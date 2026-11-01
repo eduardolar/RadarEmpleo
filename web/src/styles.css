@@ -1,0 +1,209 @@
+/* Tailwind 4 mete su reset (preflight) y sus utilidades en capas CSS (@layer base / utilities).
+   Los estilos de Angular Material (material-theme.scss y los de cada componente) van sin capa,
+   y lo que va sin capa siempre gana: el reset no rompe Material (probado en la F0 con botones,
+   campos outline y fill, select, datepicker, checkbox, toggle, chips y card).
+   Contrapartida: una utilidad de Tailwind no pisa una propiedad que Material ya pone en sus
+   propios elementos; para eso hay que usar ! (p. ej. rounded-none!) o los mixins *-overrides de Material. */
+@import 'tailwindcss';
+
+/* Roboto desde la propia app (no desde Google Fonts): funciona sin conexión, también en el APK,
+   y no manda la IP a Google. 600 y 700 para font-semibold y font-bold: sin ellos el navegador
+   inventa la negrita. Cada archivo trae todos los alfabetos con unicode-range, pero el navegador
+   solo descarga el que usa la página (latin). */
+@import '@fontsource/roboto/400.css';
+@import '@fontsource/roboto/500.css';
+@import '@fontsource/roboto/600.css';
+@import '@fontsource/roboto/700.css';
+
+/* Una sola fuente de colores: el tema de Material (mat.theme en material-theme.scss) genera los
+   roles de Material 3 como --mat-sys-* y aquí se exponen a Tailwind (bg-primary, text-on-surface,
+   bg-surface-container-low...). Así lo maquetado con Tailwind y los diálogos, menús y campos de
+   Material salen de la misma paleta, y cambiar el tema (o pasar a modo oscuro) cambia las dos cosas.
+   Es en ese sentido y no al revés porque Material necesita unos 40 roles coherentes entre sí, que
+   ya calcula mat.theme. inline: la utilidad usa var(--mat-sys-*) directamente. */
+@theme inline {
+  --color-primary: var(--mat-sys-primary);
+  --color-on-primary: var(--mat-sys-on-primary);
+  --color-primary-container: var(--mat-sys-primary-container);
+  --color-on-primary-container: var(--mat-sys-on-primary-container);
+  --color-secondary-container: var(--mat-sys-secondary-container);
+  --color-on-secondary-container: var(--mat-sys-on-secondary-container);
+  --color-error: var(--mat-sys-error);
+  --color-on-error: var(--mat-sys-on-error);
+  --color-error-container: var(--mat-sys-error-container);
+  --color-on-error-container: var(--mat-sys-on-error-container);
+  --color-surface: var(--mat-sys-surface);
+  --color-on-surface: var(--mat-sys-on-surface);
+  --color-on-surface-variant: var(--mat-sys-on-surface-variant);
+  --color-surface-container-lowest: var(--mat-sys-surface-container-lowest);
+  --color-surface-container-low: var(--mat-sys-surface-container-low);
+  --color-surface-container: var(--mat-sys-surface-container);
+  --color-surface-container-high: var(--mat-sys-surface-container-high);
+  --color-surface-container-highest: var(--mat-sys-surface-container-highest);
+  --color-outline: var(--mat-sys-outline);
+  --color-outline-variant: var(--mat-sys-outline-variant);
+
+  /* Color del estado de la candidatura (ver «Colores por estado» más abajo): bg-estado, ring-estado-borde,
+     bg-estado-suave, text-on-estado... toman el color del [data-estado] más cercano */
+  --color-estado: var(--estado-fuerte);
+  --color-estado-suave: var(--estado-suave);
+  --color-estado-borde: var(--estado-borde);
+  --color-on-estado: var(--estado-texto);
+}
+
+/* Barra de desplazamiento oculta (la fila de filtros del móvil se sigue pudiendo deslizar) */
+@utility scrollbar-oculta {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Barra fina y discreta para el scroll horizontal del tablero en el PC */
+@utility scrollbar-fina {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mat-sys-outline-variant) transparent;
+}
+
+/* Colores por estado: el ÚNICO sitio donde se definen. Se usan poniendo data-estado="Enviada" en un
+   elemento y, dentro, las utilidades de arriba (bg-estado para puntos y franjas; bg-estado-suave +
+   text-on-estado + ring-estado-borde para chips). Contraste comprobado (WCAG AA):
+   - texto sobre suave, sobre blanco y sobre surface-container: de 5,9:1 a 8,9:1 (claro) y >9:1 (oscuro)
+   - fuerte (puntos, franjas) sobre blanco y surface-container: de 3,8:1 a 5,7:1 (mínimo 3:1)
+   Descartada y Cerrada van apagadas a propósito (poca saturación), pero con el mismo contraste.
+   light-dark(): como los --mat-sys-*, ya están listas si un día se activa el modo oscuro. */
+[data-estado='Detectada'] {
+  --estado-fuerte: light-dark(#0e7490, #4fc3dc);
+  --estado-suave: light-dark(#e0f4f8, #0c3440);
+  --estado-borde: light-dark(#a5dbe6, #155e75);
+  --estado-texto: light-dark(#155e75, #a5e9f5);
+}
+[data-estado='Preparada'] {
+  --estado-fuerte: light-dark(#7c3aed, #a78bfa);
+  --estado-suave: light-dark(#f0ebfe, #2b1f4d);
+  --estado-borde: light-dark(#d4c6fb, #4c3a8a);
+  --estado-texto: light-dark(#5b21b6, #d9ccff);
+}
+[data-estado='Enviada'] {
+  --estado-fuerte: light-dark(#2563eb, #7aa7ff);
+  --estado-suave: light-dark(#e6eefe, #172a52);
+  --estado-borde: light-dark(#bcd0fb, #2c4a8a);
+  --estado-texto: light-dark(#1e40af, #c7d8ff);
+}
+[data-estado='Entrevista'] {
+  --estado-fuerte: light-dark(#b45309, #f0b450);
+  --estado-suave: light-dark(#fdf3dc, #3a2a0c);
+  --estado-borde: light-dark(#f3d68f, #6b4c14);
+  --estado-texto: light-dark(#854d0e, #fbdc9c);
+}
+[data-estado='Oferta'] {
+  --estado-fuerte: light-dark(#15803d, #5fcf86);
+  --estado-suave: light-dark(#e3f6e8, #0f3320);
+  --estado-borde: light-dark(#a9dfb8, #1f5e38);
+  --estado-texto: light-dark(#166534, #b2ecc4);
+}
+[data-estado='Descartada'] {
+  --estado-fuerte: light-dark(#9b6b74, #b48f97);
+  --estado-suave: light-dark(#f4eef0, #33262a);
+  --estado-borde: light-dark(#dccbd0, #574047);
+  --estado-texto: light-dark(#6e3f4a, #e8d3d8);
+}
+[data-estado='Cerrada'] {
+  --estado-fuerte: light-dark(#6b7280, #959ca6);
+  --estado-suave: light-dark(#eff1f3, #2a2d31);
+  --estado-borde: light-dark(#d3d7dd, #474c53);
+  --estado-texto: light-dark(#4b5563, #d5d9de);
+}
+
+/* Tablero: arrastrar y soltar. Son las clases que pone el CDK; la vista previa se pinta fuera del
+   componente (en <body>), por eso va aquí y no en la plantilla. */
+.cdk-drag-preview {
+  box-sizing: border-box;
+  cursor: grabbing;
+}
+/* La tarjeta «cogida»: levantada, algo girada y con el borde del color primario */
+.cdk-drag-preview .tarjeta-candidatura {
+  rotate: 2deg;
+  box-shadow: var(--mat-sys-level4);
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 0;
+}
+/* El hueco donde caerá: un recuadro discontinuo en lugar de la tarjeta */
+.cdk-drag-placeholder {
+  border-radius: 0.75rem;
+  outline: 2px dashed var(--mat-sys-outline);
+  outline-offset: -2px;
+  background-color: color-mix(in srgb, var(--mat-sys-primary) 6%, transparent);
+}
+.cdk-drag-placeholder > * {
+  opacity: 0;
+}
+/* Columnas donde se puede soltar (las demás ya se atenúan desde la plantilla) */
+.zona-soltar.cdk-drop-list-receiving {
+  outline: 2px dashed color-mix(in srgb, var(--mat-sys-primary) 45%, transparent);
+  outline-offset: -2px;
+  background-color: color-mix(in srgb, var(--mat-sys-primary) 4%, transparent);
+}
+/* Y la columna sobre la que está ahora mismo la tarjeta (al entrar deja de ser «receiving») */
+.zona-soltar.cdk-drop-list-dragging {
+  outline-style: solid;
+  outline-color: var(--mat-sys-primary);
+  background-color: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
+}
+.cdk-drag-animating {
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cdk-drag-animating {
+    transition: none;
+  }
+  .cdk-drag-preview .tarjeta-candidatura {
+    rotate: none;
+  }
+}
+
+/* Móvil y cualquier pantalla táctil: botones de Material de 48 px de alto, fáciles de acertar con el dedo */
+@media (width < 48rem), (pointer: coarse) {
+  html {
+    --mat-button-filled-container-height: 48px;
+    --mat-button-outlined-container-height: 48px;
+    --mat-button-text-container-height: 48px;
+    --mat-button-tonal-container-height: 48px;
+    --mat-button-protected-container-height: 48px;
+  }
+}
+
+/* Móvil (por debajo de md, donde está la barra inferior) */
+@media (width < 48rem) {
+  /* El snackbar sale por encima de la barra inferior (4 rem + borde) y de la zona de gestos */
+  .cdk-overlay-pane .mat-mdc-snack-bar-container {
+    margin-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Base para el diseñador: botones de acciones destructivas y avisos de error con el rol «error»
+   del tema. Se cambian los tokens de Material (no las propiedades) para no pelear con sus estilos. */
+.boton-peligro {
+  --mat-button-filled-container-color: var(--mat-sys-error);
+  --mat-button-filled-label-text-color: var(--mat-sys-on-error);
+}
+
+.boton-peligro-texto {
+  --mat-button-text-label-text-color: var(--mat-sys-error);
+  --mat-button-text-state-layer-color: var(--mat-sys-error);
+  --mat-button-text-ripple-color: color-mix(in srgb, var(--mat-sys-error) 12%, transparent);
+}
+
+/* Acción con riesgo pero que se puede deshacer (Descartar): contorno y texto en rojo */
+.boton-peligro-borde {
+  --mat-button-outlined-label-text-color: var(--mat-sys-error);
+  --mat-button-outlined-outline-color: var(--mat-sys-error);
+  --mat-button-outlined-state-layer-color: var(--mat-sys-error);
+  --mat-button-outlined-ripple-color: color-mix(in srgb, var(--mat-sys-error) 12%, transparent);
+}
+
+.aviso-error {
+  --mat-snack-bar-container-color: var(--mat-sys-error-container);
+  --mat-snack-bar-supporting-text-color: var(--mat-sys-on-error-container);
+  --mat-snack-bar-button-color: var(--mat-sys-on-error-container);
+}

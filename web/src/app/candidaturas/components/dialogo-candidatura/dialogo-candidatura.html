@@ -1,0 +1,31 @@
+<h2 mat-dialog-title>{{ candidatura ? 'Editar candidatura' : 'Nueva candidatura' }}</h2>
+<mat-dialog-content>
+  <!-- Margen arriba: si no, la etiqueta del primer campo outline queda cortada bajo el título -->
+  <app-formulario-candidatura
+    #formulario
+    class="pt-2"
+    [inicial]="candidatura"
+    [rapido]="!candidatura"
+    [guardando]="guardando()"
+    [erroresServidor]="erroresServidor()"
+    [conBotones]="false"
+    (guardar)="guardar($event)"
+  />
+</mat-dialog-content>
+
+<!-- Fijos abajo aunque el formulario se desplace. form="..." los asocia al <form> del formulario:
+     el clic y el Intro desde cualquier campo lo envían igual que si estuvieran dentro -->
+<mat-dialog-actions align="end">
+  <button mat-button type="button" [disabled]="guardando()" (click)="cerrarSinGuardar()">
+    Cancelar
+  </button>
+  <button
+    mat-flat-button
+    type="submit"
+    disabledInteractive
+    [attr.form]="formulario.idFormulario"
+    [disabled]="guardando()"
+  >
+    {{ guardando() ? 'Guardando...' : textoGuardar }}
+  </button>
+</mat-dialog-actions>

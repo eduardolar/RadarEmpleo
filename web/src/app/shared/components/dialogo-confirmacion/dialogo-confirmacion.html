@@ -1,0 +1,11 @@
+<h2 mat-dialog-title>{{ datos.titulo }}</h2>
+<mat-dialog-content>
+  <p [id]="idMensaje">{{ datos.mensaje }}</p>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <!-- El foco empieza en «Cancelar» para que Intro no confirme sin querer -->
+  <button mat-button type="button" [mat-dialog-close]="false" cdkFocusInitial>Cancelar</button>
+  <button mat-flat-button type="button" class="boton-peligro" [mat-dialog-close]="true">
+    {{ datos.confirmar }}
+  </button>
+</mat-dialog-actions>

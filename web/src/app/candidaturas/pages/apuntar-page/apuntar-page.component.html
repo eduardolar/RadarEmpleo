@@ -1,0 +1,16 @@
+<section class="max-w-2xl space-y-6">
+  <app-cabecera-pagina
+    titulo="Apuntar"
+    descripcion="Pega el enlace de la oferta y pon la empresa y el puesto. El resto puede esperar."
+  />
+
+  <div class="rounded-2xl bg-surface-container-lowest p-5 ring-1 ring-outline-variant sm:p-6">
+    <app-formulario-candidatura
+      [rapido]="true"
+      [guardando]="guardando()"
+      [erroresServidor]="erroresServidor()"
+      textoGuardar="Apuntar"
+      (guardar)="guardar($event)"
+    />
+  </div>
+</section>

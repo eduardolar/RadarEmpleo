@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# El CI solo lee el código: el GITHUB_TOKEN no necesita más permisos
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (.NET)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restaurar
+        run: dotnet restore RadarEmpleo.slnx
+
+      - name: Compilar
+        run: dotnet build RadarEmpleo.slnx --no-restore --configuration Release
+
+      - name: Tests
+        run: dotnet test RadarEmpleo.slnx --no-build --configuration Release --logger "console;verbosity=normal"
+
+  web:
+    name: Web (Angular)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar
+        run: npm ci
+
+      - name: Formato
+        run: npx prettier --check src
+
+      - name: Tests
+        run: npx ng test --watch=false
+
+      - name: Compilar
+        run: npx ng build

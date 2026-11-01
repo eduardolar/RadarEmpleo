@@ -1,0 +1,36 @@
+<header
+  class="fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r border-white/5 bg-slate-950 text-slate-300 md:flex"
+>
+  <div class="px-6 pt-6 pb-4">
+    <p class="text-lg font-semibold text-white">RadarEmpleo</p>
+    <p class="text-xs text-slate-400">Tus candidaturas, en un sitio</p>
+  </div>
+
+  <nav aria-label="Navegación principal" class="px-3">
+    <ul class="space-y-1">
+      @for (opcion of opciones; track opcion.ruta) {
+        @let activa = seccionActiva() === opcion.ruta;
+        <li>
+          <a
+            [routerLink]="opcion.ruta"
+            [class]="activa ? 'bg-blue-500/10 text-white ring-1 ring-inset ring-blue-400/20' : ''"
+            [attr.aria-current]="activa ? 'page' : null"
+            class="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-white/5 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none"
+          >
+            <span
+              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-800 transition group-hover:text-blue-300"
+              [class.text-slate-400]="!activa"
+              [class.text-blue-300]="activa"
+            >
+              <app-icono-menu class="h-5 w-5" [icono]="opcion.icono" />
+            </span>
+            <span class="flex min-w-0 flex-col">
+              <span class="text-sm font-semibold text-slate-100">{{ opcion.etiqueta }}</span>
+              <span class="truncate text-xs text-slate-400">{{ opcion.descripcion }}</span>
+            </span>
+          </a>
+        </li>
+      }
+    </ul>
+  </nav>
+</header>

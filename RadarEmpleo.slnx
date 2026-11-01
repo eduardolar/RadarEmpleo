@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RadarEmpleo.Api/RadarEmpleo.Api.csproj" />
+    <Project Path="src/RadarEmpleo.Data/RadarEmpleo.Data.csproj" />
+    <Project Path="src/RadarEmpleo.Domain/RadarEmpleo.Domain.csproj" />
+    <Project Path="src/RadarEmpleo.Services/RadarEmpleo.Services.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RadarEmpleo.Tests/RadarEmpleo.Tests.csproj" />
+  </Folder>
+</Solution>

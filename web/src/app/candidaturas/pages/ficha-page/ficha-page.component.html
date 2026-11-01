@@ -1,0 +1,548 @@
+<!-- overflow-wrap se hereda: cubre cualquier texto que venga de fuera (una URL en la pega, el
+     análisis, una nota...) para que no ensanche la página en el móvil -->
+<div
+  #inicio
+  tabindex="-1"
+  class="flex max-w-5xl flex-col gap-6 [overflow-wrap:anywhere] outline-none"
+>
+  <a
+    routerLink="/tablero"
+    class="-ml-1 inline-flex min-h-12 items-center gap-1.5 rounded-lg px-1 text-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+  >
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      class="h-4 w-4"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12.5 15 7.5 10l5-5" />
+    </svg>
+    Volver al tablero
+  </a>
+
+  <!-- Hueco fijo para la barra de carga; el margen negativo evita que sume dos separaciones -->
+  <div class="-my-3 h-1">
+    @if (cargando() || cambiando()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Cargando la candidatura" />
+    }
+  </div>
+
+  @if (error(); as problema) {
+    @if (problema.estado === 404) {
+      <div
+        role="alert"
+        class="flex flex-col items-center rounded-2xl bg-surface-container-lowest px-6 py-10 text-center ring-1 ring-outline-variant"
+      >
+        <!-- Una ficha vacía con un interrogante -->
+        <svg aria-hidden="true" viewBox="0 0 120 120" class="h-28 w-28">
+          <circle cx="60" cy="60" r="56" class="fill-surface-container" />
+          <rect
+            x="30"
+            y="24"
+            width="52"
+            height="66"
+            rx="8"
+            class="fill-surface-container-lowest stroke-outline-variant"
+            stroke-width="2.5"
+          />
+          <path
+            d="M40 40h22M40 50h32M40 60h26"
+            class="stroke-outline-variant"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <circle
+            cx="82"
+            cy="80"
+            r="18"
+            class="fill-primary-container stroke-primary"
+            stroke-width="3"
+          />
+          <path
+            d="M76.5 75.5a5.5 5.5 0 1 1 7.8 5c-1.5.7-2.3 1.7-2.3 3.2v.8"
+            fill="none"
+            class="stroke-primary"
+            stroke-width="3"
+            stroke-linecap="round"
+          />
+          <circle cx="82" cy="90.5" r="2" class="fill-primary" />
+        </svg>
+        <p class="mt-4 text-lg font-medium">Esta candidatura no existe o se ha borrado.</p>
+        <p class="mt-1 max-w-sm text-sm text-on-surface-variant">
+          Puede que el enlace sea antiguo. Las demás siguen en el tablero.
+        </p>
+        <a mat-flat-button routerLink="/tablero" class="mt-5">Ir al tablero</a>
+      </div>
+    } @else {
+      <div
+        role="alert"
+        class="flex items-start gap-3 rounded-2xl bg-error-container p-4 text-on-error-container"
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          class="mt-0.5 h-5 w-5 shrink-0"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path stroke-linecap="round" d="M12 7.5v5.5M12 16.5h.01" />
+        </svg>
+        <div>
+          @if (candidatura()) {
+            <p class="font-medium">No se ha podido actualizar esta ficha.</p>
+            <p class="mt-1">{{ problema.mensaje }}</p>
+            <p class="mt-1">Lo de abajo es lo último que se cargó y puede no estar al día.</p>
+          } @else {
+            <p>{{ problema.mensaje }}</p>
+          }
+          <button mat-button type="button" class="mt-2" (click)="reintentar()">Reintentar</button>
+        </div>
+      </div>
+    }
+  }
+
+  @if (candidatura(); as c) {
+    <!-- data-estado: la franja de arriba y el chip del estado toman su color (styles.css) -->
+    <header
+      [attr.data-estado]="c.estado"
+      class="overflow-hidden rounded-2xl bg-surface-container-lowest ring-1 ring-outline-variant"
+    >
+      <span aria-hidden="true" class="block h-1.5 bg-estado"></span>
+
+      <div class="space-y-5 p-5 sm:p-6">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div class="min-w-0 space-y-1">
+            <p class="text-sm font-medium text-on-surface-variant">{{ c.empresa }}</p>
+            <h1 class="text-2xl leading-tight font-semibold text-on-surface sm:text-3xl">
+              {{ c.puesto }}
+            </h1>
+
+            <p class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-2 text-sm">
+              <span
+                #estadoActual
+                tabindex="-1"
+                class="inline-flex items-center gap-1.5 rounded-full bg-estado-suave px-3 py-1 font-medium text-on-estado ring-1 ring-estado-borde outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <span aria-hidden="true" class="h-2 w-2 rounded-full bg-estado"></span>
+                <span class="sr-only">Estado: </span>{{ etiquetas.estado[c.estado] }}
+              </span>
+              <span class="inline-flex items-center gap-1 text-on-surface-variant">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  class="h-4 w-4 shrink-0"
+                >
+                  <circle cx="10" cy="10" r="7" />
+                  <path stroke-linecap="round" d="M10 6.5V10l2.5 1.5" />
+                </svg>
+                En este estado: {{ diasEnEstado() }}
+              </span>
+            </p>
+          </div>
+
+          <!-- Acciones sobre la ficha (no cambian el estado) -->
+          <div class="-ml-3 flex flex-wrap gap-1 lg:ml-0 lg:shrink-0 lg:justify-end">
+            @if (c.enlace) {
+              <a mat-button [href]="c.enlace" target="_blank" rel="noopener noreferrer">
+                Abrir la oferta <span class="sr-only">(se abre en otra pestaña)</span>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  class="ml-1 inline h-4 w-4 align-[-0.15em]"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M11 4h5v5M16 4l-7 7M14 12v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3"
+                  />
+                </svg>
+              </a>
+            }
+            <button mat-button type="button" (click)="editar()">Editar</button>
+            <!-- «Borrar» a secas cabe en la misma línea en el móvil y sube el cambio de estado -->
+            <button
+              mat-button
+              type="button"
+              class="boton-peligro-texto"
+              aria-label="Borrar candidatura"
+              (click)="borrar()"
+            >
+              Borrar
+            </button>
+          </div>
+        </div>
+
+        @if (accionesALaVista().length > 0) {
+          <div class="border-t border-outline-variant pt-4">
+            <p id="titulo-acciones" class="mb-2 text-xs font-medium text-on-surface-variant">
+              Cambiar estado
+            </p>
+            <div role="group" aria-labelledby="titulo-acciones" class="flex flex-wrap gap-2">
+              @for (accion of accionesALaVista(); track accion.destino) {
+                @if (accion.destacada) {
+                  <button
+                    mat-flat-button
+                    type="button"
+                    disabledInteractive
+                    [disabled]="bloqueado()"
+                    (click)="cambiarEstado(accion.destino)"
+                  >
+                    {{ accion.texto }}
+                  </button>
+                } @else {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    [class.boton-peligro-borde]="accion.destino === 'Descartada'"
+                    disabledInteractive
+                    [disabled]="bloqueado()"
+                    (click)="cambiarEstado(accion.destino)"
+                  >
+                    {{ accion.texto }}
+                  </button>
+                }
+              }
+              @if (masOpciones().length > 0) {
+                <button mat-button type="button" [matMenuTriggerFor]="menuMasOpciones">
+                  Más opciones
+                </button>
+                <mat-menu #menuMasOpciones="matMenu">
+                  @for (accion of masOpciones(); track accion.destino) {
+                    <button mat-menu-item type="button" (click)="cambiarEstado(accion.destino)">
+                      {{ accion.texto }}
+                    </button>
+                  }
+                </mat-menu>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </header>
+
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <section
+        aria-labelledby="titulo-datos"
+        class="min-w-0 rounded-2xl bg-surface-container-lowest p-5 ring-1 ring-outline-variant sm:p-6"
+      >
+        <h2 id="titulo-datos" class="mb-4 text-lg font-semibold">Datos</h2>
+        <dl class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3 lg:grid-cols-2">
+          <div>
+            <dt class="text-xs font-medium text-on-surface-variant">Modalidad</dt>
+            <dd class="mt-0.5">
+              {{ etiquetas.modalidad[c.modalidad] }}
+              @if (c.modalidadDetalle) {
+                <span class="block text-xs text-on-surface-variant">{{ c.modalidadDetalle }}</span>
+              }
+            </dd>
+          </div>
+
+          <div>
+            <dt class="text-xs font-medium text-on-surface-variant">Ubicación</dt>
+            <dd class="mt-0.5">{{ c.ubicacion || '—' }}</dd>
+          </div>
+
+          <div>
+            <dt class="text-xs font-medium text-on-surface-variant">Encaje</dt>
+            <dd class="mt-1">
+              <span
+                class="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium"
+                [class]="
+                  c.encaje === 'Alto'
+                    ? 'bg-primary-container text-on-primary-container'
+                    : 'bg-surface-container-high text-on-surface-variant'
+                "
+              >
+                {{ etiquetas.encaje[c.encaje] }}
+              </span>
+            </dd>
+          </div>
+
+          <div>
+            <dt class="text-xs font-medium text-on-surface-variant">Portal</dt>
+            <dd class="mt-0.5">{{ c.portal || '—' }}</dd>
+          </div>
+
+          <div>
+            <dt class="text-xs font-medium text-on-surface-variant">Salario</dt>
+            <dd class="mt-0.5">{{ c.salario || '—' }}</dd>
+          </div>
+
+          <div>
+            <dt class="text-xs font-medium text-on-surface-variant">Origen</dt>
+            <dd class="mt-0.5">{{ etiquetas.origen[c.origen] }}</dd>
+          </div>
+
+          <div>
+            <dt class="text-xs font-medium text-on-surface-variant">Detectada</dt>
+            <dd class="mt-0.5">{{ c.fechaDeteccion | fechaMadrid }}</dd>
+          </div>
+
+          <div>
+            <dt class="text-xs font-medium text-on-surface-variant">Enviada</dt>
+            <dd class="mt-0.5">{{ c.fechaEnvio ? (c.fechaEnvio | fechaMadrid) : '—' }}</dd>
+          </div>
+
+          <div>
+            <dt class="text-xs font-medium text-on-surface-variant">Última modificación</dt>
+            <dd class="mt-0.5">{{ c.fechaUltimoCambio | fechaMadrid: 'dia-hora' }}</dd>
+          </div>
+
+          @if (c.motivoDescarte) {
+            <div class="col-span-full rounded-xl bg-surface-container-low p-3">
+              <dt class="text-xs font-medium text-on-surface-variant">Motivo de descarte</dt>
+              <dd class="mt-0.5">
+                {{ etiquetas.motivo[c.motivoDescarte] }}
+                @if (c.motivoDescarteTexto) {
+                  <span class="text-on-surface-variant">— {{ c.motivoDescarteTexto }}</span>
+                }
+              </dd>
+            </div>
+          }
+        </dl>
+
+        @if (c.pega || c.analisis) {
+          <div class="mt-5 space-y-4 border-t border-outline-variant pt-5">
+            @if (c.pega) {
+              <div>
+                <h3 class="text-sm font-semibold">Inconveniente</h3>
+                <p class="mt-1 rounded-xl bg-surface-container-low p-3 text-sm whitespace-pre-line">
+                  {{ c.pega }}
+                </p>
+              </div>
+            }
+            @if (c.analisis) {
+              <div>
+                <h3 class="text-sm font-semibold">Análisis</h3>
+                <p class="mt-1 text-sm leading-relaxed whitespace-pre-line">{{ c.analisis }}</p>
+              </div>
+            }
+          </div>
+        }
+      </section>
+
+      <section
+        aria-labelledby="titulo-recordatorios"
+        class="min-w-0 self-start rounded-2xl bg-surface-container-lowest p-5 ring-1 ring-outline-variant sm:p-6"
+      >
+        <h2 id="titulo-recordatorios" class="mb-4 text-lg font-semibold">Recordatorios</h2>
+        @if (c.recordatorios.length > 0) {
+          <ul class="space-y-2 text-sm">
+            @for (recordatorio of c.recordatorios; track recordatorio.id) {
+              <li class="flex gap-3 rounded-xl bg-surface-container-low p-3">
+                <span
+                  aria-hidden="true"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                  [class]="
+                    recordatorio.hecho
+                      ? 'bg-surface-container-high text-on-surface-variant'
+                      : 'bg-primary-container text-on-primary-container'
+                  "
+                >
+                  @if (recordatorio.hecho) {
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="h-4 w-4"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m5 10.5 3 3 7-7" />
+                    </svg>
+                  } @else {
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      class="h-4 w-4"
+                    >
+                      <rect x="3.5" y="4.5" width="13" height="12" rx="2" />
+                      <path stroke-linecap="round" d="M3.5 8.5h13M7 3v3M13 3v3" />
+                    </svg>
+                  }
+                </span>
+                <div class="min-w-0">
+                  <p class="font-medium">
+                    <span
+                      [class.line-through]="recordatorio.hecho"
+                      [class.text-on-surface-variant]="recordatorio.hecho"
+                      >{{ recordatorio.titulo }}</span
+                    >
+                    @if (recordatorio.hecho) {
+                      <span class="text-xs font-normal text-on-surface-variant">(hecho)</span>
+                    }
+                  </p>
+                  <p class="mt-0.5 text-xs text-on-surface-variant">
+                    <time [attr.datetime]="recordatorio.fechaHora" class="font-medium">{{
+                      recordatorio.fechaHora | fechaMadrid: 'dia-hora'
+                    }}</time>
+                    · {{ etiquetas.recordatorio[recordatorio.tipo] }}
+                  </p>
+                  @if (recordatorio.notas) {
+                    <p class="mt-1 whitespace-pre-line">{{ recordatorio.notas }}</p>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="text-sm text-on-surface-variant">
+            No hay recordatorios. Al marcarla como enviada se programa un seguimiento a 7 días.
+          </p>
+        }
+      </section>
+    </div>
+
+    <section
+      aria-labelledby="titulo-historial"
+      class="rounded-2xl bg-surface-container-lowest p-5 ring-1 ring-outline-variant sm:p-6"
+    >
+      <h2
+        #tituloHistorial
+        id="titulo-historial"
+        tabindex="-1"
+        class="mb-4 text-lg font-semibold outline-none"
+      >
+        Historial y notas
+      </h2>
+
+      <form [formGroup]="formularioNota" (ngSubmit)="anadirNota()" class="mb-6">
+        <mat-form-field appearance="outline" class="w-full">
+          <mat-label>Nueva nota</mat-label>
+          <textarea
+            #entradaNota
+            matInput
+            formControlName="texto"
+            rows="2"
+            (keydown.control.enter)="anadirNota($event)"
+            (keydown.meta.enter)="anadirNota($event)"
+          ></textarea>
+          <mat-hint class="max-md:hidden">Ctrl + Intro para añadirla</mat-hint>
+          <mat-error>{{ mensajeError(formularioNota.controls.texto.errors, campoNota) }}</mat-error>
+        </mat-form-field>
+        <div class="flex justify-end">
+          <button mat-flat-button type="submit" disabledInteractive [disabled]="guardandoNota()">
+            {{ guardandoNota() ? 'Guardando...' : 'Añadir nota' }}
+          </button>
+        </div>
+      </form>
+
+      <!-- Línea de tiempo: cada apunte con su marca (color del estado al que pasó, o gris si es nota)
+           y una línea que las une. Las marcas son decorativas: el texto ya dice qué es cada cosa -->
+      <ol>
+        @for (elemento of lineaDeTiempo(); track elemento.clave; let ultimo = $last) {
+          <li class="relative flex gap-3 pb-5 text-sm last:pb-0">
+            @if (!ultimo) {
+              <span
+                aria-hidden="true"
+                class="absolute top-9 bottom-1 left-4 w-0.5 -translate-x-1/2 rounded-full bg-outline-variant"
+              ></span>
+            }
+            @switch (elemento.tipo) {
+              @case ('estado') {
+                <span
+                  aria-hidden="true"
+                  [attr.data-estado]="elemento.cambio.a"
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-estado-suave text-on-estado ring-1 ring-estado-borde"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="h-4 w-4"
+                  >
+                    @if (elemento.cambio.de) {
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M4 10h11m-4-4 4 4-4 4"
+                      />
+                    } @else {
+                      <path stroke-linecap="round" d="M10 4.5v11M4.5 10h11" />
+                    }
+                  </svg>
+                </span>
+                <div class="min-w-0 flex-1 pt-1">
+                  <p class="text-xs text-on-surface-variant">
+                    <time [attr.datetime]="elemento.fecha">{{
+                      elemento.fecha | fechaMadrid: 'dia-hora'
+                    }}</time>
+                  </p>
+                  <p class="mt-0.5 font-medium">
+                    @if (elemento.cambio.de) {
+                      {{ etiquetas.estado[elemento.cambio.de] }} →
+                      {{ etiquetas.estado[elemento.cambio.a] }}
+                    } @else {
+                      Alta en {{ etiquetas.estado[elemento.cambio.a] }}
+                    }
+                  </p>
+                  @if (elemento.cambio.comentario) {
+                    <p class="mt-0.5 whitespace-pre-line text-on-surface-variant">
+                      {{ elemento.cambio.comentario }}
+                    </p>
+                  }
+                </div>
+              }
+              @case ('nota') {
+                <span
+                  aria-hidden="true"
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    class="h-4 w-4"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M5 3.5h10a1.5 1.5 0 0 1 1.5 1.5v6.5l-5 5H5A1.5 1.5 0 0 1 3.5 15V5A1.5 1.5 0 0 1 5 3.5ZM16.5 11.5h-3.5a1.5 1.5 0 0 0-1.5 1.5v3.5M7 7.5h6M7 10.5h3"
+                    />
+                  </svg>
+                </span>
+                <div class="min-w-0 flex-1 pt-1">
+                  <div class="flex items-start justify-between gap-2">
+                    <p class="text-xs text-on-surface-variant">
+                      <time [attr.datetime]="elemento.fecha">{{
+                        elemento.fecha | fechaMadrid: 'dia-hora'
+                      }}</time>
+                      · Nota
+                    </p>
+                    <button
+                      mat-button
+                      type="button"
+                      class="boton-peligro-texto -mt-2 -mr-2 shrink-0"
+                      [attr.aria-label]="
+                        'Borrar la nota del ' + (elemento.fecha | fechaMadrid: 'dia-hora')
+                      "
+                      (click)="borrarNota(elemento.nota)"
+                    >
+                      Borrar
+                    </button>
+                  </div>
+                  <p class="mt-1 rounded-xl bg-surface-container-low px-3 py-2 whitespace-pre-line">
+                    {{ elemento.nota.texto }}
+                  </p>
+                </div>
+              }
+            }
+          </li>
+        }
+      </ol>
+    </section>
+  }
+</div>

@@ -1,0 +1,160 @@
+<form [id]="idFormulario" [formGroup]="formulario" (ngSubmit)="enviar()" class="space-y-4">
+  @if (erroresGenerales().length > 0) {
+    <div
+      role="alert"
+      class="rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container"
+    >
+      @for (mensaje of erroresGenerales(); track $index) {
+        <p>{{ mensaje }}</p>
+      }
+    </div>
+  }
+
+  <!-- Tres grupos en el formulario completo; en las altas solo lo básico, sin título -->
+  <fieldset class="min-w-0">
+    @if (!soloBasicos()) {
+      <legend class="mb-3 text-sm font-semibold text-on-surface">Datos de la oferta</legend>
+    }
+    <div class="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+      <!-- El enlace va primero: lo normal es venir de la oferta con él copiado -->
+      <mat-form-field appearance="outline" class="sm:col-span-2">
+        <mat-label>Enlace a la oferta</mat-label>
+        <input matInput formControlName="enlace" type="url" inputmode="url" />
+        @if (soloBasicos() && portalDetectado()) {
+          <mat-hint>Se apuntará el portal: {{ portalDetectado() }}</mat-hint>
+        }
+        <mat-error>{{ mensajeError(formulario.controls.enlace.errors, campos.enlace) }}</mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Empresa</mat-label>
+        <input
+          matInput
+          formControlName="empresa"
+          required
+          autocomplete="off"
+          [matAutocomplete]="autocompletarEmpresa"
+        />
+        <mat-autocomplete #autocompletarEmpresa="matAutocomplete">
+          @for (empresa of sugerenciasEmpresa(); track empresa.id) {
+            <mat-option [value]="empresa.nombre">
+              {{ empresa.nombre }}
+              <span class="text-xs text-on-surface-variant">
+                · {{ empresa.candidaturas }}
+                {{ empresa.candidaturas === 1 ? 'candidatura' : 'candidaturas' }}
+              </span>
+            </mat-option>
+          }
+        </mat-autocomplete>
+        <mat-error>{{
+          mensajeError(formulario.controls.empresa.errors, campos.empresa)
+        }}</mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Puesto</mat-label>
+        <input matInput formControlName="puesto" required />
+        @if (puestoDelEnlace()) {
+          <mat-hint>Sacado del enlace: revísalo</mat-hint>
+        }
+        <mat-error>{{ mensajeError(formulario.controls.puesto.errors, campos.puesto) }}</mat-error>
+      </mat-form-field>
+
+      @if (!soloBasicos()) {
+        <mat-form-field appearance="outline">
+          <mat-label>Portal</mat-label>
+          <input matInput formControlName="portal" placeholder="LinkedIn, InfoJobs..." />
+          <mat-error>{{
+            mensajeError(formulario.controls.portal.errors, campos.portal)
+          }}</mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Ubicación</mat-label>
+          <input matInput formControlName="ubicacion" />
+          <mat-error>{{
+            mensajeError(formulario.controls.ubicacion.errors, campos.ubicacion)
+          }}</mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Modalidad</mat-label>
+          <mat-select formControlName="modalidad">
+            @for (opcion of modalidades; track opcion.valor) {
+              <mat-option [value]="opcion.valor">{{ opcion.etiqueta }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Detalle de la modalidad</mat-label>
+          <input matInput formControlName="modalidadDetalle" placeholder="2 días en oficina..." />
+          <mat-error>{{
+            mensajeError(formulario.controls.modalidadDetalle.errors, campos.modalidadDetalle)
+          }}</mat-error>
+        </mat-form-field>
+      }
+    </div>
+  </fieldset>
+
+  @if (soloBasicos()) {
+    <!-- -ml-3: alinea el texto del botón con el borde de los campos. mb-2: su zona táctil (48 px)
+         sobresale del botón y, sin margen, en el diálogo sacaría una barra de desplazamiento -->
+    <button mat-button type="button" class="mb-2 -ml-3" (click)="mostrarMasDatos()">
+      Añadir más datos
+    </button>
+  } @else {
+    <fieldset class="min-w-0 border-t border-outline-variant pt-4">
+      <legend class="float-left mb-3 w-full text-sm font-semibold text-on-surface">
+        Valoración
+      </legend>
+      <div class="clear-left grid gap-x-4 sm:grid-cols-2">
+        <mat-form-field appearance="outline">
+          <mat-label>Encaje</mat-label>
+          <mat-select formControlName="encaje">
+            @for (opcion of encajes; track opcion.valor) {
+              <mat-option [value]="opcion.valor">{{ opcion.etiqueta }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Salario</mat-label>
+          <input matInput formControlName="salario" />
+          <mat-error>{{
+            mensajeError(formulario.controls.salario.errors, campos.salario)
+          }}</mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="sm:col-span-2">
+          <mat-label>Inconveniente</mat-label>
+          <textarea matInput formControlName="pega" rows="2"></textarea>
+          <mat-hint>Lo que no encaja o puede frenar la candidatura.</mat-hint>
+          <mat-error>{{ mensajeError(formulario.controls.pega.errors, campos.pega) }}</mat-error>
+        </mat-form-field>
+      </div>
+    </fieldset>
+
+    <fieldset class="min-w-0 border-t border-outline-variant pt-4">
+      <legend class="float-left mb-3 w-full text-sm font-semibold text-on-surface">
+        Notas internas
+      </legend>
+      <mat-form-field appearance="outline" class="clear-left w-full">
+        <mat-label>Análisis</mat-label>
+        <textarea matInput formControlName="analisis" rows="4"></textarea>
+        <mat-error>{{
+          mensajeError(formulario.controls.analisis.errors, campos.analisis)
+        }}</mat-error>
+      </mat-form-field>
+    </fieldset>
+  }
+
+  <!-- En el diálogo los botones van en mat-dialog-actions (fijos abajo) con form="idFormulario" -->
+  @if (conBotones()) {
+    <div class="flex flex-wrap justify-end gap-2">
+      <button mat-flat-button type="submit" disabledInteractive [disabled]="guardando()">
+        {{ guardando() ? 'Guardando...' : textoGuardar() }}
+      </button>
+    </div>
+  }
+</form>

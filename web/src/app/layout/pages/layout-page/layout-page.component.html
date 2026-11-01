@@ -1,0 +1,24 @@
+<!-- Con <base href="/"> el href solo llevaría a /#principal y recargaría la app: el clic mueve el foco a mano -->
+<a
+  href="#principal"
+  (click)="saltarAlContenido($event)"
+  class="fixed top-3 left-3 z-50 -translate-y-[200%] rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-on-primary shadow-lg transition focus:translate-y-0 focus:outline-2 focus:outline-offset-2 focus:outline-primary"
+>
+  Saltar al contenido
+</a>
+
+<div class="min-h-screen bg-surface-container-low text-on-surface antialiased">
+  <app-menu-lateral />
+
+  <!-- Abajo deja sitio a la barra de pestañas del móvil y a la zona de gestos del sistema -->
+  <main
+    id="principal"
+    #principal
+    tabindex="-1"
+    class="px-5 pt-5 pb-[calc(6rem+env(safe-area-inset-bottom))] outline-none sm:px-6 sm:pt-6 md:ml-60 md:pb-6"
+  >
+    <router-outlet />
+  </main>
+</div>
+
+<app-barra-inferior />

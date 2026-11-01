@@ -1,0 +1,96 @@
+<h2 mat-dialog-title>{{ titulo }}</h2>
+
+<form [formGroup]="formulario" (ngSubmit)="confirmar()">
+  <mat-dialog-content>
+    <div class="mb-5 rounded-xl bg-surface-container-low p-3 text-sm">
+      <p class="font-medium text-on-surface">{{ datos.puesto }}</p>
+      <p class="text-on-surface-variant">{{ datos.empresa }}</p>
+      <!-- De un estado a otro, cada uno con su color (styles.css) -->
+      <p class="mt-2 flex flex-wrap items-center gap-2">
+        <span class="sr-only">De</span>
+        <span
+          [attr.data-estado]="datos.actual"
+          class="inline-flex items-center gap-1.5 rounded-full bg-estado-suave px-2.5 py-0.5 text-xs font-medium text-on-estado ring-1 ring-estado-borde"
+        >
+          <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-estado"></span>
+          {{ etiquetaActual }}
+        </span>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="h-4 w-4 text-on-surface-variant"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 10h11m-4-4 4 4-4 4" />
+        </svg>
+        <span class="sr-only">a</span>
+        <span
+          [attr.data-estado]="datos.destino"
+          class="inline-flex items-center gap-1.5 rounded-full bg-estado-suave px-2.5 py-0.5 text-xs font-medium text-on-estado ring-1 ring-estado-borde"
+        >
+          <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-estado"></span>
+          {{ etiquetaDestino }}
+        </span>
+      </p>
+    </div>
+
+    @if (saleDelProceso) {
+      <p class="mb-5 text-sm text-on-surface-variant">
+        Sale de las candidaturas en curso. Si te equivocas, «Reabrir» la devuelve a Detectada.
+      </p>
+    }
+
+    @if (descartando) {
+      <!-- Lo que pide el descarte va junto, separado del comentario general -->
+      <fieldset class="mb-2 min-w-0">
+        <legend id="titulo-motivo" class="mb-1 text-sm font-semibold text-on-surface">
+          Por qué se descarta
+        </legend>
+
+        <mat-radio-group
+          formControlName="motivoDescarte"
+          required
+          aria-labelledby="titulo-motivo"
+          class="mb-3 grid grid-cols-2 gap-x-2 gap-y-1"
+        >
+          @for (motivo of motivos; track motivo.valor) {
+            <mat-radio-button [value]="motivo.valor" class="min-w-0">
+              {{ motivo.etiqueta }}
+            </mat-radio-button>
+          }
+        </mat-radio-group>
+        @if (
+          formulario.controls.motivoDescarte.touched && formulario.controls.motivoDescarte.invalid
+        ) {
+          <p role="alert" class="mb-3 text-sm text-error">
+            {{ mensajeError(formulario.controls.motivoDescarte.errors, campos.motivo) }}
+          </p>
+        }
+
+        <mat-form-field appearance="outline" class="w-full">
+          <mat-label>Detalle del motivo (opcional)</mat-label>
+          <textarea matInput formControlName="motivoDescarteTexto" rows="2"></textarea>
+          <mat-error>{{
+            mensajeError(formulario.controls.motivoDescarteTexto.errors, campos.motivoTexto)
+          }}</mat-error>
+        </mat-form-field>
+      </fieldset>
+    }
+
+    <mat-form-field appearance="outline" class="w-full">
+      <mat-label>Comentario (opcional)</mat-label>
+      <textarea matInput formControlName="comentario" rows="2"></textarea>
+      <mat-hint>Queda en el historial de la candidatura.</mat-hint>
+      <mat-error>{{
+        mensajeError(formulario.controls.comentario.errors, campos.comentario)
+      }}</mat-error>
+    </mat-form-field>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="cerrarSinGuardar()">Cancelar</button>
+    <button mat-flat-button type="submit" [class.boton-peligro]="descartando">{{ titulo }}</button>
+  </mat-dialog-actions>
+</form>

@@ -1,0 +1,23 @@
+<button
+  mat-button
+  type="button"
+  class="whitespace-nowrap"
+  [matMenuTriggerFor]="menu"
+  [attr.aria-label]="'Mover a… (' + descripcion() + ')'"
+>
+  Mover a…
+</button>
+<mat-menu #menu="matMenu">
+  @for (destino of destinos(); track destino.estado) {
+    <button mat-menu-item type="button" (click)="elegir.emit(destino.estado)">
+      <span class="inline-flex items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          class="h-2.5 w-2.5 shrink-0 rounded-full bg-estado"
+          [attr.data-estado]="destino.estado"
+        ></span>
+        {{ destino.etiqueta }}
+      </span>
+    </button>
+  }
+</mat-menu>
