@@ -57,6 +57,11 @@ public class AppDbContext : DbContext
         b.Entity<Candidatura>().HasIndex(c => c.ClaveImportacion).IsUnique();
         b.Entity<Candidatura>().HasIndex(c => c.Estado);
 
+        // --- Concurrencia optimista: todo cambio (de datos o de estado) actualiza FechaUltimoCambio, así
+        // que de dos peticiones que cambian a la vez la misma candidatura solo guarda la primera (la
+        // segunda duplicaría el cambio de estado y el seguimiento) ---
+        b.Entity<Candidatura>().Property(c => c.FechaUltimoCambio).IsConcurrencyToken();
+
         // --- Candidatura 1-N historial, notas y recordatorios, en cascada ---
         b.Entity<CambioEstado>()
             .HasOne(x => x.Candidatura).WithMany(c => c.Historial)

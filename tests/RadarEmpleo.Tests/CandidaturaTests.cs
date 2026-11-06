@@ -72,6 +72,17 @@ public class CandidaturaTests
         Assert.Equal("Seguimiento: Desarrollador .NET en Acme Software", seguimiento.Titulo);
     }
 
+    [Fact]
+    public void CambiarEstado_AEnviadaSinProgramarSeguimiento_RellenaFechaEnvioSinRecordatorio()
+    {
+        var c = Nueva();
+
+        c.CambiarEstado(EstadoCandidatura.Enviada, Ahora, Origen.Registro, programarSeguimiento: false);
+
+        Assert.Equal(Ahora, c.FechaEnvio);
+        Assert.Empty(c.Recordatorios);
+    }
+
     [Theory]
     [InlineData(EstadoCandidatura.Entrevista)]
     [InlineData(EstadoCandidatura.Oferta)]

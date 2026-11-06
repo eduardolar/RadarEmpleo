@@ -1,7 +1,10 @@
+using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using RadarEmpleo.Data;
 using RadarEmpleo.Services;
+using RadarEmpleo.Services.Curriculum;
 
 namespace RadarEmpleo.Tests;
 
@@ -27,6 +30,58 @@ public sealed class RelojFijo : IClock
 
     /// <summary>Adelanta el reloj.</summary>
     public void Avanzar(TimeSpan tiempo) => AhoraUtc += tiempo;
+}
+
+/// <summary>Exportador para tests: no escribe nada, cuenta las llamadas y devuelve lo que diga el test.</summary>
+public sealed class ExportadorFalso : IExportadorRadar
+{
+    public int Llamadas { get; private set; }
+
+    public bool Resultado { get; set; } = true;
+
+    public Task<bool> ExportarAsync()
+    {
+        Llamadas++;
+        return Task.FromResult(Resultado);
+    }
+}
+
+/// <summary>
+/// Ejecuta una acción justo antes del primer guardado, una sola vez: sirve para simular que otra
+/// petición guarda entre la lectura y el guardado del servicio bajo prueba.
+/// </summary>
+public sealed class AntesDeGuardar(Func<Task> accion) : SaveChangesInterceptor
+{
+    private Func<Task>? _pendiente = accion;
+
+    public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+        InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    {
+        var pendiente = _pendiente;
+        _pendiente = null;
+        if (pendiente is not null) await pendiente();
+        return result;
+    }
+}
+
+/// <summary>
+/// Ejecuta una acción justo antes de la primera consulta cuyo SQL contenga el texto dado, una sola vez:
+/// simula que otra petición guarda entre dos lecturas del servicio bajo prueba.
+/// </summary>
+public sealed class AntesDeConsultar(string contiene, Func<Task> accion) : DbCommandInterceptor
+{
+    private Func<Task>? _pendiente = accion;
+
+    public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+        CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+    {
+        if (_pendiente is { } pendiente && command.CommandText.Contains(contiene, StringComparison.Ordinal))
+        {
+            _pendiente = null;
+            await pendiente();
+        }
+        return result;
+    }
 }
 
 /// <summary>
@@ -58,6 +113,9 @@ public abstract class ArnesSqliteTests : IDisposable
     /// <summary>Reloj fijo que reciben los servicios.</summary>
     protected RelojFijo Reloj { get; } = new(AhoraInicial);
 
+    /// <summary>Exportador falso que reciben los servicios: los tests de servicio nunca escriben en disco.</summary>
+    protected ExportadorFalso Exportador { get; } = new();
+
     protected ArnesSqliteTests()
     {
         // Una única conexión abierta y compartida mantiene viva la BD en memoria mientras el test vive.
@@ -76,6 +134,14 @@ public abstract class ArnesSqliteTests : IDisposable
 
     /// <summary>Crea un contexto nuevo sobre la conexión compartida (para siembras y asserts).</summary>
     protected AppDbContext CreateContext() => new AppDbContext(Options);
+
+    /// <summary>Factory sobre la misma BD cuyo primer guardado ejecuta antes <paramref name="accion"/> (ver <see cref="AntesDeGuardar"/>).</summary>
+    protected TestDbContextFactory FactoryAntesDeGuardar(Func<Task> accion) =>
+        new(new DbContextOptionsBuilder<AppDbContext>(Options).AddInterceptors(new AntesDeGuardar(accion)).Options);
+
+    /// <summary>Factory sobre la misma BD que ejecuta <paramref name="accion"/> antes de la primera consulta con ese SQL (ver <see cref="AntesDeConsultar"/>).</summary>
+    protected TestDbContextFactory FactoryAntesDeConsultar(string contiene, Func<Task> accion) =>
+        new(new DbContextOptionsBuilder<AppDbContext>(Options).AddInterceptors(new AntesDeConsultar(contiene, accion)).Options);
 
     /// <summary>Cierra la conexión compartida, lo que descarta la base de datos en memoria.</summary>
     public void Dispose()

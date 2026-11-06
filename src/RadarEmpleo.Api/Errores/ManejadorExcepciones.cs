@@ -12,12 +12,15 @@ namespace RadarEmpleo.Api.Errores;
 /// <list type="bullet">
 /// <item><see cref="ValidacionException"/> → 400 (datos inválidos), con el campo en <c>errors</c>.</item>
 /// <item><see cref="ReglaNegocioException"/> → 409 (la operación no se permite en el estado actual).</item>
+/// <item>Otra petición ha cambiado la candidatura entre medias (<see cref="DbUpdateConcurrencyException"/>) → 409.</item>
 /// <item>Violación de un índice único en la BD (<see cref="DbUpdateException"/> de SQLite) → 409.</item>
 /// </list>
 /// Cualquier otra excepción sigue su camino y acaba en un 500 genérico (sin detalles internos).
 /// </summary>
 public sealed class ManejadorExcepciones(IProblemDetailsService problemDetails) : IExceptionHandler
 {
+    public const string MensajeCambiadaEnOtraPestana = "Otra pestaña acaba de cambiar esta candidatura. Vuelve a abrirla para ver cómo ha quedado.";
+
     public async ValueTask<bool> TryHandleAsync(HttpContext http, Exception exception, CancellationToken cancellationToken)
     {
         ProblemDetails? problema = exception switch
@@ -29,6 +32,9 @@ public sealed class ManejadorExcepciones(IProblemDetailsService problemDetails) 
                 validacion.Message),
 
             ReglaNegocioException regla => Conflicto(regla.Message),
+
+            // La importación ya lo traduce a su propio mensaje: este es el de la ficha.
+            DbUpdateConcurrencyException => Conflicto(MensajeCambiadaEnOtraPestana),
 
             DbUpdateException bd when ErroresBaseDatos.EsViolacionUnica(bd, out _) =>
                 Conflicto("Ya existe un registro con esos mismos datos. Revisa si lo has dado de alta antes."),

@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
+import { Title } from '@angular/platform-browser';
 import { provideRouter, Router, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
@@ -71,6 +72,36 @@ describe('Navegación', () => {
     const activos = harness.routeNativeElement!.querySelectorAll('a[aria-current="page"]');
     expect(activos).toHaveLength(2);
     activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/rastreos'));
+  });
+
+  it('desde Más se llega a la importación, que resalta Más y pide la vista previa', async () => {
+    const harness = await RouterTestingHarness.create('/mas');
+    const pagina = harness.routeNativeElement!;
+
+    pagina.querySelector<HTMLAnchorElement>('main a[href="/importacion"]')!.click();
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/importacion');
+    expect(TestBed.inject(Title).getTitle()).toBe('Traer del registro · RadarEmpleo');
+    http.expectOne('/api/importacion/tabla/previsualizar').flush({
+      lote: { version: 1, origen: 'Tabla', filas: [] },
+      resumen: {
+        nuevas: 0,
+        avanzan: 0,
+        yaExisten: 0,
+        paraRevisar: 0,
+        sinLeer: 0,
+        enviosEnTexto: 0,
+      },
+      filas: [],
+      sinLeer: [],
+    });
+    await harness.fixture.whenStable();
+
+    expect(pagina.querySelector('h1')?.textContent).toContain('Traer del registro');
+    const activos = pagina.querySelectorAll('a[aria-current="page"]');
+    expect(activos).toHaveLength(2);
+    activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/mas'));
   });
 
   describe('salir de Apuntar', () => {

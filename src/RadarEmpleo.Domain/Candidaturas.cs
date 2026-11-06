@@ -99,7 +99,8 @@ public class Candidatura
     /// <item>A «Enviada»: <see cref="FechaEnvio"/> pasa a ser ahora (también al reenviar tras reabrir:
     /// es un envío nuevo) y se programa un recordatorio de seguimiento para las 09:00 de Madrid
     /// <see cref="ReglasEstado.DiasSeguimiento"/> días después (<see cref="ReglasEstado.FechaSeguimiento"/>),
-    /// salvo que ya haya uno pendiente.</item>
+    /// salvo que ya haya uno pendiente o <paramref name="programarSeguimiento"/> sea false (un envío
+    /// importado de hace semanas no debe crear un seguimiento ya vencido).</item>
     /// <item>A «Entrevista» u «Oferta» sin fecha de envío (se saltó «Enviada»): se rellena
     /// <see cref="FechaEnvio"/> con ahora, pero sin seguimiento (ya hay respuesta).</item>
     /// <item>A «Descartada»: guarda el motivo. A cualquier otro estado, el motivo se borra.</item>
@@ -115,7 +116,8 @@ public class Candidatura
         Origen origen,
         MotivoDescarte? motivo = null,
         string? motivoTexto = null,
-        string? comentario = null)
+        string? comentario = null,
+        bool programarSeguimiento = true)
     {
         ReglasEstado.Validar(Estado, nuevo, motivo);
 
@@ -145,7 +147,7 @@ public class Candidatura
         {
             case EstadoCandidatura.Enviada:
                 FechaEnvio = ahoraUtc;
-                if (!SeguimientosPendientes().Any())
+                if (programarSeguimiento && !SeguimientosPendientes().Any())
                 {
                     Recordatorios.Add(new Recordatorio
                     {

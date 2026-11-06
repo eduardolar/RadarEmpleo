@@ -20,6 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Registro inventado: los tests nunca usan el real. -->
+    <None Include="..\..\datos-ejemplo\**\*" LinkBase="datos-ejemplo" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\RadarEmpleo.Domain\RadarEmpleo.Domain.csproj" />
     <ProjectReference Include="..\..\src\RadarEmpleo.Data\RadarEmpleo.Data.csproj" />
     <ProjectReference Include="..\..\src\RadarEmpleo.Services\RadarEmpleo.Services.csproj" />

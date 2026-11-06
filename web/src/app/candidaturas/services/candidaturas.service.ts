@@ -1,18 +1,9 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import {
-  catchError,
-  defer,
-  finalize,
-  MonoTypeOperatorFunction,
-  Observable,
-  Subscription,
-  tap,
-  throwError,
-} from 'rxjs';
+import { defer, finalize, Observable, Subscription, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ErrorApi } from '../../core/interfaces/error-api.interface';
-import { convertirErrorApi } from '../../core/utils/error-api';
+import { conErrorApi, convertirErrorApi } from '../../core/utils/error-api';
 import {
   CambiarEstado,
   CandidaturaDetalle,
@@ -24,11 +15,6 @@ import {
 
 const URL_CANDIDATURAS = `${environment.apiUrl}/api/candidaturas`;
 const URL_NOTAS = `${environment.apiUrl}/api/notas`;
-
-/** Los errores de las operaciones llegan a quien se suscribe ya convertidos en ErrorApi */
-function conErrorApi<T>(): MonoTypeOperatorFunction<T> {
-  return catchError((error: unknown) => throwError(() => convertirErrorApi(error)));
-}
 
 function aResumen(d: CandidaturaDetalle): CandidaturaResumen {
   return {

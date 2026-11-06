@@ -39,7 +39,7 @@ public class EmpresasService
     /// o crea una nueva con el nombre tal cual se escribió (recortado). Mira primero las empresas que
     /// el contexto ya sigue (incluidas las recién añadidas y aún sin guardar) y después la BD. No
     /// guarda: lo hace quien llama, en la misma transacción que la candidatura, y si otra petición
-    /// crea la misma empresa entre medias, quien llama reintenta con <see cref="ReutilizarSiDuplicadaAsync"/>.
+    /// crea la misma empresa entre medias, quien llama reintenta con <see cref="ReutilizarDuplicadasAsync"/>.
     /// </summary>
     /// <exception cref="ValidacionException">El nombre está vacío o se queda sin letras ni números al
     /// normalizarlo («, S.L.», «...»).</exception>
@@ -69,24 +69,59 @@ public class EmpresasService
         && detalle.Contains("Empresas.NombreNormalizado", StringComparison.Ordinal);
 
     /// <summary>
-    /// Tras un <see cref="EsEmpresaDuplicada"/>: si <paramref name="candidatura"/> iba a crear su
-    /// empresa, deja de crearla (la quita del contexto) y la apunta a la que otra petición acaba de
-    /// guardar con el mismo nombre normalizado. Devuelve false si no hay nada que reintentar.
+    /// Guarda y, si otra petición ha creado a la vez una de las empresas nuevas (salta el índice único de
+    /// <c>Empresas.NombreNormalizado</c>), reintenta UNA vez apuntando a la empresa ya creada.
     /// </summary>
-    internal static async Task<bool> ReutilizarSiDuplicadaAsync(AppDbContext db, Candidatura candidatura)
+    internal static async Task GuardarReutilizandoEmpresasAsync(AppDbContext db)
     {
-        var empresa = candidatura.Empresa;
-        if (db.Entry(empresa).State != EntityState.Added) return false;
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException error) when (EsEmpresaDuplicada(error))
+        {
+            if (!await ReutilizarDuplicadasAsync(db)) throw;
+            await db.SaveChangesAsync();
+        }
+    }
 
-        var existente = await db.Empresas.FirstOrDefaultAsync(e => e.NombreNormalizado == empresa.NombreNormalizado);
-        if (existente is null) return false;
+    /// <summary>
+    /// Tras un <see cref="EsEmpresaDuplicada"/>: cada empresa que <paramref name="db"/> iba a crear y que
+    /// otra petición acaba de guardar con el mismo nombre normalizado deja de crearse (se quita del
+    /// contexto), y las candidaturas que la usaban pasan a apuntar a la ya guardada. Sirve para un alta
+    /// suelta y para una importación con varias candidaturas y empresas nuevas. Devuelve false si no hay
+    /// nada que reintentar.
+    /// </summary>
+    internal static async Task<bool> ReutilizarDuplicadasAsync(AppDbContext db)
+    {
+        var nuevas = db.ChangeTracker.Entries<Empresa>()
+            .Where(e => e.State == EntityState.Added)
+            .Select(e => e.Entity)
+            .ToList();
+        if (nuevas.Count == 0) return false;
 
-        // Primero se reasigna (y EF mueve la candidatura de una empresa a otra) y después se quita la
-        // duplicada: al revés, EF entendería que la candidatura se queda sin empresa.
-        candidatura.Empresa = existente;
-        candidatura.EmpresaId = existente.Id;
-        db.ChangeTracker.DetectChanges();
-        db.Entry(empresa).State = EntityState.Detached;
-        return true;
+        var nombres = nuevas.Select(e => e.NombreNormalizado).ToList();
+        var guardadas = await db.Empresas
+            .Where(e => nombres.Contains(e.NombreNormalizado))
+            .ToDictionaryAsync(e => e.NombreNormalizado, StringComparer.Ordinal);
+        var candidaturas = db.ChangeTracker.Entries<Candidatura>().Select(e => e.Entity).ToList();
+
+        var reutilizada = false;
+        foreach (var empresa in nuevas)
+        {
+            if (!guardadas.TryGetValue(empresa.NombreNormalizado, out var existente)) continue;
+
+            // Primero se reasigna (y EF mueve las candidaturas de una empresa a otra) y después se quita la
+            // duplicada: al revés, EF entendería que las candidaturas se quedan sin empresa.
+            foreach (var candidatura in candidaturas.Where(c => ReferenceEquals(c.Empresa, empresa)))
+            {
+                candidatura.Empresa = existente;
+                candidatura.EmpresaId = existente.Id;
+            }
+            db.ChangeTracker.DetectChanges();
+            db.Entry(empresa).State = EntityState.Detached;
+            reutilizada = true;
+        }
+        return reutilizada;
     }
 }

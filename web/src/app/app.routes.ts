@@ -41,6 +41,12 @@ export const routes: Routes = [
         loadComponent: () => import('./mas/pages/mas-page/mas-page.component'),
       },
       {
+        path: 'importacion',
+        title: 'Traer del registro · RadarEmpleo',
+        loadComponent: () =>
+          import('./importacion/pages/importacion-page/importacion-page.component'),
+      },
+      {
         path: '**',
         redirectTo: 'hoy',
       },

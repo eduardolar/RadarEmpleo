@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using RadarEmpleo.Api.Configuracion;
 using RadarEmpleo.Api.Errores;
 using RadarEmpleo.Domain;
 using RadarEmpleo.Services.Contratos;
@@ -69,6 +71,15 @@ public sealed class ApiTests : IDisposable
 
         Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
         Assert.Equal("Healthy", await respuesta.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public void Fabrica_CarpetaCurriculum_EsLaTemporalDelTestYNoLaReal()
+    {
+        var opciones = _fabrica.Services.GetRequiredService<IOptions<OpcionesRadar>>().Value;
+
+        Assert.Equal(_fabrica.CarpetaCurriculum, opciones.CarpetaCurriculum);
+        Assert.StartsWith(Path.GetTempPath(), opciones.CarpetaCurriculum);
     }
 
     [Fact]
@@ -235,6 +246,15 @@ public sealed class ApiTests : IDisposable
         var problema = await AssertBadRequestEnEspanolAsync(respuesta);
         Assert.StartsWith("El nombre de la empresa no es válido", problema.GetProperty("detail").GetString());
         Assert.True(problema.GetProperty("errors").TryGetProperty("empresa", out _));
+    }
+
+    [Fact]
+    public async Task CrearCandidatura_EnlaceQueNoEsWeb_Devuelve400ConElCampoEnlace()
+    {
+        var respuesta = await _http.PostAsJsonAsync("/api/candidaturas", new { empresa = "Acme", puesto = "Backend", enlace = "mailto:a@ejemplo.com" });
+
+        var problema = await AssertBadRequestEnEspanolAsync(respuesta);
+        Assert.Equal("El enlace tiene que ser una dirección web.", problema.GetProperty("errors").GetProperty("enlace")[0].GetString());
     }
 
     [Fact]

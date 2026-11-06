@@ -86,4 +86,20 @@ public static class ReglasEstado
 
     /// <summary>Nombre del estado para los mensajes al usuario.</summary>
     public static string Texto(EstadoCandidatura estado) => estado.ToString();
+
+    /// <summary>Motivo de descarte en español, como lo enseña el front.</summary>
+    public static string Texto(MotivoDescarte motivo) => motivo switch
+    {
+        MotivoDescarte.Experiencia => "Experiencia",
+        MotivoDescarte.Ingles => "Inglés",
+        MotivoDescarte.Titulacion => "Titulación",
+        MotivoDescarte.Zona => "Zona",
+        MotivoDescarte.Modalidad => "Modalidad",
+        MotivoDescarte.Perfil => "Perfil",
+        MotivoDescarte.Salario => "Salario",
+        MotivoDescarte.Cerrada => "Oferta cerrada",
+        MotivoDescarte.DecisionPropia => "Decisión propia",
+        MotivoDescarte.Otro => "Otro",
+        _ => motivo.ToString()
+    };
 }

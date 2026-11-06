@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { catchError, MonoTypeOperatorFunction, throwError } from 'rxjs';
 import { ErrorApi } from '../interfaces/error-api.interface';
 
 const SIN_CONEXION =
@@ -41,6 +42,11 @@ export function convertirErrorApi(error: unknown): ErrorApi {
     textoNoVacio(problema['detail']) ?? titulo ?? POR_CODIGO[error.status] ?? inesperado;
 
   return { estado: error.status, mensaje, errores };
+}
+
+/** Los errores de las operaciones llegan a quien se suscribe ya convertidos en ErrorApi */
+export function conErrorApi<T>(): MonoTypeOperatorFunction<T> {
+  return catchError((error: unknown) => throwError(() => convertirErrorApi(error)));
 }
 
 function leerErrores(valor: unknown): Record<string, string[]> {

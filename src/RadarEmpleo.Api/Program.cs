@@ -6,6 +6,8 @@ using RadarEmpleo.Api.Configuracion;
 using RadarEmpleo.Api.Errores;
 using RadarEmpleo.Data;
 using RadarEmpleo.Services;
+using RadarEmpleo.Services.Curriculum;
+using RadarEmpleo.Services.Importacion;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,6 +38,12 @@ builder.Services.AddDbContextFactory<AppDbContext>((sp, o) =>
 builder.Services.AddSingleton<IClock, RelojSistema>();
 builder.Services.AddScoped<CandidaturasService>();
 builder.Services.AddScoped<EmpresasService>();
+builder.Services.AddScoped<ImportacionService>();
+// Services no referencia a Api: las rutas se construyen aquí a partir de las opciones.
+builder.Services.AddSingleton(sp =>
+    new RutasCurriculum(sp.GetRequiredService<IOptions<OpcionesRadar>>().Value.CarpetaCurriculum));
+builder.Services.AddSingleton<ILectorCurriculum, LectorCurriculum>();
+builder.Services.AddSingleton<IExportadorRadar, ExportadorRadarMd>();
 
 // --- API: controladores, enums como texto en JSON, ProblemDetails, 400 en español y 409 para reglas de negocio ---
 // Enums SOLO como texto: con allowIntegerValues: false, {"estado":99} o "modalidad":42 dan 400 en vez

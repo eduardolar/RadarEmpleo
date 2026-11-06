@@ -17,7 +17,13 @@ export const OPCIONES_MENU: readonly OpcionMenu[] = [
     ruta: '/rastreos',
     icono: 'rastreos',
   },
-  { etiqueta: 'Más', descripcion: 'Agenda, perfil y ajustes', ruta: '/mas', icono: 'mas' },
+  {
+    etiqueta: 'Más',
+    descripcion: 'Agenda, perfil y ajustes',
+    ruta: '/mas',
+    subrutas: ['/importacion'],
+    icono: 'mas',
+  },
 ];
 
 /** Opción del menú a la que pertenece una URL, con sus páginas interiores */

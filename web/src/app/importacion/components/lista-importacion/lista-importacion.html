@@ -1,0 +1,74 @@
+<ul class="flex flex-col gap-2">
+  <!-- Por posición: una fila repetida en el registro trae la misma clave que la primera -->
+  @for (fila of filas(); track $index) {
+    <!-- data-estado: la franja y el chip toman el color del estado que dice el chip (styles.css) -->
+    <li
+      [attr.data-estado]="
+        fila.resultado === 'YaExiste'
+          ? (fila.estadoActual ?? fila.estadoRegistro)
+          : fila.estadoRegistro
+      "
+      class="relative overflow-hidden rounded-xl bg-surface-container-lowest py-3 pr-3 pl-4 shadow-sm ring-1 ring-outline-variant"
+    >
+      <span aria-hidden="true" class="absolute inset-y-0 left-0 w-1 bg-estado"></span>
+
+      <p class="text-xs font-medium text-on-surface-variant">{{ fila.empresa }}</p>
+      <p class="mt-0.5 text-[0.9375rem] leading-snug font-semibold text-on-surface">
+        {{ fila.puesto }}
+      </p>
+
+      <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        <span
+          class="inline-flex items-center gap-1 rounded-full bg-estado-suave px-2 py-0.5 font-medium text-on-estado ring-1 ring-estado-borde"
+        >
+          <span aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full bg-estado"></span>
+          <span class="sr-only">Estado: </span>{{ textoEstado(fila) }}
+        </span>
+        <span class="text-on-surface-variant tabular-nums">{{ fila.fecha | fechaMadrid }}</span>
+      </p>
+
+      @if (fila.motivo) {
+        <p class="mt-2 rounded-xl bg-surface-container-low px-3 py-2 text-sm text-on-surface">
+          {{ fila.motivo }}
+        </p>
+      }
+      @for (aviso of fila.avisos; track $index) {
+        <p class="mt-2 flex items-start gap-1.5 text-sm text-on-surface-variant">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            class="mt-0.5 h-4 w-4 shrink-0"
+          >
+            <circle cx="10" cy="10" r="7" />
+            <path stroke-linecap="round" d="M10 9.5v4M10 6.5h.01" />
+          </svg>
+          <span class="min-w-0">{{ aviso }}</span>
+        </p>
+      }
+
+      <!-- La que ya está en la app: compararla de un vistazo antes de decidir nada -->
+      @if (fila.candidaturaId !== null) {
+        <a
+          [routerLink]="['/candidaturas', fila.candidaturaId]"
+          [attr.aria-label]="'Ver la que tienes: ' + fila.puesto + ' en ' + fila.empresa"
+          class="-mb-2 -ml-1 inline-flex min-h-12 items-center gap-1 rounded-lg px-1 text-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+        >
+          Ver la que tienes
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            class="h-4 w-4"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="m7.5 5 5 5-5 5" />
+          </svg>
+        </a>
+      }
+    </li>
+  }
+</ul>

@@ -1,0 +1,300 @@
+<!-- overflow-wrap se hereda: cubre cualquier texto que venga del registro (una URL en un motivo, un
+     puesto muy largo...) para que no ensanche la página en el móvil -->
+<section
+  #inicio
+  tabindex="-1"
+  aria-label="Traer del registro"
+  class="flex max-w-3xl flex-col gap-5 [overflow-wrap:anywhere] outline-none"
+>
+  <!-- Como en la ficha: en el móvil la única salida sería la pestaña «Más» de abajo -->
+  <a
+    routerLink="/mas"
+    class="-mb-3 -ml-1 inline-flex min-h-12 items-center gap-1.5 self-start rounded-lg px-1 text-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+  >
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      class="h-4 w-4"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12.5 15 7.5 10l5-5" />
+    </svg>
+    Volver a Más
+  </a>
+
+  <app-cabecera-pagina
+    titulo="Traer del registro"
+    descripcion="Copia en la app las candidaturas de la tabla de tu registro (ofertas-enviadas.md). El archivo no se cambia."
+  />
+
+  <!-- Hueco fijo para que la barra no empuje la página al aparecer -->
+  <div class="-my-2 h-1 shrink-0">
+    @if (cargando()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Leyendo el registro" />
+    }
+  </div>
+
+  <!-- Contenedor fijo: los lectores de pantalla solo anuncian cambios en regiones que ya existían.
+       Vacío no se oculta: el margen negativo solo anula la separación que le da la columna -->
+  <div role="status" aria-live="polite" class="empty:-mt-5">
+    <!-- La barra sola es muy fina: sin texto parecería una página vacía -->
+    @if (cargando() && !resultado()) {
+      <p class="text-sm text-on-surface-variant">Leyendo tu registro...</p>
+    }
+    @if (resultado() || todoAlDia()) {
+      <div
+        class="flex flex-col items-center rounded-2xl bg-surface-container-lowest px-6 py-8 text-center ring-1 ring-outline-variant"
+      >
+        <!-- Una marca de hecho dentro de los círculos del radar -->
+        <svg aria-hidden="true" viewBox="0 0 96 96" class="h-20 w-20">
+          <circle cx="48" cy="48" r="44" class="fill-primary-container" />
+          <circle cx="48" cy="48" r="31" fill="none" class="stroke-primary/30" stroke-width="2" />
+          <path
+            d="m35 49 9.5 9.5L62 38"
+            fill="none"
+            class="stroke-primary"
+            stroke-width="5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <div class="mt-4 max-w-md space-y-1">
+          @if (todoAlDia()) {
+            <p class="text-lg font-medium text-on-surface">{{ tituloAlDia() }}</p>
+          }
+          @if (resultado(); as hecho) {
+            <p class="font-medium text-on-surface">{{ textoResultado(hecho) }}</p>
+            @if (!hecho.radarActualizado) {
+              <p class="text-sm text-on-surface-variant">{{ avisoRadar }}</p>
+            }
+          } @else {
+            <p class="text-sm text-on-surface-variant">{{ textoNadaQueAnadir() }}</p>
+          }
+        </div>
+
+        <!-- Lo siguiente que se hace: ver lo traído o, tras tocar el archivo, volver a leerlo -->
+        <div class="mt-5 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
+          @if (hayCambiosGuardados()) {
+            <a
+              mat-flat-button
+              routerLink="/tablero"
+              class="[--mat-button-filled-container-height:48px]"
+            >
+              Ver el tablero
+            </a>
+          }
+          @if (todoAlDia()) {
+            <button
+              mat-button
+              type="button"
+              class="[--mat-button-text-container-height:48px]"
+              (click)="reintentar()"
+            >
+              Volver a leer
+            </button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  @if (error(); as mensaje) {
+    <div
+      role="alert"
+      class="flex items-start gap-3 rounded-2xl bg-error-container p-4 text-on-error-container"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        class="mt-0.5 h-5 w-5 shrink-0"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path stroke-linecap="round" d="M12 7.5v5.5M12 16.5h.01" />
+      </svg>
+      <div class="min-w-0">
+        <p>{{ mensaje }}</p>
+        <button
+          mat-button
+          type="button"
+          class="mt-2 [--mat-button-text-container-height:48px]"
+          (click)="reintentar()"
+        >
+          Reintentar
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Un solo botón para las dos posiciones: arriba con el resumen y, en listas largas, al final -->
+  <ng-template #botonAplicar>
+    <!-- 48 px también con ratón: es la acción de la página -->
+    <button
+      mat-flat-button
+      type="button"
+      class="w-full shrink-0 text-balance [--mat-button-filled-container-height:48px] sm:w-auto"
+      disabledInteractive
+      [disabled]="aplicando()"
+      (click)="aplicar()"
+    >
+      {{ aplicando() ? 'Guardando...' : textoBoton() }}
+    </button>
+  </ng-template>
+
+  @if (vista(); as previa) {
+    @if (lineasResumen().length > 0 || porAplicar().length > 0) {
+      <div
+        class="flex flex-col gap-4 rounded-2xl bg-surface-container-lowest p-4 ring-1 ring-outline-variant sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      >
+        @if (lineasResumen().length > 0) {
+          <ul aria-label="Resumen del registro" class="flex min-w-0 flex-wrap gap-2">
+            @for (linea of lineasResumen(); track linea) {
+              <li
+                class="rounded-full bg-surface-container px-3 py-1 text-sm font-medium text-on-surface"
+              >
+                {{ linea }}
+              </li>
+            }
+          </ul>
+        }
+
+        @if (porAplicar().length > 0) {
+          <!-- Volver a leer también aquí: tras corregir el archivo no hay que buscarlo en los grupos plegados -->
+          <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              mat-stroked-button
+              type="button"
+              class="w-full [--mat-button-outlined-container-height:48px] sm:w-auto"
+              disabledInteractive
+              [disabled]="aplicando()"
+              (click)="reintentar()"
+            >
+              Volver a leer
+            </button>
+            <ng-container [ngTemplateOutlet]="botonAplicar" />
+          </div>
+        }
+      </div>
+    }
+
+    @if (avisoEnvios(); as aviso) {
+      <p
+        class="flex items-start gap-2 rounded-xl bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          class="mt-0.5 h-4 w-4 shrink-0"
+        >
+          <circle cx="10" cy="10" r="7" />
+          <path stroke-linecap="round" d="M10 9.5v4M10 6.5h.01" />
+        </svg>
+        <span class="min-w-0">{{ aviso }}</span>
+      </p>
+    }
+
+    <!-- Separadas: el chip «Enviada» de una nueva no se confunde con el de una que ya existe -->
+    @if (nuevas().length > 0) {
+      <section aria-labelledby="titulo-nuevas" class="flex flex-col gap-3">
+        <h2 id="titulo-nuevas" class="text-lg font-semibold text-on-surface">
+          Se van a añadir ({{ nuevas().length }})
+        </h2>
+        <app-lista-importacion [filas]="nuevas()" />
+      </section>
+    }
+
+    @if (avanzan().length > 0) {
+      <section aria-labelledby="titulo-avanzan" class="flex flex-col gap-3">
+        <div class="space-y-1">
+          <h2 id="titulo-avanzan" class="text-lg font-semibold text-on-surface">
+            Cambian de estado ({{ avanzan().length }})
+          </h2>
+          <p class="text-sm text-on-surface-variant">
+            Ya están en la app: solo se les pone el estado de tu archivo. No se borra nada.
+          </p>
+        </div>
+        <app-lista-importacion [filas]="avanzan()" />
+      </section>
+    }
+
+    <!-- Tras repasar una lista larga, el botón de arriba queda lejos del pulgar -->
+    @if (porAplicar().length > filasParaRepetirBoton) {
+      <div class="flex sm:justify-end">
+        <ng-container [ngTemplateOutlet]="botonAplicar" />
+      </div>
+    }
+
+    <div class="flex flex-col gap-2 empty:hidden">
+      @for (grupo of grupos(); track grupo.titulo) {
+        @if (grupo.filas.length > 0) {
+          <details class="group rounded-2xl bg-surface-container">
+            <summary
+              class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-2 font-semibold text-on-surface transition-colors group-open:rounded-b-none hover:bg-surface-container-high focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
+            >
+              <span class="min-w-0">{{ grupo.titulo }} ({{ grupo.filas.length }})</span>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                class="h-5 w-5 shrink-0 text-on-surface-variant transition-transform group-open:rotate-180 motion-reduce:transition-none"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="m5 7.5 5 5 5-5" />
+              </svg>
+            </summary>
+            <p class="px-4 pt-1 text-sm text-on-surface-variant">{{ grupo.explicacion }}</p>
+            <app-lista-importacion class="px-2 pt-2 pb-2" [filas]="grupo.filas" />
+          </details>
+        }
+      }
+
+      @if (previa.sinLeer.length > 0) {
+        <details class="group rounded-2xl bg-surface-container">
+          <summary
+            class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-2 font-semibold text-on-surface transition-colors group-open:rounded-b-none hover:bg-surface-container-high focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
+          >
+            <span class="min-w-0">No se han podido leer ({{ previa.sinLeer.length }})</span>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              class="h-5 w-5 shrink-0 text-on-surface-variant transition-transform group-open:rotate-180 motion-reduce:transition-none"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="m5 7.5 5 5 5-5" />
+            </svg>
+          </summary>
+          <p class="px-4 pt-1 text-sm text-on-surface-variant">{{ explicacionSinLeer }}</p>
+          <ul class="flex flex-col gap-2 px-2 pt-2 text-sm text-on-surface">
+            @for (fila of previa.sinLeer; track fila.linea) {
+              <li class="rounded-xl bg-surface-container-lowest p-3 ring-1 ring-outline-variant">
+                Línea {{ fila.linea }}: {{ fila.motivo }}
+              </li>
+            }
+          </ul>
+          <div class="px-2 pt-1 pb-2">
+            <button
+              mat-button
+              type="button"
+              class="[--mat-button-text-container-height:48px]"
+              disabledInteractive
+              [disabled]="aplicando()"
+              (click)="reintentar()"
+            >
+              Volver a leer
+            </button>
+          </div>
+        </details>
+      }
+    </div>
+  }
+</section>

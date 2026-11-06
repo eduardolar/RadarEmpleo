@@ -15,7 +15,51 @@ public class CandidaturasServiceTests : ArnesSqliteTests
 
     public CandidaturasServiceTests()
     {
-        _candidaturas = new CandidaturasService(Factory, Reloj); // ctor real bajo prueba
+        _candidaturas = new CandidaturasService(Factory, Reloj, Exportador); // ctor real bajo prueba
+    }
+
+    [Fact]
+    public async Task CrearEditarCambiarEstadoYBorrar_CadaUno_ExportaElRadar()
+    {
+        var creada = await CrearAsync();
+        Assert.Equal(1, Exportador.Llamadas);
+
+        await _candidaturas.EditarAsync(creada.Id, new GuardarCandidaturaRequest("Acme", "Backend"));
+        Assert.Equal(2, Exportador.Llamadas);
+
+        await _candidaturas.CambiarEstadoAsync(creada.Id, new CambiarEstadoRequest(EstadoCandidatura.Enviada));
+        Assert.Equal(3, Exportador.Llamadas);
+
+        await _candidaturas.BorrarAsync(creada.Id);
+        Assert.Equal(4, Exportador.Llamadas);
+    }
+
+    [Fact]
+    public async Task OperacionesQueNoCambianElRadar_NoExportan()
+    {
+        var creada = await CrearAsync();
+        var llamadas = Exportador.Llamadas;
+
+        var nota = await _candidaturas.AnadirNotaAsync(creada.Id, new CrearNotaRequest("Una nota"));
+        await _candidaturas.BorrarNotaAsync(nota!.Id);
+        await _candidaturas.ListarAsync();
+        await _candidaturas.ObtenerAsync(creada.Id);
+        await _candidaturas.BorrarAsync(999);
+        await _candidaturas.EditarAsync(999, new GuardarCandidaturaRequest("Acme", "Backend"));
+        await Assert.ThrowsAsync<ReglaNegocioException>(() =>
+            _candidaturas.CambiarEstadoAsync(creada.Id, new CambiarEstadoRequest(EstadoCandidatura.Detectada)));
+
+        Assert.Equal(llamadas, Exportador.Llamadas);
+    }
+
+    [Fact]
+    public async Task CrearAsync_SiElRadarNoSePuedeEscribir_LaCandidaturaQuedaGuardada()
+    {
+        Exportador.Resultado = false;
+
+        var creada = await CrearAsync();
+
+        Assert.NotNull(await _candidaturas.ObtenerAsync(creada.Id));
     }
 
     private Task<CandidaturaDetalleDto> CrearAsync(string empresa = "Acme Software S.L.", string puesto = "Desarrollador .NET",
@@ -84,6 +128,44 @@ public class CandidaturasServiceTests : ArnesSqliteTests
     {
         await Assert.ThrowsAsync<ValidacionException>(() =>
             _candidaturas.CrearAsync(new GuardarCandidaturaRequest("Acme", "Backend", Modalidad: (Modalidad)42)));
+    }
+
+    [Theory]
+    [InlineData("www.ejemplo.com/ofertas/1", "https://www.ejemplo.com/ofertas/1")]
+    [InlineData("  https://ejemplo.com/ofertas/1  ", "https://ejemplo.com/ofertas/1")]
+    [InlineData("   ", null)]
+    public async Task CrearAsync_Enlace_SeGuardaNormalizado(string enlace, string? esperado)
+    {
+        var detalle = await _candidaturas.CrearAsync(new GuardarCandidaturaRequest("Acme", "Backend", Enlace: enlace));
+
+        Assert.Equal(esperado, detalle.Enlace);
+    }
+
+    [Theory]
+    [InlineData("mailto:rrhh@ejemplo.com")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("no es un enlace")]
+    public async Task CrearAsync_EnlaceQueNoEsWeb_LanzaValidacionYNoGuardaNada(string enlace)
+    {
+        var ex = await Assert.ThrowsAsync<ValidacionException>(() =>
+            _candidaturas.CrearAsync(new GuardarCandidaturaRequest("Empresa Nueva", "Backend", Enlace: enlace)));
+
+        Assert.Equal("enlace", ex.Campo);
+        await using var db = CreateContext();
+        Assert.Equal(0, await db.Candidaturas.CountAsync());
+        Assert.Equal(0, await db.Empresas.CountAsync());
+    }
+
+    [Fact]
+    public async Task EditarAsync_EnlaceQueNoEsWeb_LanzaValidacionYDejaElAnterior()
+    {
+        var creada = await _candidaturas.CrearAsync(new GuardarCandidaturaRequest("Acme", "Backend", Enlace: "ejemplo.com/1"));
+
+        var ex = await Assert.ThrowsAsync<ValidacionException>(() =>
+            _candidaturas.EditarAsync(creada.Id, new GuardarCandidaturaRequest("Acme", "Backend", Enlace: "mailto:a@ejemplo.com")));
+
+        Assert.Equal("enlace", ex.Campo);
+        Assert.Equal("https://ejemplo.com/1", (await _candidaturas.ObtenerAsync(creada.Id))!.Enlace);
     }
 
     [Fact]
@@ -455,5 +537,90 @@ public class CandidaturasServiceTests : ArnesSqliteTests
     public async Task AnadirNotaAsync_CandidaturaInexistente_DevuelveNull()
     {
         Assert.Null(await _candidaturas.AnadirNotaAsync(999, new CrearNotaRequest("Hola")));
+    }
+
+    [Fact]
+    public async Task EdicionesYCambiosDeEstadoSeguidos_ConElControlDeConcurrencia_NoChocan()
+    {
+        var creada = await CrearAsync();
+
+        // Mismo instante a propósito: el control compara con lo leído, no con la hora.
+        await _candidaturas.EditarAsync(creada.Id, new GuardarCandidaturaRequest("Acme", "Backend"));
+        await _candidaturas.CambiarEstadoAsync(creada.Id, new CambiarEstadoRequest(EstadoCandidatura.Enviada));
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+        await _candidaturas.EditarAsync(creada.Id, new GuardarCandidaturaRequest("Acme", "Backend senior"));
+        await _candidaturas.AnadirNotaAsync(creada.Id, new CrearNotaRequest("Llamada"));
+        await _candidaturas.CambiarEstadoAsync(creada.Id, new CambiarEstadoRequest(EstadoCandidatura.Entrevista));
+
+        var ficha = (await _candidaturas.ObtenerAsync(creada.Id))!;
+        Assert.Equal(EstadoCandidatura.Entrevista, ficha.Estado);
+        Assert.Equal("Backend senior", ficha.Puesto);
+        Assert.True(await _candidaturas.BorrarAsync(creada.Id));
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_OtraPeticionLaCambiaEntreMedias_ChocaYNoDuplicaElCambioNiElSeguimiento()
+    {
+        var creada = await CrearAsync();
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+        var lenta = new CandidaturasService(FactoryAntesDeGuardar(() =>
+            _candidaturas.CambiarEstadoAsync(creada.Id, new CambiarEstadoRequest(EstadoCandidatura.Enviada))), Reloj, Exportador);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
+            lenta.CambiarEstadoAsync(creada.Id, new CambiarEstadoRequest(EstadoCandidatura.Enviada)));
+
+        var ficha = (await _candidaturas.ObtenerAsync(creada.Id))!;
+        Assert.Single(ficha.Historial, h => h.A == EstadoCandidatura.Enviada);
+        Assert.Single(ficha.Recordatorios);
+    }
+
+    [Fact]
+    public async Task BorrarAsync_OtraPeticionLaBorraEntreMedias_DevuelveFalseComoSiNoExistiera()
+    {
+        var creada = await CrearAsync();
+        var lenta = new CandidaturasService(FactoryAntesDeGuardar(() => _candidaturas.BorrarAsync(creada.Id)), Reloj, Exportador);
+
+        Assert.False(await lenta.BorrarAsync(creada.Id));
+
+        Assert.Null(await _candidaturas.ObtenerAsync(creada.Id));
+    }
+
+    [Fact]
+    public async Task BorrarAsync_OtraPeticionLaCambiaEntreMedias_SigueChocandoYNoLaBorra()
+    {
+        var creada = await CrearAsync();
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+        var lenta = new CandidaturasService(FactoryAntesDeGuardar(() =>
+            _candidaturas.EditarAsync(creada.Id, new GuardarCandidaturaRequest("Acme", "Cambiada"))), Reloj, Exportador);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => lenta.BorrarAsync(creada.Id));
+
+        Assert.Equal("Cambiada", (await _candidaturas.ObtenerAsync(creada.Id))!.Puesto);
+    }
+
+    [Fact]
+    public async Task BorrarNotaAsync_OtraPeticionLaBorraEntreMedias_DevuelveFalse()
+    {
+        var creada = await CrearAsync();
+        var nota = (await _candidaturas.AnadirNotaAsync(creada.Id, new CrearNotaRequest("Una nota")))!;
+        var lenta = new CandidaturasService(FactoryAntesDeGuardar(() => _candidaturas.BorrarNotaAsync(nota.Id)), Reloj, Exportador);
+
+        Assert.False(await lenta.BorrarNotaAsync(nota.Id));
+
+        Assert.Empty((await _candidaturas.ObtenerAsync(creada.Id))!.Notas);
+    }
+
+    [Fact]
+    public async Task EditarAsync_OtraPeticionLaEditaEntreMedias_ChocaYSeQuedaLaPrimera()
+    {
+        var creada = await CrearAsync();
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+        var lenta = new CandidaturasService(FactoryAntesDeGuardar(() =>
+            _candidaturas.EditarAsync(creada.Id, new GuardarCandidaturaRequest("Acme", "Primera"))), Reloj, Exportador);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
+            lenta.EditarAsync(creada.Id, new GuardarCandidaturaRequest("Acme", "Segunda")));
+
+        Assert.Equal("Primera", (await _candidaturas.ObtenerAsync(creada.Id))!.Puesto);
     }
 }

@@ -11,6 +11,10 @@ describe('opcionDeUrl', () => {
     expect(opcionDeUrl('/candidaturas/12')?.etiqueta).toBe('Tablero');
   });
 
+  it('la importación cuenta como Más', () => {
+    expect(opcionDeUrl('/importacion')?.etiqueta).toBe('Más');
+  });
+
   it('no tiene en cuenta los parámetros de la URL', () => {
     expect(opcionDeUrl('/tablero?texto=angular')?.etiqueta).toBe('Tablero');
     expect(opcionDeUrl('/candidaturas/12#notas')?.etiqueta).toBe('Tablero');

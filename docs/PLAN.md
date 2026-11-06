@@ -118,7 +118,7 @@ Relaciones: Empresa 1-N Candidatura; Candidatura 1-N CambioEstado, Nota, Documen
 - Estadísticas: `/estadisticas/por-estado`, `/por-semana`, `/motivos-descarte`
 - `GET /perfil`
 - Rastreos: `GET /rastreos`, `GET /rastreos/{id}`, `POST /rastreos/escanear`, `POST /rastreos/ofertas/{id}/detectar`, `POST /rastreos/ofertas/{id}/ignorar`
-- Importación: `POST /importacion/tabla/previsualizar`, `POST /importacion/lote/previsualizar`, `POST /importacion/lote/aplicar`, `GET /importacion/secciones`
+- Importación (F3): `POST /importacion/tabla/previsualizar` (lee la tabla del registro y la compara con la BD, sin escribir) y `POST /importacion/lote/aplicar` (recibe el lote y las claves elegidas). El análisis de las secciones de texto libre (y con él una vista previa de un lote propuesto por un agente) va en la F6, con «Extraer registro».
 - Agentes (solo puerto local): `POST /agentes/rastreo`, `POST /agentes/analizar/{candidaturaId}`, `POST /agentes/extraer-registro`, `GET /agentes/ejecuciones`, `GET /agentes/ejecuciones/{id}`, `POST /agentes/ejecuciones/{id}/cancelar`
 - Sistema: `GET /sistema/info`, `/health`
 
@@ -156,7 +156,7 @@ Flujo más corto: Rastreos → «Detectada» → abrir ficha → vincular CV sug
 | F0 | Esqueleto: git privado, solución, `webapi --use-controllers`, `ng new` en `web/` sin SSR, Tailwind, Material, proxy, `/health`, `/api/sistema/info`, `.gitignore`, CI mínima | 0,5 | `dotnet test` y `ng test` en verde; `ng serve` muestra «API conectada · modo Local» |
 | F1 | Dominio y API de candidaturas, migración `Inicial`, `ReglasEstado`, Scalar, ~30 tests | 2 | Desde Scalar: crear, pasar a Enviada y ver historial y seguimiento a +7 días |
 | F2 | Tablero y ficha en Angular (signals), diálogo de estado, notas | 2 | Crear 3, arrastrar una a Enviada, recargar y que siga igual |
-| F3 | Importación determinista, `ExportadorRadarMd`, página de Importación | 1,5 | 15 filas en la vista previa; aplicar dos veces sin duplicados; `Get-FileHash` del registro igual antes y después; aparece `radar\candidaturas.md` |
+| F3 | Importación determinista, `ExportadorRadarMd`, página de Importación | 1,5 | Todas las filas de la tabla del registro en la vista previa (27 el 01/11; los ~41 envíos que solo constan en texto libre quedan para la F6, «Extraer registro»); aplicar dos veces sin duplicados; `Get-FileHash` del registro igual antes y después; aparece `radar\candidaturas.md` |
 | F4 | Documentos, perfil y bandeja de rastreos | 1,5 | Abrir el PDF del CV de Marco Talento; pasar una oferta de ejemplo a Detectada |
 | F5 | Recordatorios, Hoy y estadísticas (con `IClock`) | 1,5 | Aparecen el 3/11 y el 17/11 de LinkedIn; un seguimiento real en Hoy |
 | F6 | Agentes: ejecutor, cola, prompts y esquemas, filtro de puerto, sincronización por hash | 2 | Extraer registro propone ~45-50 candidaturas; Analizar encaje rellena la pega; 403 por el puerto 5181 |
@@ -187,7 +187,7 @@ Flujo más corto: Rastreos → «Detectada» → abrir ficha → vincular CV sug
 
 Anotados al corregir la revisión de las fases 0 y 1; se harán en la fase indicada.
 
-- **Concurrencia y móvil (F7):** columna `Version` (token de concurrencia) en Candidatura para no pisar cambios entre el PC y el móvil, y un `PATCH` para ediciones parciales desde el móvil.
+- **Concurrencia y móvil (F7):** columna `Version` (token de concurrencia) en Candidatura para no pisar cambios entre el PC y el móvil, y un `PATCH` para ediciones parciales desde el móvil. (Desde la F3, `FechaUltimoCambio` ya es token de concurrencia y un choque da 409; falta que el front mande la versión que leyó para detectar ediciones hechas sobre una ficha vieja.)
 - **Origen fijado en el servidor (F6/F7):** que el `Origen` (Manual, Movil, Agente…) lo decida la API según el puerto o la ruta por la que llega la petición, no lo que mande el cliente.
 - **Empresas:** endpoint para renombrar una empresa o fusionar/limpiar duplicadas y huérfanas.
 - **Modo Demo (F8):** ocultar Scalar y `/openapi` en modo Demo.
@@ -207,3 +207,21 @@ Anotados al corregir la revisión de las fases 0 y 1; se harán en la fase indic
 - **Aviso de enlace duplicado al apuntar:** la búsqueda de la API no mira el enlace.
 - **Probar en vivo sin abrir ventanas:** `spawn` sin `detached`, porque `detached` anula `windowsHide` y la API abre su propia ventana.
 - **Sin comprobar en un móvil real:** el arrastre táctil y el teclado virtual. Los cambios finales de la F2 (botón único, «Más opciones», 48 px y textos) solo tienen tests, sin prueba en vivo.
+
+### Pendientes de la revisión de la F3
+- **Enlaces guardados antes de la F3:** normalizar los que ya están en la BD sin esquema (`www.x.com` → `https://www.x.com`); la importación y la API ya normalizan los nuevos.
+- **«Aplicar» se fía del lote del cliente (F6):** el servidor lo recalcula todo, pero no comprueba que el lote salga del registro actual. Revalidarlo con el hash del registro cuando llegue la sincronización por hash.
+- **`.tmp` huérfano en `radar\`:** si la API se cae entre escribir el temporal y moverlo, queda un `candidaturas.md.<guid>.tmp`. Limpiarlos al arrancar.
+- **`<details>` repetido en `importacion-page.component.html`:** los tres grupos plegados repiten el mismo marcado; sacarlo a un componente.
+- **Carpeta Curriculum vacía:** probar el caso de `CarpetaCurriculum` vacía con una configuración de test que no use la ruta real (hoy `appsettings.Local.json` apunta a ella).
+
+## 12. Ampliación pedida por Eduardo el 06/11/2026 (replanificar F4-F6 al cerrar la F3)
+
+Eduardo quiere que RadarEmpleo haga **todo el ciclo** de la búsqueda, como el equipo /empleo: rastrear → analizar encaje → **adaptar CV y carta a la oferta** → **enviar la candidatura**.
+
+- **Preparar candidatura** (se adelanta de la v1.1): desde la ficha, lanzar redactor-cv + revisor-candidatura; ver el PDF en la app, pedir cambios y vincularlo como Documento.
+- **Enviar candidatura:** por correo (mensaje con adjunto) o por portal (LinkedIn solicitud sencilla, InfoJobs, web de la empresa) con un agente que usa su Chrome. Al terminar: estado Enviada, FechaEnvio y seguimiento a +7 días.
+- **Ajuste «Envío: Manual / Automático»** en Ajustes (decisión de Eduardo):
+  - Manual (por defecto): la app lo deja todo listo y se para antes del último clic; Eduardo confirma cada envío.
+  - Automático: envía sola. A proponer por el arquitecto con salvaguardas: solo si el revisor da OK, límite diario, lista de canales permitidos (avisar de que LinkedIn/InfoJobs pueden bloquear cuentas por envíos automatizados), registro de todo lo enviado y aviso inmediato a Eduardo.
+- Sigue valiendo: nunca texto libre como prompt, protección por puerto y una ejecución de agente a la vez.

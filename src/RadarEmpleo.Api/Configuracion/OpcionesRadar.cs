@@ -20,7 +20,10 @@ public sealed class OpcionesRadar
     /// </summary>
     public string? RutaBaseDatos { get; set; }
 
-    /// <summary>Carpeta Curriculum de la que la app solo leerá (a partir de la F3). Vacía de momento.</summary>
+    /// <summary>
+    /// Carpeta Curriculum. Admite variables de entorno. La app lee de ella el registro y solo escribe
+    /// <c>radar\candidaturas.md</c>. Si está vacía, la importación avisa y el radar no se genera.
+    /// </summary>
     public string? CarpetaCurriculum { get; set; }
 
     /// <summary>Ruta final del archivo de la base de datos, con las variables de entorno expandidas.</summary>

@@ -12,7 +12,7 @@ public class EmpresasServiceTests : ArnesSqliteTests
     public EmpresasServiceTests()
     {
         _empresas = new EmpresasService(Factory);
-        _candidaturas = new CandidaturasService(Factory, Reloj);
+        _candidaturas = new CandidaturasService(Factory, Reloj, Exportador);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RadarEmpleo.Data;
 using RadarEmpleo.Domain;
 using RadarEmpleo.Services.Contratos;
+using RadarEmpleo.Services.Curriculum;
 
 namespace RadarEmpleo.Services;
 
@@ -10,17 +11,20 @@ namespace RadarEmpleo.Services;
 /// Cada operación abre su propio contexto con la factory. Los métodos que buscan por id
 /// devuelven null (o false) si no existe, y el controlador lo traduce a 404. Los datos inválidos
 /// lanzan <see cref="ValidacionException"/> (400 en la API) y las reglas de negocio incumplidas,
-/// <see cref="ReglaNegocioException"/> (409).
+/// <see cref="ReglaNegocioException"/> (409). Lo que sale en el radar se exporta después de guardar;
+/// las notas no salen en él.
 /// </summary>
 public class CandidaturasService
 {
     private readonly IDbContextFactory<AppDbContext> _factory;
     private readonly IClock _reloj;
+    private readonly IExportadorRadar _exportador;
 
-    public CandidaturasService(IDbContextFactory<AppDbContext> factory, IClock reloj)
+    public CandidaturasService(IDbContextFactory<AppDbContext> factory, IClock reloj, IExportadorRadar exportador)
     {
         _factory = factory;
         _reloj = reloj;
+        _exportador = exportador;
     }
 
     /// <summary>
@@ -87,7 +91,8 @@ public class CandidaturasService
         CopiarDatos(datos, candidatura);
 
         db.Candidaturas.Add(candidatura);
-        await GuardarAsync(db, candidatura);
+        await EmpresasService.GuardarReutilizandoEmpresasAsync(db);
+        await _exportador.ExportarAsync();
 
         // La entidad recién guardada ya tiene todo lo que pinta la ficha (sin abrir otro contexto).
         return ADetalle(candidatura);
@@ -115,11 +120,16 @@ public class CandidaturasService
         // Solo la última modificación: FechaEstado (los «días en el estado») no se toca al editar.
         candidatura.FechaUltimoCambio = _reloj.AhoraUtc;
 
-        await GuardarAsync(db, candidatura);
+        await EmpresasService.GuardarReutilizandoEmpresasAsync(db);
+        await _exportador.ExportarAsync();
         return ADetalle(candidatura);
     }
 
-    /// <summary>Borra la candidatura con su historial, notas y recordatorios (cascada). La empresa se queda.</summary>
+    /// <summary>
+    /// Borra la candidatura con su historial, notas y recordatorios (cascada). La empresa se queda.
+    /// Devuelve false si no existe, también si otra petición la acaba de borrar. Si otra la acaba de
+    /// cambiar, sigue saltando el control de concurrencia (409): lo que se iba a borrar ya no es lo que se vio.
+    /// </summary>
     public async Task<bool> BorrarAsync(int id)
     {
         await using var db = await _factory.CreateDbContextAsync();
@@ -127,7 +137,17 @@ public class CandidaturasService
         if (candidatura is null) return false;
 
         db.Candidaturas.Remove(candidatura);
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await using var otra = await _factory.CreateDbContextAsync();
+            if (await otra.Candidaturas.AnyAsync(c => c.Id == id)) throw;
+            return false;
+        }
+        await _exportador.ExportarAsync();
         return true;
     }
 
@@ -157,6 +177,7 @@ public class CandidaturasService
             TextoOpcional(peticion.Comentario));
 
         await db.SaveChangesAsync();
+        await _exportador.ExportarAsync();
         return ADetalle(candidatura);
     }
 
@@ -180,7 +201,7 @@ public class CandidaturasService
         return ANota(nota);
     }
 
-    /// <summary>Borra una nota. Devuelve false si no existe.</summary>
+    /// <summary>Borra una nota. Devuelve false si no existe, también si otra petición la acaba de borrar.</summary>
     public async Task<bool> BorrarNotaAsync(int notaId)
     {
         await using var db = await _factory.CreateDbContextAsync();
@@ -188,7 +209,15 @@ public class CandidaturasService
         if (nota is null) return false;
 
         db.Notas.Remove(nota);
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Las notas no tienen token: el DELETE solo no borra nada si ya no estaba.
+            return false;
+        }
         return true;
     }
 
@@ -208,7 +237,7 @@ public class CandidaturasService
 
     private static void CopiarDatos(GuardarCandidaturaRequest d, Candidatura c)
     {
-        c.Enlace = TextoOpcional(d.Enlace);
+        c.Enlace = EnlaceValidado(d.Enlace);
         c.Portal = TextoOpcional(d.Portal);
         c.Modalidad = d.Modalidad;
         c.ModalidadDetalle = TextoOpcional(d.ModalidadDetalle);
@@ -217,23 +246,6 @@ public class CandidaturasService
         c.Pega = TextoOpcional(d.Pega);
         c.Analisis = TextoOpcional(d.Analisis);
         c.Salario = TextoOpcional(d.Salario);
-    }
-
-    /// <summary>
-    /// Guarda y, si otra petición ha creado a la vez la misma empresa nueva (salta el índice único de
-    /// <c>Empresas.NombreNormalizado</c>), reintenta UNA vez apuntando a la empresa ya creada.
-    /// </summary>
-    private static async Task GuardarAsync(AppDbContext db, Candidatura candidatura)
-    {
-        try
-        {
-            await db.SaveChangesAsync();
-        }
-        catch (DbUpdateException error) when (EmpresasService.EsEmpresaDuplicada(error))
-        {
-            if (!await EmpresasService.ReutilizarSiDuplicadaAsync(db, candidatura)) throw;
-            await db.SaveChangesAsync();
-        }
     }
 
     private static void ValidarEnums(GuardarCandidaturaRequest d)
@@ -248,6 +260,13 @@ public class CandidaturasService
 
     private static string? TextoOpcional(string? valor) =>
         string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private static string? EnlaceValidado(string? enlace)
+    {
+        var normalizado = Enlaces.Normalizar(enlace)
+            ?? throw new ValidacionException("El enlace tiene que ser una dirección web.", "enlace");
+        return TextoOpcional(normalizado);
+    }
 
     /// <summary>
     /// Inicio del filtro «desde» en UTC. Una fecha sola (sin hora ni zona: <see cref="DateTimeKind.Unspecified"/>

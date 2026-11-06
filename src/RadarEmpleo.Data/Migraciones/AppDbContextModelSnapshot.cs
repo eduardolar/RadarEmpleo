@@ -86,6 +86,7 @@ namespace RadarEmpleo.Data.Migraciones
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("FechaUltimoCambio")
+                        .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Modalidad")
