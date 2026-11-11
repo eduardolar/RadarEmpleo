@@ -82,6 +82,57 @@ public sealed class ApiTests : IDisposable
         Assert.StartsWith(Path.GetTempPath(), opciones.CarpetaCurriculum);
     }
 
+    [Theory]
+    [InlineData("evil.example")]
+    [InlineData("evil.example:5180")]
+    [InlineData("radar.evil.example")]
+    [InlineData("192.168.1.20:5180")]
+    public async Task HostQueNoEsLocal_Devuelve400ContraElDnsRebinding(string host)
+    {
+        using var peticion = new HttpRequestMessage(HttpMethod.Get, "/api/candidaturas");
+        peticion.Headers.Host = host;
+
+        var respuesta = await _http.SendAsync(peticion);
+
+        Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("localhost:4200")] // el proxy de ng serve reenvía el Host del navegador
+    [InlineData("127.0.0.1:5180")]
+    [InlineData("[::1]:5180")]
+    public async Task HostLocal_SeAtiende(string host)
+    {
+        using var peticion = new HttpRequestMessage(HttpMethod.Get, "/api/candidaturas");
+        peticion.Headers.Host = host;
+
+        var respuesta = await _http.SendAsync(peticion);
+
+        Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Arranque_BorraLosTemporalesViejosDelRadarYDejaLoDemas()
+    {
+        using var fabrica = new FabricaApi();
+        var radar = Path.Combine(fabrica.CarpetaCurriculum, "radar");
+        Directory.CreateDirectory(radar);
+        var viejo = Path.Combine(radar, $"candidaturas.md.{Guid.NewGuid():N}.tmp");
+        var reciente = Path.Combine(radar, $"candidaturas.md.{Guid.NewGuid():N}.tmp");
+        var otro = Path.Combine(radar, "otro.tmp");
+        foreach (var archivo in new[] { viejo, reciente, otro }) File.WriteAllText(archivo, "x");
+        File.SetLastWriteTimeUtc(viejo, DateTime.UtcNow.AddHours(-1));
+        File.SetLastWriteTimeUtc(otro, DateTime.UtcNow.AddHours(-1));
+
+        using var http = fabrica.CreateClient();
+        Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/health")).StatusCode);
+
+        Assert.False(File.Exists(viejo));
+        Assert.True(File.Exists(reciente));
+        Assert.True(File.Exists(otro));
+    }
+
     [Fact]
     public async Task SistemaInfo_ConfiguracionPorDefecto_DevuelveModoLocalYAgentesApagados()
     {

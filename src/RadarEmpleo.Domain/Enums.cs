@@ -69,3 +69,43 @@ public enum TipoRecordatorio
     Plazo,
     Otro
 }
+
+/// <summary>Qué es un documento vinculado a una candidatura. Se deduce del nombre del archivo (<see cref="ReglasDocumento.TipoDesdeNombre"/>).</summary>
+public enum TipoDocumento
+{
+    CV,
+    Carta,
+    GuiaEntrevista,
+    Correo,
+    Otro
+}
+
+/// <summary>
+/// Cómo llegó un documento a la ficha. En la F5 siempre es <see cref="Manual"/>: <see cref="Registro"/>
+/// queda para «Extraer registro» (F7) y <see cref="Preparacion"/> para «Preparar candidatura» (F8).
+/// </summary>
+public enum OrigenDocumento
+{
+    Registro,
+    Manual,
+    Preparacion
+}
+
+/// <summary>
+/// De dónde sale un rastreo: una sección «## Rastreo …» del registro, un informe
+/// <c>rastreos\rastreo_*.md</c> de la tarea de los lunes o el <c>.json</c> que generará la app (F7).
+/// </summary>
+public enum OrigenRastreo
+{
+    Registro,
+    TareaLunes,
+    App
+}
+
+/// <summary>Qué ha pasado con una oferta de un rastreo.</summary>
+public enum EstadoOfertaRastreo
+{
+    Pendiente,
+    Convertida,
+    Ignorada
+}

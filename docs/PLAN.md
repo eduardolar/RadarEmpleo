@@ -76,6 +76,7 @@ Importación: formato común `LoteImportacion` (JSON con versión). Productor A:
   - `localhost:5181` (remoto): para el móvil; pide la cabecera `X-Radar-Token` y no tiene endpoints de agentes. Los endpoints de agentes comprueban `HttpContext.Connection.LocalPort == 5180` y `Agentes:Habilitado`. Hacen falta dos puertos porque `tailscale serve` reenvía desde localhost.
   - En producción, la API sirve el build de Angular desde `wwwroot` (un proceso, una URL, sin CORS).
 - **Móvil por Tailscale** (gratis para uso personal, comprobar condiciones): `tailscale serve --https=443 http://localhost:5181` y el móvil usa `https://<pc>.<tailnet>.ts.net`. Funciona fuera de casa, con HTTPS válido y sin exponer nada. El PC tiene que estar encendido; la app avisa con un banner.
+  - **Pendiente para la F12 (anotado en la F5a):** `AllowedHosts` solo admite `localhost;127.0.0.1;[::1]` para cortar el DNS rebinding. Si `tailscale serve` reenvía con la cabecera `Host` original, hay que añadir `<pc>.<tailnet>.ts.net` a `AllowedHosts` (mejor en `appsettings.Local.json`), o el móvil recibirá un 400.
 - **Datos personales:** BD fuera del repositorio; rutas y token en `appsettings.Local.json` (en `.gitignore`) o `user-secrets`; el repositorio solo lleva `datos-ejemplo/` inventados; `scripts/comprobar-datos-personales.ps1` (también en CI) busca teléfonos, DNI y correos que no sean de `example.com`.
 - **Demo pública:** `RadarEmpleo:Modo=Demo` resiembra los datos de ejemplo al arrancar y cada 24 h; agentes desactivados con ejecuciones de ejemplo; limitador de peticiones; `Dockerfile` en el plan gratis de Render (o Azure App Service F1); APK de demo en GitHub Releases.
 
@@ -216,6 +217,8 @@ Anotados al corregir la revisión de las fases 0 y 1; se harán en la fase indic
 - **Carpeta Curriculum vacía:** probar el caso de `CarpetaCurriculum` vacía con una configuración de test que no use la ruta real (hoy `appsettings.Local.json` apunta a ella).
 
 ## 12. Ampliación pedida por Eduardo el 06/11/2026 (replanificar F4-F6 al cerrar la F3)
+
+> **Replanificado y aprobado el 06/11/2026: ver `docs/PLAN-AMPLIACION.md`** (fases F4-F13, que sustituyen a las F4-F8 del apartado 8).
 
 Eduardo quiere que RadarEmpleo haga **todo el ciclo** de la búsqueda, como el equipo /empleo: rastrear → analizar encaje → **adaptar CV y carta a la oferta** → **enviar la candidatura**.
 

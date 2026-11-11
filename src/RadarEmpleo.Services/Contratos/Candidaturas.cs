@@ -36,12 +36,15 @@ public sealed record CandidaturaResumenDto(
     Origen Origen);
 
 /// <summary>Ficha completa: datos, historial (del más antiguo al más reciente), notas (de la más
-/// reciente a la más antigua), recordatorios (por fecha) y los estados a los que se puede mover.</summary>
+/// reciente a la más antigua), recordatorios (por fecha), documentos (por tipo, el vigente primero) y
+/// los estados a los que se puede mover.</summary>
 /// <param name="FechaEstado">Cuándo entró en el estado actual (UTC). Es la que debe usar el front para
 /// los «días en el estado»: en el alta es la fecha de detección y luego solo cambia con los cambios de
 /// estado, no al editar datos.</param>
 /// <param name="FechaUltimoCambio">Última modificación de cualquier tipo (también editar datos). NO sirve
 /// para los «días en el estado».</param>
+/// <param name="HayCarpetaCurriculum">Si la carpeta Curriculum está ahora en su sitio. Sin ella no se
+/// encuentra ningún documento, y la ficha lo dice una vez en vez de en cada uno.</param>
 public sealed record CandidaturaDetalleDto(
     int Id,
     int EmpresaId,
@@ -68,7 +71,9 @@ public sealed record CandidaturaDetalleDto(
     IReadOnlyList<EstadoCandidatura> EstadosPosibles,
     IReadOnlyList<CambioEstadoDto> Historial,
     IReadOnlyList<NotaDto> Notas,
-    IReadOnlyList<RecordatorioDto> Recordatorios);
+    IReadOnlyList<RecordatorioDto> Recordatorios,
+    IReadOnlyList<DocumentoDto> Documentos,
+    bool HayCarpetaCurriculum);
 
 /// <summary>Apunte del historial de estados (<paramref name="De"/> es null en el alta).</summary>
 public sealed record CambioEstadoDto(int Id, EstadoCandidatura? De, EstadoCandidatura A, DateTime Fecha, string? Comentario, Origen Origen);

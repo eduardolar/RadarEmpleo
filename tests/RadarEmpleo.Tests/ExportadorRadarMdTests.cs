@@ -298,4 +298,77 @@ public sealed class ExportadorRadarMdTests : ArnesSqliteTests, IDisposable
         Assert.All(resultados, Assert.True);
         Assert.Single(Filas(await File.ReadAllTextAsync(Radar)));
     }
+
+    // ---------------------------------------------------------------- temporales huérfanos
+
+    private string CarpetaRadar => Path.GetDirectoryName(Radar)!;
+
+    private string CrearArchivo(string relativo, TimeSpan antiguedad)
+    {
+        var ruta = Path.Combine(CarpetaRadar, relativo);
+        Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
+        File.WriteAllText(ruta, "x");
+        File.SetLastWriteTimeUtc(ruta, Reloj.AhoraUtc - antiguedad);
+        return ruta;
+    }
+
+    [Fact]
+    public void LimpiarTemporales_BorraSoloLosHuerfanosViejosDeRadar()
+    {
+        var viejo = CrearArchivo($"candidaturas.md.{Guid.NewGuid():N}.tmp", TimeSpan.FromHours(2));
+        var viejoEnvios = CrearArchivo($"envios.md.{Guid.NewGuid():N}.tmp", TimeSpan.FromMinutes(11));
+        var radar = CrearArchivo("candidaturas.md", TimeSpan.FromDays(3));
+        var otro = CrearArchivo("otro.tmp", TimeSpan.FromDays(3));
+        var reciente = CrearArchivo($"candidaturas.md.{Guid.NewGuid():N}.tmp", TimeSpan.FromMinutes(5));
+        var enSubcarpeta = CrearArchivo(Path.Combine("sub", $"candidaturas.md.{Guid.NewGuid():N}.tmp"), TimeSpan.FromHours(2));
+        var mayusculas = CrearArchivo($"candidaturas.md.{Guid.NewGuid().ToString("N").ToUpperInvariant()}.tmp", TimeSpan.FromHours(2));
+        var guidCorto = CrearArchivo("candidaturas.md.abc123.tmp", TimeSpan.FromHours(2));
+
+        Assert.Equal(2, _exportador.LimpiarTemporalesHuerfanos());
+
+        Assert.False(File.Exists(viejo));
+        Assert.False(File.Exists(viejoEnvios));
+        Assert.All(new[] { radar, otro, reciente, enSubcarpeta, mayusculas, guidCorto }, r => Assert.True(File.Exists(r), r));
+    }
+
+    [Fact]
+    public void LimpiarTemporales_NoTocaNadaFueraDeRadar()
+    {
+        var fuera = Path.Combine(_carpeta, $"candidaturas.md.{Guid.NewGuid():N}.tmp");
+        File.WriteAllText(fuera, "x");
+        File.SetLastWriteTimeUtc(fuera, Reloj.AhoraUtc.AddDays(-1));
+        Directory.CreateDirectory(CarpetaRadar);
+
+        Assert.Equal(0, _exportador.LimpiarTemporalesHuerfanos());
+
+        Assert.True(File.Exists(fuera));
+    }
+
+    [Fact]
+    public void LimpiarTemporales_SinCarpetaRadar_DevuelveCeroYNoLaCrea()
+    {
+        Assert.Equal(0, _exportador.LimpiarTemporalesHuerfanos());
+
+        Assert.False(Directory.Exists(CarpetaRadar));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void LimpiarTemporales_SinCarpetaCurriculum_DevuelveCero(string? carpeta)
+    {
+        Assert.Equal(0, Crear(new RutasCurriculum(carpeta)).LimpiarTemporalesHuerfanos());
+    }
+
+    [Fact]
+    public async Task LimpiarTemporales_DespuesDeExportar_ElRadarSigueYSePuedeVolverAExportar()
+    {
+        CrearArchivo($"candidaturas.md.{Guid.NewGuid():N}.tmp", TimeSpan.FromHours(1));
+        Assert.True(await _exportador.ExportarAsync());
+
+        Assert.Equal(1, _exportador.LimpiarTemporalesHuerfanos());
+
+        Assert.True(File.Exists(Radar));
+        Assert.True(await _exportador.ExportarAsync());
+    }
 }

@@ -18,6 +18,9 @@ public sealed partial class ExportadorRadarMd : IExportadorRadar
 {
     private const string SinDato = "—";
 
+    /// <summary>Antigüedad a partir de la cual un temporal ya no puede ser de una exportación en curso.</summary>
+    public static readonly TimeSpan EdadTemporalHuerfano = TimeSpan.FromMinutes(10);
+
     private static readonly UTF8Encoding Utf8SinBom = new(encoderShouldEmitUTF8Identifier: false);
 
     private readonly IDbContextFactory<AppDbContext> _factory;
@@ -37,6 +40,10 @@ public sealed partial class ExportadorRadarMd : IExportadorRadar
     [GeneratedRegex(@"\s+")]
     private static partial Regex Espacios();
 
+    // El mismo patrón que EscribirAsync («candidaturas.md.<guid N>.tmp»): vale también para el futuro envios.md.
+    [GeneratedRegex(@"^[^\\/]+\.md\.[0-9a-f]{32}\.tmp$", RegexOptions.CultureInvariant)]
+    private static partial Regex TemporalHuerfano();
+
     public async Task<bool> ExportarAsync()
     {
         if (!_rutas.HayCarpeta) return false;
@@ -52,6 +59,44 @@ public sealed partial class ExportadorRadarMd : IExportadorRadar
             // Lo que ha pedido el usuario ya está guardado: el radar no puede convertirlo en un error.
             _registro.LogError(error, "No se ha podido escribir el radar de candidaturas.");
             return false;
+        }
+        finally
+        {
+            _turno.Release();
+        }
+    }
+
+    public int LimpiarTemporalesHuerfanos()
+    {
+        var carpeta = _rutas.CarpetaRadar;
+        if (!_rutas.HayCarpeta || carpeta is null || !Directory.Exists(carpeta)) return 0;
+
+        // Mismo turno que la exportación: así nunca se borra el temporal de una que está escribiendo.
+        _turno.Wait();
+        try
+        {
+            var limite = _reloj.AhoraUtc - EdadTemporalHuerfano;
+            var borrados = 0;
+            foreach (var archivo in new DirectoryInfo(carpeta).EnumerateFiles())
+            {
+                if (!TemporalHuerfano().IsMatch(archivo.Name) || archivo.LastWriteTimeUtc > limite) continue;
+                try
+                {
+                    archivo.Delete();
+                    borrados++;
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    _registro.LogWarning("No se ha podido borrar un temporal del radar: {Archivo}.", archivo.Name);
+                }
+            }
+            if (borrados > 0) _registro.LogInformation("Borrados {Borrados} temporales huérfanos del radar.", borrados);
+            return borrados;
+        }
+        catch (Exception error)
+        {
+            _registro.LogError(error, "No se han podido revisar los temporales del radar.");
+            return 0;
         }
         finally
         {

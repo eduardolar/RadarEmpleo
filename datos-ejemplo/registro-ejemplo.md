@@ -35,3 +35,19 @@ ENVIADA el 2026-08-30. Pedían disponibilidad inmediata.
 | Tema | Pendiente |
 |---|---|
 | Portfolio | Añadir capturas |
+
+## Rastreo 03/11 (martes, ejemplo inventado)
+
+Rastreo de prueba con el formato del equipo. Todo es inventado.
+
+- **Alto · Empresa Rastreo Uno — Desarrollador/a .NET Junior** (remoto, indefinido). https://ejemplo.com/ofertas/2001 — CV de .NET. Pega: piden algo de Azure.
+- **Medio-Alto · Talleres Ficticios S.L. — Desarrollador .NET** (la misma de la tabla). https://ejemplo.com/ofertas/1001
+- **Medio-Bajo · Empresa Rastreo Dos — Programador/a Python – IA** (1-3 años). Pega: piden 2 años. https://ejemplo.com/ofertas/2002 · https://ejemplo.com/ofertas/2003
+- **Descartada (03/11) · Empresa Rastreo Tres — Camarero/a**, pide vivir en la zona. https://ejemplo.com/ofertas/2004
+- **Medio · Empresa Rastreo Cuatro — Dependiente/a**, no verificable.
+- **Bajo:** Empresa Rastreo Cinco (telefonía) y Empresa Rastreo Seis (almacén).
+- **Plan B:** Empresa Rastreo Siete https://ejemplo.com/ofertas/2005 · Empresa Rastreo Ocho https://ejemplo.com/ofertas/2006
+
+Antes, con lista numerada:
+1. **Empresa Rastreo Nueve — Técnico/a de soporte**, remoto. Pegas: turnos de fin de semana. https://ejemplo.com/ofertas/2007
+2. Tiro largo: **Empresa Rastreo Diez — Analista programador/a** (3 años). https://ejemplo.com/ofertas/2008

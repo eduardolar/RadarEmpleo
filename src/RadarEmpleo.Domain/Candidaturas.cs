@@ -58,6 +58,57 @@ public class Candidatura
     public ICollection<CambioEstado> Historial { get; set; } = new List<CambioEstado>();
     public ICollection<Nota> Notas { get; set; } = new List<Nota>();
     public ICollection<Recordatorio> Recordatorios { get; set; } = new List<Recordatorio>();
+    public ICollection<Documento> Documentos { get; set; } = new List<Documento>();
+
+    /// <summary>
+    /// Vincula un archivo de Curriculum a la ficha y lo deja como el vigente de su tipo: el que lo era
+    /// deja de serlo. Necesita <see cref="Documentos"/> cargados.
+    /// </summary>
+    /// <exception cref="ReglaNegocioException">Esa misma ruta ya está vinculada (sin distinguir mayúsculas, como Windows).</exception>
+    public Documento VincularDocumento(TipoDocumento tipo, string nombreArchivo, string rutaRelativa,
+        OrigenDocumento origen, DateTime ahoraUtc, string? hashSha256 = null)
+    {
+        if (Documentos.Any(d => string.Equals(d.RutaRelativa, rutaRelativa, StringComparison.OrdinalIgnoreCase)))
+            throw new ReglaNegocioException("Ese documento ya está en la ficha.");
+
+        foreach (var anterior in Documentos.Where(d => d.Tipo == tipo && d.Vigente))
+            anterior.Vigente = false;
+
+        var documento = new Documento
+        {
+            Candidatura = this,
+            CandidaturaId = Id,
+            Tipo = tipo,
+            NombreArchivo = nombreArchivo,
+            RutaRelativa = rutaRelativa,
+            Encontrado = true,
+            Origen = origen,
+            Vigente = true,
+            HashSha256 = hashSha256,
+            FechaAlta = ahoraUtc
+        };
+        Documentos.Add(documento);
+        return documento;
+    }
+
+    /// <summary>
+    /// Quita el documento de la ficha (el archivo no se toca). Si era el vigente, pasa a serlo el más
+    /// reciente que quede de su tipo. Devuelve false si no es de esta candidatura. Necesita
+    /// <see cref="Documentos"/> cargados.
+    /// </summary>
+    public bool QuitarDocumento(Documento documento)
+    {
+        if (!Documentos.Remove(documento)) return false;
+
+        if (documento.Vigente)
+        {
+            var siguiente = Documentos.Where(d => d.Tipo == documento.Tipo)
+                .OrderByDescending(d => d.FechaAlta).ThenByDescending(d => d.Id)
+                .FirstOrDefault();
+            if (siguiente is not null) siguiente.Vigente = true;
+        }
+        return true;
+    }
 
     /// <summary>
     /// Crea una candidatura nueva en «Detectada» y apunta en el historial el alta

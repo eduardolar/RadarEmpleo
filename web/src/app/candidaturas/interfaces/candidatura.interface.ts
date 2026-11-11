@@ -1,3 +1,5 @@
+import { Documento } from '../../documentos/interfaces/documento.interface';
+
 // Tipos del contrato de /api/candidaturas (RadarEmpleo.Services/Contratos/Candidaturas.cs).
 // Los enums viajan como texto y las fechas como cadenas ISO en UTC (terminan en «Z»).
 
@@ -80,6 +82,10 @@ export interface CandidaturaDetalle {
   /** De la más reciente a la más antigua */
   notas: Nota[];
   recordatorios: Recordatorio[];
+  /** Por tipo y con el vigente de cada tipo primero */
+  documentos: Documento[];
+  /** Si la carpeta Curriculum está en su sitio: sin ella no se encuentra ningún documento */
+  hayCarpetaCurriculum: boolean;
 }
 
 /** Apunte del historial: `de` es null en el alta */

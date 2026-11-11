@@ -11,13 +11,15 @@ namespace RadarEmpleo.Tests.Api;
 /// <summary>
 /// Arranca la API real en memoria (<see cref="WebApplicationFactory{TEntryPoint}"/>) con una base de
 /// datos SQLite en un archivo temporal propio, de modo que también se prueba que las migraciones se
-/// aplican al arrancar, y con una carpeta Curriculum temporal propia. Así los tests nunca tocan la
-/// carpeta real, aunque exista un appsettings.Local.json. Al terminar borra los dos.
+/// aplican al arrancar, y con una carpeta Curriculum temporal propia (con el registro, el perfil y un CV
+/// inventados) o la que diga el test. Así los tests nunca tocan la carpeta real, aunque exista un
+/// appsettings.Local.json. Al terminar borra la BD y, si es suya, la carpeta.
 /// </summary>
 public sealed class FabricaApi : WebApplicationFactory<Program>
 {
     private readonly string _rutaBd = Path.Combine(Path.GetTempPath(), $"radar-tests-{Guid.NewGuid():N}.db");
     private readonly string _modo;
+    private readonly bool _carpetaPropia;
 
     /// <summary>Opciones JSON como las de la API (camelCase y enums como texto).</summary>
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -25,17 +27,54 @@ public sealed class FabricaApi : WebApplicationFactory<Program>
         Converters = { new JsonStringEnumConverter() }
     };
 
-    /// <summary>Carpeta Curriculum de este test, con el registro inventado. Se puede vaciar o borrar para probar los 409.</summary>
-    public string CarpetaCurriculum { get; } = Path.Combine(Path.GetTempPath(), $"radar-tests-curriculum-{Guid.NewGuid():N}");
+    /// <summary>
+    /// Carpeta Curriculum de este test: la temporal con los datos inventados (se puede vaciar o borrar para
+    /// probar los 409) o la que se pasó al constructor.
+    /// </summary>
+    public string CarpetaCurriculum { get; }
+
+    /// <summary>Carpeta con los datos inventados que acompañan a los tests.</summary>
+    public static string CarpetaDatosEjemplo => Path.Combine(AppContext.BaseDirectory, "datos-ejemplo");
 
     /// <summary>Ruta del registro inventado que acompaña a los tests.</summary>
-    public static string RutaRegistroEjemplo => Path.Combine(AppContext.BaseDirectory, "datos-ejemplo", "registro-ejemplo.md");
+    public static string RutaRegistroEjemplo => Path.Combine(CarpetaDatosEjemplo, "registro-ejemplo.md");
 
-    public FabricaApi(string modo = "Local")
+    /// <summary>Ruta del perfil inventado que acompaña a los tests.</summary>
+    public static string RutaPerfilEjemplo => Path.Combine(CarpetaDatosEjemplo, "perfil-ejemplo.md");
+
+    /// <param name="modo">Modo de la API (Local o Demo).</param>
+    /// <param name="carpetaCurriculum">Null para una carpeta temporal con los datos inventados; "" para
+    /// arrancar sin carpeta; cualquier otra ruta se usa tal cual (y no se crea ni se borra).</param>
+    public FabricaApi(string modo = "Local", string? carpetaCurriculum = null)
     {
         _modo = modo;
-        Directory.CreateDirectory(CarpetaCurriculum);
-        File.Copy(RutaRegistroEjemplo, Path.Combine(CarpetaCurriculum, RutasCurriculum.ArchivoRegistro));
+        _carpetaPropia = carpetaCurriculum is null;
+        CarpetaCurriculum = carpetaCurriculum ?? Path.Combine(Path.GetTempPath(), $"radar-tests-curriculum-{Guid.NewGuid():N}");
+        if (_carpetaPropia) CopiarDatosEjemplo(CarpetaCurriculum);
+    }
+
+    /// <summary>
+    /// Deja en <paramref name="carpeta"/> una Curriculum de mentira: el registro y el perfil con sus
+    /// nombres reales y las carpetas <c>Candidaturas\</c> y <c>rastreos\</c> de los datos de ejemplo.
+    /// </summary>
+    public static void CopiarDatosEjemplo(string carpeta)
+    {
+        Directory.CreateDirectory(carpeta);
+        File.Copy(RutaRegistroEjemplo, Path.Combine(carpeta, RutasCurriculum.ArchivoRegistro));
+        File.Copy(RutaPerfilEjemplo, Path.Combine(carpeta, RutasCurriculum.ArchivoPerfil));
+        CopiarCarpeta(RutasCurriculum.CarpetaCandidaturas, carpeta);
+        CopiarCarpeta(RutasCurriculum.CarpetaInformesRastreo, carpeta);
+    }
+
+    private static void CopiarCarpeta(string nombre, string carpeta)
+    {
+        var origen = Path.Combine(CarpetaDatosEjemplo, nombre);
+        foreach (var archivo in Directory.GetFiles(origen, "*", SearchOption.AllDirectories))
+        {
+            var destino = Path.Combine(carpeta, nombre, Path.GetRelativePath(origen, archivo));
+            Directory.CreateDirectory(Path.GetDirectoryName(destino)!);
+            File.Copy(archivo, destino);
+        }
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -60,7 +99,7 @@ public sealed class FabricaApi : WebApplicationFactory<Program>
         }
         try
         {
-            if (Directory.Exists(CarpetaCurriculum)) Directory.Delete(CarpetaCurriculum, recursive: true);
+            if (_carpetaPropia && Directory.Exists(CarpetaCurriculum)) Directory.Delete(CarpetaCurriculum, recursive: true);
         }
         catch (IOException) { /* temporal: si sigue abierto, ya lo limpiará el sistema */ }
     }

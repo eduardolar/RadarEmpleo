@@ -46,6 +46,8 @@ export function crearDetalle(cambios: Partial<CandidaturaDetalle> = {}): Candida
     ],
     notas: [],
     recordatorios: [],
+    documentos: [],
+    hayCarpetaCurriculum: true,
     ...cambios,
   };
 }

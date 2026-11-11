@@ -1,0 +1,214 @@
+<h2 mat-dialog-title>{{ datos.titulo }} para {{ datos.empresa }}</h2>
+<mat-dialog-content>
+  <!-- Hueco fijo para la barra de carga: así la lista no salta al aparecer -->
+  <div class="mb-3 h-1">
+    @if (cargando() || vinculando()) {
+      <mat-progress-bar
+        mode="indeterminate"
+        [attr.aria-label]="vinculando() ? 'Añadiendo a la ficha' : 'Buscando documentos'"
+      />
+    }
+  </div>
+
+  @if (errorVincular(); as mensaje) {
+    <div
+      role="alert"
+      class="mb-3 flex items-start gap-3 rounded-xl bg-error-container p-3 text-sm text-on-error-container"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        class="mt-0.5 h-5 w-5 shrink-0"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path stroke-linecap="round" d="M12 7.5v5.5M12 16.5h.01" />
+      </svg>
+      <p class="min-w-0">{{ mensaje }}</p>
+    </div>
+  }
+
+  @if (cargando()) {
+    <p class="text-sm text-on-surface-variant">Buscando en la carpeta Curriculum...</p>
+  } @else if (error(); as mensaje) {
+    <div
+      role="alert"
+      class="flex items-start gap-3 rounded-xl bg-error-container p-3 text-sm text-on-error-container"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        class="mt-0.5 h-5 w-5 shrink-0"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path stroke-linecap="round" d="M12 7.5v5.5M12 16.5h.01" />
+      </svg>
+      <div class="min-w-0">
+        <p>{{ mensaje }}</p>
+        <button mat-button type="button" class="mt-1 -ml-3 min-h-12" (click)="buscar()">
+          Reintentar
+        </button>
+      </div>
+    </div>
+  } @else if (filas().length === 0) {
+    <div class="flex flex-col items-center px-2 py-6 text-center">
+      <!-- Una lupa sobre un documento vacío -->
+      <svg aria-hidden="true" viewBox="0 0 120 120" class="h-24 w-24">
+        <circle cx="60" cy="60" r="56" class="fill-surface-container" />
+        <rect
+          x="30"
+          y="24"
+          width="52"
+          height="66"
+          rx="8"
+          class="fill-surface-container-lowest stroke-outline-variant"
+          stroke-width="2.5"
+        />
+        <path
+          d="M40 40h22M40 50h32M40 60h26"
+          class="stroke-outline-variant"
+          stroke-width="4"
+          stroke-linecap="round"
+        />
+        <circle
+          cx="80"
+          cy="78"
+          r="14"
+          class="fill-primary-container stroke-primary"
+          stroke-width="3"
+        />
+        <path d="m90 88 10 10" class="stroke-primary" stroke-width="4" stroke-linecap="round" />
+      </svg>
+      <p class="mt-3 font-medium text-on-surface">
+        No he encontrado ningún CV con el nombre de esta empresa.
+      </p>
+      <p class="mt-1 max-w-sm text-sm">
+        Si ya lo tienes, comprueba que está en la carpeta Candidaturas y que su nombre lleva el de
+        la empresa.
+      </p>
+      <button mat-stroked-button type="button" class="mt-4 min-h-12" (click)="buscar()">
+        Volver a buscar
+      </button>
+    </div>
+  } @else {
+    @if (sinCoincidencias()) {
+      <p class="mb-3 flex items-start gap-2 rounded-xl bg-surface-container-low p-3 text-sm">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          class="mt-0.5 h-4 w-4 shrink-0"
+        >
+          <circle cx="10" cy="10" r="7" />
+          <path stroke-linecap="round" d="M10 9.5v4M10 6.5h.01" />
+        </svg>
+        <span class="min-w-0">
+          No he encontrado ningún CV con el nombre de esta empresa. Estos son los de su semana:
+        </span>
+      </p>
+    }
+    <!-- Destacado, el de la primera fila que no está ya en la ficha ni es posterior al envío (la API
+         las ordena de mejor a peor). Si todas lo están, o solo son «los de su semana», ninguno -->
+    <ul aria-label="Documentos encontrados" class="divide-y divide-outline-variant">
+      @for (fila of filas(); track fila.sugerido.rutaRelativa) {
+        @let etiquetaUsar =
+          'Usar este: ' +
+          fila.nombre +
+          ', ' +
+          fila.carpeta +
+          (fila.sugerido.esAntiguo ? ', antiguo' : '') +
+          (fila.sugerido.posteriorAlEnvio ? ', posterior al envío' : '');
+        <li class="flex min-h-12 items-center gap-3 py-2">
+          <div class="min-w-0 flex-1">
+            <p class="font-medium text-on-surface [overflow-wrap:anywhere]">{{ fila.nombre }}</p>
+            <p class="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                class="h-3.5 w-3.5 shrink-0"
+              >
+                <path
+                  stroke-linejoin="round"
+                  d="M2.5 5.5A1.5 1.5 0 0 1 4 4h3.5l2 2H16a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5v-9Z"
+                />
+              </svg>
+              <span><span class="sr-only">Carpeta: </span>{{ fila.carpeta }}</span>
+              <span aria-hidden="true">·</span>
+              <span>{{ fila.sugerido.extension === 'pdf' ? 'PDF' : 'Word' }}</span>
+              @if (fila.sugerido.esAntiguo) {
+                <span
+                  class="rounded-full bg-surface-container-high px-2 py-0.5 font-medium text-on-surface-variant"
+                >
+                  Antiguo
+                </span>
+              }
+              <!-- Hecho después de enviarla: no puede ser el CV que se mandó -->
+              @if (fila.sugerido.posteriorAlEnvio) {
+                <span
+                  class="rounded-full bg-surface-container-high px-2 py-0.5 font-medium text-on-surface-variant"
+                >
+                  Posterior al envío
+                </span>
+              }
+            </p>
+          </div>
+          @if (fila.sugerido.yaVinculado) {
+            <span
+              class="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-on-surface-variant"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                class="h-4 w-4"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="m5 10.5 3 3 7-7" />
+              </svg>
+              Ya está en la ficha
+            </span>
+          } @else if ($index === indiceDestacado()) {
+            <button
+              #destacado
+              mat-flat-button
+              type="button"
+              class="min-h-12 shrink-0"
+              disabledInteractive
+              [disabled]="vinculando()"
+              [attr.aria-label]="etiquetaUsar"
+              (click)="usar(fila.sugerido)"
+            >
+              Usar este
+            </button>
+          } @else {
+            <button
+              mat-stroked-button
+              type="button"
+              class="min-h-12 shrink-0"
+              disabledInteractive
+              [disabled]="vinculando()"
+              [attr.aria-label]="etiquetaUsar"
+              (click)="usar(fila.sugerido)"
+            >
+              Usar este
+            </button>
+          }
+        </li>
+      }
+    </ul>
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button type="button" mat-dialog-close>Cerrar</button>
+</mat-dialog-actions>

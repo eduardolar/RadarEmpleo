@@ -58,4 +58,23 @@ public class EnlacesTests
     {
         Assert.Null(Enlaces.Normalizar(enlace));
     }
+
+    [Theory]
+    [InlineData("https://www.linkedin.com/jobs/view/1/")]
+    [InlineData("http://www.linkedin.com/jobs/view/1")]
+    [InlineData("HTTPS://WWW.LinkedIn.com/jobs/view/1")]
+    [InlineData("www.linkedin.com/jobs/view/1")]
+    public void ParaComparar_LaMismaOfertaEscritaDistinto_DaLoMismo(string enlace)
+    {
+        Assert.Equal("https://www.linkedin.com/jobs/view/1", Enlaces.ParaComparar(enlace));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("mailto:rrhh@acme.com")]
+    public void ParaComparar_SinEnlaceWeb_Null(string? enlace)
+    {
+        Assert.Null(Enlaces.ParaComparar(enlace));
+    }
 }

@@ -47,6 +47,11 @@ export const routes: Routes = [
           import('./importacion/pages/importacion-page/importacion-page.component'),
       },
       {
+        path: 'perfil',
+        title: 'Perfil y filtros · RadarEmpleo',
+        loadComponent: () => import('./perfil/pages/perfil-page/perfil-page.component'),
+      },
+      {
         path: '**',
         redirectTo: 'hoy',
       },

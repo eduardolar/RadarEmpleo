@@ -35,6 +35,19 @@ public static partial class Enlaces
         return AUrl(conEsquema)?.Host.Contains('.') == true ? conEsquema : null;
     }
 
+    /// <summary>
+    /// Forma para COMPARAR (no para guardar) si dos enlaces son la misma oferta: normalizado, sin la «/»
+    /// final, con «https» y en minúsculas. Null si no hay enlace o no es una dirección web.
+    /// </summary>
+    public static string? ParaComparar(string? enlace)
+    {
+        var normalizado = Normalizar(enlace);
+        if (string.IsNullOrEmpty(normalizado)) return null;
+
+        var sinBarra = normalizado.TrimEnd('/').ToLowerInvariant();
+        return sinBarra.StartsWith("http://", StringComparison.Ordinal) ? "https://" + sinBarra[7..] : sinBarra;
+    }
+
     private static Uri? AUrl(string texto) =>
         Uri.TryCreate(texto, UriKind.Absolute, out var url) && url.Host.Length > 0 ? url : null;
 }

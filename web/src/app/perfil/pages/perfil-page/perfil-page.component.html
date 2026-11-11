@@ -1,0 +1,124 @@
+<!-- overflow-wrap se hereda: el perfil trae enlaces largos que no deben ensanchar la página en el móvil -->
+<section
+  aria-label="Perfil y filtros"
+  class="flex max-w-3xl flex-col gap-5 [overflow-wrap:anywhere]"
+>
+  <app-enlace-volver ruta="/mas" texto="Volver a Más" class="-mb-3 self-start" />
+
+  <app-cabecera-pagina
+    titulo="Perfil y filtros"
+    descripcion="Lo que usa el equipo /empleo para buscarte ofertas."
+  />
+
+  <!-- Hueco fijo para que la barra no empuje la página al aparecer -->
+  <div class="-my-2 h-1 shrink-0">
+    @if (cargando()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Leyendo el perfil" />
+    }
+  </div>
+
+  <!-- La barra sola es muy fina: sin texto parecería una página vacía. Vacío no se oculta (los
+       lectores de pantalla solo anuncian regiones que ya existían): el margen anula el hueco -->
+  <div role="status" aria-live="polite" class="empty:-mt-5">
+    @if (cargando() && !perfil()) {
+      <p class="text-sm text-on-surface-variant">Leyendo tu perfil...</p>
+    }
+  </div>
+
+  @if (error(); as mensaje) {
+    <div
+      role="alert"
+      class="flex items-start gap-3 rounded-2xl bg-error-container p-4 text-on-error-container"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        class="mt-0.5 h-5 w-5 shrink-0"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path stroke-linecap="round" d="M12 7.5v5.5M12 16.5h.01" />
+      </svg>
+      <div class="min-w-0">
+        <p>{{ mensaje }}</p>
+        <button
+          mat-button
+          type="button"
+          class="mt-2 [--mat-button-text-container-height:48px]"
+          (click)="reintentar()"
+        >
+          Reintentar
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (perfil(); as datos) {
+    <!-- De qué perfil se trata, cuándo se cambió y quién lo cambia -->
+    <div
+      class="flex flex-col gap-4 rounded-2xl bg-surface-container-lowest p-4 ring-1 ring-outline-variant sm:p-5"
+    >
+      <div class="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-container text-on-primary-container"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            class="h-6 w-6"
+          >
+            <circle cx="12" cy="8.5" r="3.5" />
+            <path stroke-linecap="round" d="M5 19.5a7 7 0 0 1 14 0" />
+          </svg>
+        </span>
+        <div class="min-w-0 space-y-0.5 self-center">
+          <p class="leading-snug font-semibold text-on-surface">{{ datos.titulo }}</p>
+          <p class="text-sm text-on-surface-variant">
+            Actualizado el {{ datos.fechaModificacion | fechaMadrid }}
+          </p>
+        </div>
+      </div>
+
+      @if (datos.introduccion) {
+        <app-texto-markdown [markdown]="datos.introduccion" />
+      }
+
+      <p
+        class="flex items-start gap-2 rounded-xl bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          class="mt-0.5 h-4 w-4 shrink-0"
+        >
+          <circle cx="10" cy="10" r="7" />
+          <path stroke-linecap="round" d="M10 9.5v4M10 6.5h.01" />
+        </svg>
+        <span class="min-w-0">Aquí solo se lee. Para cambiarlo, díselo al equipo /empleo.</span>
+      </p>
+    </div>
+
+    <!-- Los filtros, que es lo que se viene a mirar, empiezan abiertos; el resto, plegado -->
+    <div class="flex flex-col gap-2">
+      @for (seccion of datos.secciones; track $index) {
+        <app-seccion-plegable [titulo]="seccion.titulo" [abierta]="abiertas().has($index)">
+          <app-texto-markdown class="px-4 pt-1 pb-4" [markdown]="seccion.markdown" />
+        </app-seccion-plegable>
+      } @empty {
+        <p
+          class="rounded-2xl bg-surface-container-lowest p-6 text-center text-sm text-on-surface-variant ring-1 ring-outline-variant"
+        >
+          El perfil todavía no tiene secciones.
+        </p>
+      }
+    </div>
+  }
+</section>

@@ -179,6 +179,23 @@
   .cdk-overlay-pane .mat-mdc-snack-bar-container {
     margin-bottom: calc(4.5rem + env(safe-area-inset-bottom));
   }
+
+  /* Diálogo a pantalla completa (panelClass: 'dialogo-movil-completo'). !important porque el ancho
+     y el máximo los pone MatDialog en línea; el contenido crece y «Cerrar» queda pegado abajo */
+  .cdk-overlay-pane.dialogo-movil-completo {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    --mat-dialog-container-shape: 0;
+  }
+  .dialogo-movil-completo .mat-mdc-dialog-surface {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+  }
+  .dialogo-movil-completo .mat-mdc-dialog-content {
+    max-height: none;
+  }
 }
 
 /* Base para el diseñador: botones de acciones destructivas y avisos de error con el rol «error»

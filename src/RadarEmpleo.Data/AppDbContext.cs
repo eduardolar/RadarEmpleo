@@ -19,6 +19,12 @@ public class AppDbContext : DbContext
     public DbSet<CambioEstado> CambiosEstado => Set<CambioEstado>();
     public DbSet<Nota> Notas => Set<Nota>();
     public DbSet<Recordatorio> Recordatorios => Set<Recordatorio>();
+    public DbSet<Documento> Documentos => Set<Documento>();
+    public DbSet<Rastreo> Rastreos => Set<Rastreo>();
+    public DbSet<OfertaRastreo> OfertasRastreo => Set<OfertaRastreo>();
+
+    /// <summary>Índice único parcial de un documento vigente por tipo y candidatura.</summary>
+    public const string IndiceVigentePorTipo = "IX_Documentos_CandidaturaId_Tipo_Vigente";
 
     /// <summary>
     /// SQLite guarda las fechas como texto sin zona: al leerlas EF las devuelve con
@@ -44,6 +50,8 @@ public class AppDbContext : DbContext
         b.Entity<CambioEstado>().Property(x => x.Origen).HasConversion<string>();
         b.Entity<Nota>().Property(x => x.Origen).HasConversion<string>();
         b.Entity<Recordatorio>().Property(x => x.Tipo).HasConversion<string>();
+        b.Entity<Documento>().Property(x => x.Tipo).HasConversion<string>();
+        b.Entity<Documento>().Property(x => x.Origen).HasConversion<string>();
 
         // --- Empresa: nombre normalizado único (no duplicar «Inditec, S.A.» e «inditec») ---
         b.Entity<Empresa>().HasIndex(e => e.NombreNormalizado).IsUnique();
@@ -73,6 +81,47 @@ public class AppDbContext : DbContext
             .HasOne(x => x.Candidatura).WithMany(c => c.Recordatorios)
             .HasForeignKey(x => x.CandidaturaId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
         b.Entity<Recordatorio>().HasIndex(r => r.FechaHora);
+
+        // --- Candidatura 1-N Documento, en cascada (solo borra filas: el archivo no se toca nunca) ---
+        b.Entity<Documento>()
+            .HasOne(d => d.Candidatura).WithMany(c => c.Documentos)
+            .HasForeignKey(d => d.CandidaturaId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<Documento>().HasIndex(d => new { d.CandidaturaId, d.RutaRelativa }).IsUnique();
+        // Un solo vigente por tipo: lo garantiza Candidatura.VincularDocumento y, si dos peticiones
+        // vinculan a la vez, también la BD (índice parcial: solo cuenta las filas vigentes).
+        b.Entity<Documento>().HasIndex(d => new { d.CandidaturaId, d.Tipo }).IsUnique()
+            .HasFilter("\"Vigente\" = 1").HasDatabaseName(IndiceVigentePorTipo);
+        // PreparacionId sin clave foránea: la tabla Preparacion llega en la F8, con SetNull.
+        b.Entity<Documento>().HasIndex(d => d.PreparacionId);
+        b.Entity<Documento>().Property(d => d.NombreArchivo).HasMaxLength(Documento.LargoNombreArchivo);
+        b.Entity<Documento>().Property(d => d.RutaRelativa).HasMaxLength(Documento.LargoRutaRelativa);
+        b.Entity<Documento>().Property(d => d.HashSha256).HasMaxLength(Documento.LargoHash);
+
+        // --- Rastreos: uno por informe (Clave única) y cada oferta una sola vez en toda la tabla (Enlace único) ---
+        b.Entity<Rastreo>().Property(r => r.Origen).HasConversion<string>();
+        b.Entity<Rastreo>().HasIndex(r => r.Clave).IsUnique();
+        b.Entity<Rastreo>().HasIndex(r => r.Fecha);
+        // EjecucionAgenteId sin clave foránea: la tabla EjecucionAgente llega en la F7.
+        b.Entity<Rastreo>().HasIndex(r => r.EjecucionAgenteId);
+        b.Entity<Rastreo>().Property(r => r.Clave).HasMaxLength(Rastreo.LargoClave);
+        b.Entity<Rastreo>().Property(r => r.Titulo).HasMaxLength(Rastreo.LargoTitulo);
+        b.Entity<Rastreo>().Property(r => r.RutaInforme).HasMaxLength(Rastreo.LargoRutaInforme);
+        b.Entity<Rastreo>().Property(r => r.Hash).HasMaxLength(Rastreo.LargoHash);
+
+        b.Entity<OfertaRastreo>().Property(o => o.Encaje).HasConversion<string>();
+        b.Entity<OfertaRastreo>().Property(o => o.Estado).HasConversion<string>();
+        b.Entity<OfertaRastreo>()
+            .HasOne(o => o.Rastreo).WithMany(r => r.Ofertas)
+            .HasForeignKey(o => o.RastreoId).OnDelete(DeleteBehavior.Cascade);
+        // Borrar la candidatura no borra la oferta: solo la desenlaza.
+        b.Entity<OfertaRastreo>()
+            .HasOne(o => o.Candidatura).WithMany()
+            .HasForeignKey(o => o.CandidaturaId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<OfertaRastreo>().HasIndex(o => o.Enlace).IsUnique();
+        b.Entity<OfertaRastreo>().Property(o => o.Empresa).HasMaxLength(OfertaRastreo.LargoEmpresa);
+        b.Entity<OfertaRastreo>().Property(o => o.Puesto).HasMaxLength(OfertaRastreo.LargoPuesto);
+        b.Entity<OfertaRastreo>().Property(o => o.Enlace).HasMaxLength(OfertaRastreo.LargoEnlace);
+        b.Entity<OfertaRastreo>().Property(o => o.Pega).HasMaxLength(OfertaRastreo.LargoPega);
     }
 }
 

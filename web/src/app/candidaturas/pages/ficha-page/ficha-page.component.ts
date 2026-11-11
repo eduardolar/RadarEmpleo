@@ -31,7 +31,9 @@ import { Title } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 import { filter, switchMap } from 'rxjs';
 import { ErrorApi } from '../../../core/interfaces/error-api.interface';
+import { PanelDocumentos } from '../../../documentos/components/panel-documentos/panel-documentos';
 import { confirmar } from '../../../shared/components/dialogo-confirmacion/dialogo-confirmacion';
+import { EnlaceVolver } from '../../../shared/components/enlace-volver/enlace-volver';
 import { FechaMadridPipe } from '../../../shared/pipes/fecha-madrid.pipe';
 import { AvisosService } from '../../../shared/services/avisos.service';
 import { FechaActualService } from '../../../shared/services/fecha-actual.service';
@@ -67,6 +69,8 @@ import { lineaDeTiempo } from '../../utils/linea-de-tiempo';
     MatMenuModule,
     MatProgressBarModule,
     FechaMadridPipe,
+    PanelDocumentos,
+    EnlaceVolver,
   ],
   selector: 'app-ficha-page',
   templateUrl: './ficha-page.component.html',

@@ -8,6 +8,7 @@ using RadarEmpleo.Data;
 using RadarEmpleo.Services;
 using RadarEmpleo.Services.Curriculum;
 using RadarEmpleo.Services.Importacion;
+using RadarEmpleo.Services.Rastreos;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,6 +40,9 @@ builder.Services.AddSingleton<IClock, RelojSistema>();
 builder.Services.AddScoped<CandidaturasService>();
 builder.Services.AddScoped<EmpresasService>();
 builder.Services.AddScoped<ImportacionService>();
+builder.Services.AddScoped<DocumentosService>();
+builder.Services.AddScoped<PerfilService>();
+builder.Services.AddScoped<RastreosService>();
 // Services no referencia a Api: las rutas se construyen aquí a partir de las opciones.
 builder.Services.AddSingleton(sp =>
     new RutasCurriculum(sp.GetRequiredService<IOptions<OpcionesRadar>>().Value.CarpetaCurriculum));
@@ -82,6 +86,16 @@ using (var scope = app.Services.CreateScope())
     var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
     using var db = factory.CreateDbContext();
     db.Database.Migrate();
+
+    // Temporales del radar que dejó una exportación cortada. Nunca debe impedir el arranque.
+    try
+    {
+        scope.ServiceProvider.GetRequiredService<IExportadorRadar>().LimpiarTemporalesHuerfanos();
+    }
+    catch (Exception error)
+    {
+        app.Logger.LogWarning(error, "No se han podido limpiar los temporales del radar.");
+    }
 }
 
 app.UseExceptionHandler();

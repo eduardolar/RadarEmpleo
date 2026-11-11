@@ -1,0 +1,335 @@
+<section
+  aria-labelledby="titulo-documentos"
+  class="rounded-2xl bg-surface-container-lowest p-5 ring-1 ring-outline-variant sm:p-6"
+>
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+    <h2 #titulo id="titulo-documentos" tabindex="-1" class="text-lg font-semibold outline-none">
+      CV y carta
+    </h2>
+    <!-- Con documentos, buscar otro pasa a ser secundario (contorno) y va arriba: con el visor de
+         75vh, al final del panel quedaría fuera de la vista -->
+    @if (hayDocumentos()) {
+      <button mat-stroked-button type="button" class="min-h-12" (click)="buscar()">
+        Buscar otro documento
+      </button>
+    }
+  </div>
+
+  @if (hayDocumentos() && !hayCarpeta()) {
+    <!-- Sin la carpeta no se encuentra ninguno: un solo aviso, no uno por documento -->
+    <div
+      role="status"
+      class="mb-4 flex items-start gap-3 rounded-xl bg-error-container p-3 text-sm text-on-error-container"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        class="mt-0.5 h-5 w-5 shrink-0"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path stroke-linecap="round" d="M12 7.5v5.5M12 16.5h.01" />
+      </svg>
+      <div>
+        <p class="font-medium">No encuentro tu carpeta Curriculum.</p>
+        <p class="mt-0.5">
+          Comprueba que sigue en su sitio (normalmente, en el Escritorio) y vuelve a abrir la ficha.
+        </p>
+      </div>
+    </div>
+  }
+
+  @if (!hayDocumentos()) {
+    <!-- Vacío: un único botón destacado -->
+    <div
+      class="flex flex-col items-start gap-4 rounded-xl bg-surface-container-low p-4 sm:flex-row sm:items-center"
+    >
+      <span
+        aria-hidden="true"
+        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-container text-on-primary-container"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          class="h-6 w-6"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M14 3.5H7.5A1.5 1.5 0 0 0 6 5v14a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V7.5l-4-4ZM14 3.5V7.5h4M9 12h6M9 15.5h4"
+          />
+        </svg>
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="font-medium text-on-surface">Todavía no hay ningún CV en esta ficha.</p>
+        <p class="mt-0.5 text-sm text-on-surface-variant">Lo busco en tu carpeta Curriculum.</p>
+      </div>
+      <button
+        mat-flat-button
+        type="button"
+        class="min-h-12 w-full shrink-0 sm:w-auto"
+        (click)="buscar()"
+      >
+        Buscar el CV
+      </button>
+    </div>
+  }
+
+  @if (vistasPestana().length > 0) {
+    <!-- preserveContent: al volver a una pestaña, su PDF no se vuelve a descargar. Cada pestaña se
+         sigue por su tipo y no por el documento: si cambia el CV vigente, la pestaña «CV» es la misma -->
+    <mat-tab-group
+      mat-stretch-tabs="false"
+      [preserveContent]="true"
+      [selectedIndex]="indicePestana()"
+      (selectedIndexChange)="elegirPestana($event)"
+    >
+      @for (vista of vistasPestana(); track vista.documento.tipo) {
+        <mat-tab [label]="vista.etiquetaTipo">
+          <div class="space-y-4 pt-4">
+            <div
+              class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+            >
+              <ng-container
+                [ngTemplateOutlet]="archivo"
+                [ngTemplateOutletContext]="{ $implicit: vista }"
+              />
+              <!-- Botones de texto: el margen negativo alinea su texto con el del nombre -->
+              <div class="-ml-3 flex flex-wrap gap-1 sm:ml-0 sm:shrink-0 sm:justify-end">
+                @if (vista.urlVisor) {
+                  <a
+                    mat-button
+                    class="min-h-12"
+                    [href]="vista.urlArchivo"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Abrir en otra pestaña
+                    <ng-container [ngTemplateOutlet]="iconoOtraPestana" />
+                  </a>
+                }
+                <ng-container
+                  [ngTemplateOutlet]="botonQuitar"
+                  [ngTemplateOutletContext]="{ $implicit: vista }"
+                />
+              </div>
+            </div>
+
+            @if (!hayCarpeta()) {
+              <!-- Ya lo dice el aviso de arriba -->
+            } @else if (!vista.documento.encontrado) {
+              <div
+                role="status"
+                class="flex items-start gap-3 rounded-xl bg-error-container p-3 text-sm text-on-error-container"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  class="mt-0.5 h-5 w-5 shrink-0"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path stroke-linecap="round" d="M12 7.5v5.5M12 16.5h.01" />
+                </svg>
+                <div>
+                  <p class="font-medium">No encuentro el archivo. Puede que se haya movido.</p>
+                  <p class="mt-0.5">
+                    Búscalo de nuevo con «Buscar otro documento» y quita este de la ficha.
+                  </p>
+                </div>
+              </div>
+            } @else if (vista.documento.extension !== 'pdf') {
+              <div
+                class="flex flex-col items-start gap-3 rounded-xl bg-surface-container-low p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p class="font-medium text-on-surface">Es un documento de Word.</p>
+                  <p class="mt-0.5 text-on-surface-variant">
+                    Aquí no se puede ver: descárgalo para abrirlo.
+                  </p>
+                </div>
+                <a mat-stroked-button class="min-h-12 shrink-0" [href]="vista.urlArchivo" download>
+                  Descargar
+                </a>
+              </div>
+            } @else if (vista.urlVisor) {
+              <iframe
+                [src]="vista.urlVisor"
+                [title]="vista.tituloVisor"
+                class="block h-[75vh] min-h-[480px] w-full rounded-xl bg-surface-container-low ring-1 ring-outline-variant"
+              ></iframe>
+            } @else {
+              <!-- Móvil: sin visor (el iframe ni se crea, para no descargar el PDF) -->
+              <p class="flex items-start gap-2 text-sm text-on-surface-variant">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  class="mt-0.5 h-4 w-4 shrink-0"
+                >
+                  <rect x="2.5" y="3.5" width="15" height="10" rx="1.5" />
+                  <path stroke-linecap="round" d="M7 16.5h6M10 13.5v3" />
+                </svg>
+                <span class="min-w-0">Para ver el PDF, abre esta ficha en el ordenador.</span>
+              </p>
+            }
+          </div>
+        </mat-tab>
+      }
+    </mat-tab-group>
+  }
+
+  @if (otros().length > 0) {
+    <div class="mt-5 border-t border-outline-variant pt-4">
+      <h3 class="mb-2 text-sm font-semibold">Otros documentos</h3>
+      <ul class="space-y-2">
+        @for (vista of otros(); track vista.documento.id) {
+          <li
+            class="flex min-h-12 flex-wrap items-center justify-between gap-x-3 rounded-xl bg-surface-container-low py-1 pr-1 pl-3"
+          >
+            <div class="min-w-0 flex-1 py-1.5">
+              <p class="text-sm font-medium text-on-surface [overflow-wrap:anywhere]">
+                {{ vista.nombre }}
+                @if (!vista.documento.vigente) {
+                  <span
+                    class="ml-1 inline-block rounded-full bg-surface-container-high px-2 py-0.5 align-[0.1em] text-xs font-medium text-on-surface-variant"
+                  >
+                    Anterior
+                  </span>
+                }
+              </p>
+              <p
+                class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-on-surface-variant"
+              >
+                <ng-container [ngTemplateOutlet]="iconoCarpeta" />
+                <span><span class="sr-only">Carpeta: </span>{{ vista.carpeta }}</span>
+                @if (hayCarpeta() && !vista.documento.encontrado) {
+                  <span aria-hidden="true">·</span>
+                  <span class="font-medium text-error">No encuentro el archivo</span>
+                }
+              </p>
+            </div>
+            <!-- Las guías, correos y CV anteriores no tienen pestaña: sin «Abrir» no habría forma de verlos -->
+            <div class="flex flex-wrap gap-1">
+              @if (vista.sePuedeAbrir) {
+                <a
+                  mat-button
+                  class="min-h-12"
+                  [href]="vista.urlArchivo"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  [attr.aria-label]="'Abrir en otra pestaña: ' + vista.nombre"
+                >
+                  Abrir
+                  <ng-container [ngTemplateOutlet]="iconoOtraPestana" />
+                </a>
+              } @else if (vista.sePuedeDescargar) {
+                <a
+                  mat-button
+                  class="min-h-12"
+                  [href]="vista.urlArchivo"
+                  download
+                  [attr.aria-label]="'Descargar: ' + vista.nombre"
+                >
+                  Descargar
+                </a>
+              }
+              <ng-container
+                [ngTemplateOutlet]="botonQuitar"
+                [ngTemplateOutletContext]="{ $implicit: vista }"
+              />
+            </div>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+</section>
+
+<!-- Nombre y carpeta del documento de la pestaña (en el móvil es todo lo que se ve de él) -->
+<ng-template #archivo let-vista>
+  <div class="flex min-w-0 items-center gap-3">
+    <span
+      aria-hidden="true"
+      class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+      [class.bg-primary-container]="vista.documento.encontrado"
+      [class.text-on-primary-container]="vista.documento.encontrado"
+      [class.bg-error-container]="!vista.documento.encontrado"
+      [class.text-on-error-container]="!vista.documento.encontrado"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M14 3.5H7.5A1.5 1.5 0 0 0 6 5v14a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V7.5l-4-4ZM14 3.5V7.5h4M9 12h6M9 15.5h4"
+        />
+      </svg>
+    </span>
+    <div class="min-w-0">
+      <p class="font-medium text-on-surface [overflow-wrap:anywhere]">{{ vista.nombre }}</p>
+      <p class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-on-surface-variant">
+        <ng-container [ngTemplateOutlet]="iconoCarpeta" />
+        <span><span class="sr-only">Carpeta: </span>{{ vista.carpeta }}</span>
+        <span aria-hidden="true">·</span>
+        <span>{{ vista.documento.extension === 'pdf' ? 'PDF' : 'Word' }}</span>
+      </p>
+    </div>
+  </div>
+</ng-template>
+
+<ng-template #iconoOtraPestana>
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.8"
+    class="ml-1 inline h-4 w-4 align-[-0.15em]"
+  >
+    <path
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M11 4h5v5M16 4l-7 7M14 12v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3"
+    />
+  </svg>
+</ng-template>
+
+<ng-template #iconoCarpeta>
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.8"
+    class="h-3.5 w-3.5 shrink-0"
+  >
+    <path
+      stroke-linejoin="round"
+      d="M2.5 5.5A1.5 1.5 0 0 1 4 4h3.5l2 2H16a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5v-9Z"
+    />
+  </svg>
+</ng-template>
+
+<!-- «(el archivo no se borra)» va solo en el aria-label: a la vista se repetiría en cada fila,
+     «Quitar de la ficha» no habla de borrar y el aviso de después confirma que el archivo sigue -->
+<ng-template #botonQuitar let-vista>
+  <button
+    mat-button
+    type="button"
+    class="min-h-12"
+    disabledInteractive
+    [disabled]="quitando() !== null"
+    [attr.aria-label]="'Quitar de la ficha: ' + vista.nombre + ' (el archivo no se borra)'"
+    (click)="quitar(vista.documento)"
+  >
+    Quitar de la ficha
+  </button>
+</ng-template>

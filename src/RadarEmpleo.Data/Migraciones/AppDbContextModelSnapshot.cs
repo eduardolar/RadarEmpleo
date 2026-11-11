@@ -137,6 +137,67 @@ namespace RadarEmpleo.Data.Migraciones
                     b.ToTable("Candidaturas");
                 });
 
+            modelBuilder.Entity("RadarEmpleo.Domain.Documento", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CandidaturaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Encontrado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("FechaAlta")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HashSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NombreArchivo")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origen")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Paginas")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("PreparacionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RutaRelativa")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Vigente")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreparacionId");
+
+                    b.HasIndex("CandidaturaId", "RutaRelativa")
+                        .IsUnique();
+
+                    b.HasIndex("CandidaturaId", "Tipo")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Documentos_CandidaturaId_Tipo_Vigente")
+                        .HasFilter("\"Vigente\" = 1");
+
+                    b.ToTable("Documentos");
+                });
+
             modelBuilder.Entity("RadarEmpleo.Domain.Empresa", b =>
                 {
                     b.Property<int>("Id")
@@ -190,6 +251,122 @@ namespace RadarEmpleo.Data.Migraciones
                     b.HasIndex("CandidaturaId");
 
                     b.ToTable("Notas");
+                });
+
+            modelBuilder.Entity("RadarEmpleo.Domain.OfertaRastreo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CandidaturaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Empresa")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Encaje")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Enlace")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FechaEstado")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Linea")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Pega")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Puesto")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RastreoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TextoOriginal")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CandidaturaId");
+
+                    b.HasIndex("Enlace")
+                        .IsUnique();
+
+                    b.HasIndex("RastreoId");
+
+                    b.ToTable("OfertasRastreo");
+                });
+
+            modelBuilder.Entity("RadarEmpleo.Domain.Rastreo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Clave")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EjecucionAgenteId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("Fecha")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FechaEscaneo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origen")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RutaInforme")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TextoInforme")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Clave")
+                        .IsUnique();
+
+                    b.HasIndex("EjecucionAgenteId");
+
+                    b.HasIndex("Fecha");
+
+                    b.ToTable("Rastreos");
                 });
 
             modelBuilder.Entity("RadarEmpleo.Domain.Recordatorio", b =>
@@ -249,6 +426,17 @@ namespace RadarEmpleo.Data.Migraciones
                     b.Navigation("Empresa");
                 });
 
+            modelBuilder.Entity("RadarEmpleo.Domain.Documento", b =>
+                {
+                    b.HasOne("RadarEmpleo.Domain.Candidatura", "Candidatura")
+                        .WithMany("Documentos")
+                        .HasForeignKey("CandidaturaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Candidatura");
+                });
+
             modelBuilder.Entity("RadarEmpleo.Domain.Nota", b =>
                 {
                     b.HasOne("RadarEmpleo.Domain.Candidatura", "Candidatura")
@@ -258,6 +446,24 @@ namespace RadarEmpleo.Data.Migraciones
                         .IsRequired();
 
                     b.Navigation("Candidatura");
+                });
+
+            modelBuilder.Entity("RadarEmpleo.Domain.OfertaRastreo", b =>
+                {
+                    b.HasOne("RadarEmpleo.Domain.Candidatura", "Candidatura")
+                        .WithMany()
+                        .HasForeignKey("CandidaturaId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("RadarEmpleo.Domain.Rastreo", "Rastreo")
+                        .WithMany("Ofertas")
+                        .HasForeignKey("RastreoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Candidatura");
+
+                    b.Navigation("Rastreo");
                 });
 
             modelBuilder.Entity("RadarEmpleo.Domain.Recordatorio", b =>
@@ -272,6 +478,8 @@ namespace RadarEmpleo.Data.Migraciones
 
             modelBuilder.Entity("RadarEmpleo.Domain.Candidatura", b =>
                 {
+                    b.Navigation("Documentos");
+
                     b.Navigation("Historial");
 
                     b.Navigation("Notas");
@@ -282,6 +490,11 @@ namespace RadarEmpleo.Data.Migraciones
             modelBuilder.Entity("RadarEmpleo.Domain.Empresa", b =>
                 {
                     b.Navigation("Candidaturas");
+                });
+
+            modelBuilder.Entity("RadarEmpleo.Domain.Rastreo", b =>
+                {
+                    b.Navigation("Ofertas");
                 });
 #pragma warning restore 612, 618
         }

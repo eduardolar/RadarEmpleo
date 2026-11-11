@@ -1,0 +1,199 @@
+<!-- Como la tarjeta del tablero: empresa arriba en pequeño, el chip de encaje y el puesto en negrita.
+     @container: los botones van uno debajo de otro si la tarjeta es estrecha (móvil, columna del PC
+     pequeño) y en fila cuando caben, mida lo que mida la pantalla -->
+<!-- tabindex -1 y data-oferta: tras pasarla o apartarla, la página deja el foco aquí o en la siguiente
+     (el botón pulsado desaparece y el teclado no debe volver al principio de la página) -->
+<article
+  tabindex="-1"
+  class="@container rounded-xl bg-surface-container-lowest p-4 shadow-sm ring-1 ring-outline-variant focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+  [attr.aria-label]="oferta().puesto + ' en ' + oferta().empresa"
+  [attr.data-oferta]="oferta().id"
+>
+  <div class="flex items-start justify-between gap-2">
+    <p class="min-w-0 pt-0.5 text-xs font-medium text-on-surface-variant">
+      {{ oferta().empresa }}
+    </p>
+    <!-- Mismos colores que el encaje del tablero: solo «Alto» destaca -->
+    <span
+      class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
+      [class]="
+        oferta().encaje === 'Alto'
+          ? 'bg-primary-container text-on-primary-container'
+          : 'bg-surface-container-high text-on-surface-variant'
+      "
+    >
+      {{ encaje() }}
+    </span>
+  </div>
+
+  <h3 class="mt-1 text-[0.9375rem] leading-snug font-semibold text-on-surface">
+    {{ oferta().puesto }}
+  </h3>
+
+  @if (oferta().pega; as pega) {
+    <!-- Recortada a dos líneas a la vista; el lector de pantalla la lee entera -->
+    <p class="mt-1.5 line-clamp-2 text-sm text-on-surface-variant">
+      <span class="font-medium text-on-surface">Pega:</span> {{ pega }}
+    </p>
+  }
+
+  <!-- Margen negativo: el texto se alinea con el resto y el área de toque sigue siendo de 48 px -->
+  <a
+    [href]="oferta().enlace"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="-ml-1 inline-flex min-h-12 items-center gap-1 rounded-lg px-1 text-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+  >
+    Ver la oferta<span class="sr-only"> (se abre en otra pestaña)</span>
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      class="h-4 w-4 shrink-0"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M11 4h5v5M16 4l-7 7M14 11.5V15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3.5"
+      />
+    </svg>
+  </a>
+
+  @if (oferta().estado !== 'Convertida' && parecidas().length > 0) {
+    <!-- Las candidaturas del registro no tienen enlace: la app no sabe si es la misma y lo pregunta
+         aquí, justo encima de «Pasar al tablero», en vez de dejar que salga repetida -->
+    <div
+      class="mt-1 mb-2 flex items-start gap-2 rounded-xl bg-surface-container px-3 pt-2.5 pb-1 text-sm text-on-surface-variant"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        class="mt-0.5 h-4 w-4 shrink-0"
+      >
+        <circle cx="10" cy="10" r="7" />
+        <path stroke-linecap="round" d="M10 9.5v4M10 6.5h.01" />
+      </svg>
+      <div class="min-w-0">
+        <p>
+          <span class="font-medium text-on-surface">Puede que ya la tengas.</span>
+          {{ textoParecidas() }} Si es la misma, no hace falta pasarla.
+        </p>
+        <ul>
+          @for (candidatura of parecidasALaVista(); track candidatura.id) {
+            <li>
+              <a
+                [routerLink]="['/candidaturas', candidatura.id]"
+                class="-mx-1 inline-flex min-h-12 items-center gap-0.5 rounded-lg px-1 font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+              >
+                {{ candidatura.puesto }} · {{ etiquetasEstado[candidatura.estado] }}
+                <span class="sr-only">: abrir su ficha</span>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  class="h-4 w-4 shrink-0"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m7.5 5 5 5-5 5" />
+                </svg>
+              </a>
+            </li>
+          }
+        </ul>
+        @if (parecidasDeMas() > 0) {
+          <p class="pb-1.5">Y {{ parecidasDeMas() }} más en el tablero.</p>
+        }
+      </div>
+    </div>
+  }
+
+  @switch (oferta().estado) {
+    @case ('Convertida') {
+      <!-- Ya está en el tablero: en vez de botones, dónde encontrarla -->
+      <p
+        class="mt-1 flex min-h-12 flex-wrap items-center gap-x-2 rounded-xl bg-surface-container-low px-3 text-sm font-medium text-on-surface"
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="h-4 w-4 shrink-0 text-primary"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="m5 10.5 3 3 7-7" />
+        </svg>
+        <span>{{ ocupada() ? 'Pasando al tablero...' : 'En el tablero' }}</span>
+        @if (oferta().candidaturaId; as id) {
+          <span aria-hidden="true" class="text-on-surface-variant">·</span>
+          <a
+            [routerLink]="['/candidaturas', id]"
+            [attr.aria-label]="'Abrir ficha: ' + oferta().puesto"
+            class="-mx-1 inline-flex min-h-12 items-center gap-0.5 rounded-lg px-1 text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          >
+            Abrir ficha
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              class="h-4 w-4"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="m7.5 5 5 5-5 5" />
+            </svg>
+          </a>
+        }
+      </p>
+    }
+    @case ('Ignorada') {
+      <!-- Ya descartada: se puede recuperar, pero sin destacar para no competir con las que hay por mirar -->
+      <div class="mt-1 flex flex-col @sm:flex-row">
+        <button
+          mat-stroked-button
+          type="button"
+          class="w-full [--mat-button-outlined-container-height:48px] @sm:w-auto"
+          disabledInteractive
+          [disabled]="ocupada()"
+          [attr.aria-label]="'Pasar al tablero: ' + oferta().puesto"
+          (click)="pulsarDetectar()"
+        >
+          Pasar al tablero
+        </button>
+      </div>
+    }
+    @default {
+      <!-- La acción de la tarjeta, destacada; «No me interesa», secundaria al lado o debajo -->
+      <div class="mt-1 flex flex-col gap-2 @sm:flex-row @sm:flex-wrap">
+        <button
+          mat-flat-button
+          type="button"
+          class="w-full [--mat-button-filled-container-height:48px] @sm:w-auto"
+          disabledInteractive
+          [disabled]="ocupada()"
+          [attr.aria-label]="'Pasar al tablero: ' + oferta().puesto"
+          (click)="pulsarDetectar()"
+        >
+          Pasar al tablero
+        </button>
+        <button
+          mat-stroked-button
+          type="button"
+          class="w-full [--mat-button-outlined-container-height:48px] @sm:w-auto"
+          disabledInteractive
+          [disabled]="ocupada()"
+          [attr.aria-label]="'No me interesa: ' + oferta().puesto"
+          (click)="pulsarIgnorar()"
+        >
+          No me interesa
+        </button>
+      </div>
+    }
+  }
+</article>

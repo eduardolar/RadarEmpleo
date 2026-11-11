@@ -332,6 +332,7 @@ public sealed class ImportacionApiTests : IDisposable
     public async Task PrevisualizarYAplicar_NoCambianElRegistroYSoloApareceElRadar()
     {
         var antes = SHA256.HashData(await File.ReadAllBytesAsync(RutaRegistro));
+        var archivosAntes = Directory.GetFiles(_fabrica.CarpetaCurriculum, "*", SearchOption.AllDirectories);
         var vista = await VistaPreviaAsync();
         Assert.False(File.Exists(RutaRadar)); // la vista previa no escribe nada
 
@@ -339,7 +340,7 @@ public sealed class ImportacionApiTests : IDisposable
 
         Assert.True(resultado.RadarActualizado);
         Assert.Equal(antes, SHA256.HashData(await File.ReadAllBytesAsync(RutaRegistro)));
-        Assert.Equal(new[] { RutaRegistro, RutaRadar }.Order(StringComparer.Ordinal),
+        Assert.Equal(archivosAntes.Append(RutaRadar).Order(StringComparer.Ordinal),
             Directory.GetFiles(_fabrica.CarpetaCurriculum, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal));
     }
 

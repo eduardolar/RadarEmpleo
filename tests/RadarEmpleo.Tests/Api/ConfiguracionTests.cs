@@ -77,4 +77,16 @@ public sealed class ConfiguracionTests : IDisposable
 
         Assert.Equal("", configuracion["RadarEmpleo:RutaBaseDatos"]);
     }
+
+    [Fact]
+    public void AppsettingsDelProyecto_SoloAdmiteHostsLocales()
+    {
+        // Contra el DNS rebinding: una web cualquiera no puede hablar con la API apuntando su dominio a 127.0.0.1.
+        var configuracion = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false)
+            .Build();
+
+        Assert.Equal("localhost;127.0.0.1;[::1]", configuracion["AllowedHosts"]);
+    }
 }

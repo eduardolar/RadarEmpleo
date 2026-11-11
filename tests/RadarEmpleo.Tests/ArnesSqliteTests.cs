@@ -44,6 +44,8 @@ public sealed class ExportadorFalso : IExportadorRadar
         Llamadas++;
         return Task.FromResult(Resultado);
     }
+
+    public int LimpiarTemporalesHuerfanos() => 0;
 }
 
 /// <summary>

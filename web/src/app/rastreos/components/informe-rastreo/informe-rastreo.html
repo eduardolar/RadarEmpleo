@@ -1,0 +1,10 @@
+<!-- En dos columnas va abierto y el título dice qué es; más estrecho, plegado, el título invita a abrirlo -->
+<app-seccion-plegable
+  [titulo]="grande() ? 'Informe del rastreo' : 'Ver el informe completo'"
+  [abierta]="grande()"
+>
+  <div class="space-y-3 px-4 pt-1 pb-4">
+    <p class="text-xs font-medium text-on-surface-variant">{{ rastreo().titulo }}</p>
+    <app-texto-markdown [markdown]="rastreo().informe" />
+  </div>
+</app-seccion-plegable>

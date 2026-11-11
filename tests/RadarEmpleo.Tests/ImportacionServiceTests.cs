@@ -676,5 +676,13 @@ public class ImportacionServiceTests : ArnesSqliteTests
         public string Texto { get; set; } = "";
 
         public Task<string> LeerRegistroAsync(CancellationToken cancelacion = default) => Task.FromResult(Texto);
+
+        public Task<TextoLeido> LeerPerfilAsync(CancellationToken cancelacion = default) => throw new NotSupportedException();
+
+        public IReadOnlyList<ArchivoDisponible> LeerDocumentosDisponibles() => throw new NotSupportedException();
+
+        public DocumentoLeido? LeerDocumento(string rutaRelativa) => throw new NotSupportedException();
+
+        public Task<InformesRastreo> LeerInformesRastreoAsync(CancellationToken cancelacion = default) => throw new NotSupportedException();
     }
 }

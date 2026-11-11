@@ -1,4 +1,3 @@
-import { BreakpointObserver } from '@angular/cdk/layout';
 import { CdkDrag, CdkDragDrop, CdkDropList, CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import {
@@ -14,7 +13,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -23,6 +22,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { debounceTime, distinctUntilChanged, map } from 'rxjs';
 import { CabeceraPagina } from '../../../shared/components/cabecera-pagina/cabecera-pagina';
+import { senalEscritorio } from '../../../shared/utils/pantalla';
 import { abrirDialogoCandidatura } from '../../components/dialogo-candidatura/dialogo-candidatura';
 import { TarjetaCandidatura } from '../../components/tarjeta-candidatura/tarjeta-candidatura';
 import { CandidaturaResumen, EstadoCandidatura } from '../../interfaces/candidatura.interface';
@@ -32,9 +32,6 @@ import { FiltroMovil, VistaTableroService } from '../../services/vista-tablero.s
 import { agruparPorEstado } from '../../utils/agrupar-por-estado';
 import { ETIQUETAS_ESTADO } from '../../utils/etiquetas';
 import { puedePasar } from '../../utils/transiciones-permitidas';
-
-// El mismo corte que «md» de Tailwind: a partir de aquí hay columnas y arrastre
-const ESCRITORIO = '(min-width: 768px)';
 
 @Component({
   imports: [
@@ -58,7 +55,6 @@ export default class TableroPageComponent {
   private readonly cambioEstado = inject(CambioEstadoService);
   private readonly vista = inject(VistaTableroService);
   private readonly dialog = inject(MatDialog);
-  private readonly breakpoints = inject(BreakpointObserver);
   private readonly elemento = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly documento = inject(DOCUMENT);
   private readonly injector = inject(Injector);
@@ -74,10 +70,7 @@ export default class TableroPageComponent {
   protected readonly busqueda = new FormControl(this.vista.texto(), { nonNullable: true });
   protected readonly textoBuscado = this.vista.texto;
 
-  protected readonly esEscritorio = toSignal(
-    this.breakpoints.observe(ESCRITORIO).pipe(map((estado) => estado.matches)),
-    { initialValue: this.breakpoints.isMatched(ESCRITORIO) },
-  );
+  protected readonly esEscritorio = senalEscritorio();
 
   protected readonly columnas = computed(() => agruparPorEstado(this.candidaturas()));
 

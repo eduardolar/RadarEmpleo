@@ -5,11 +5,11 @@ using RadarEmpleo.Services.Contratos;
 
 namespace RadarEmpleo.Api.Controllers;
 
-/// <summary>Candidaturas: listado, ficha, alta, edición, borrado, cambio de estado y notas.</summary>
+/// <summary>Candidaturas: listado, ficha, alta, edición, borrado, cambio de estado, notas y documentos.</summary>
 [ApiController]
 [Route("api/candidaturas")]
 [Produces("application/json")]
-public class CandidaturasController(CandidaturasService candidaturas) : ControllerBase
+public class CandidaturasController(CandidaturasService candidaturas, DocumentosService documentos) : ControllerBase
 {
     /// <summary>Lista las candidaturas (más recientes primero) con filtros opcionales.</summary>
     /// <param name="estado">Solo las de este estado.</param>
@@ -76,5 +76,22 @@ public class CandidaturasController(CandidaturasService candidaturas) : Controll
         var nota = await candidaturas.AnadirNotaAsync(id, peticion);
         if (nota is null) return NotFound();
         return CreatedAtRoute("ObtenerCandidatura", new { id }, nota);
+    }
+
+    /// <summary>
+    /// Vincula a la ficha un archivo de Curriculum (normalmente uno de <c>GET /api/documentos/sugeridos</c>)
+    /// y lo deja como el vigente de su tipo. Devuelve 400 si la ruta no es válida, 404 si la candidatura no
+    /// existe y 409 si no está el archivo, ya está vinculado o falta la carpeta Curriculum.
+    /// </summary>
+    [HttpPost("{id:int}/documentos")]
+    [ProducesResponseType<DocumentoDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<DocumentoDto>> VincularDocumento(int id, VincularDocumentoRequest peticion)
+    {
+        var documento = await documentos.VincularAsync(id, peticion);
+        if (documento is null) return NotFound();
+        return CreatedAtRoute("ObtenerCandidatura", new { id }, documento);
     }
 }

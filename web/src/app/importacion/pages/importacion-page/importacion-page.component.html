@@ -7,22 +7,7 @@
   class="flex max-w-3xl flex-col gap-5 [overflow-wrap:anywhere] outline-none"
 >
   <!-- Como en la ficha: en el móvil la única salida sería la pestaña «Más» de abajo -->
-  <a
-    routerLink="/mas"
-    class="-mb-3 -ml-1 inline-flex min-h-12 items-center gap-1.5 self-start rounded-lg px-1 text-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-  >
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 20 20"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      class="h-4 w-4"
-    >
-      <path stroke-linecap="round" stroke-linejoin="round" d="M12.5 15 7.5 10l5-5" />
-    </svg>
-    Volver a Más
-  </a>
+  <app-enlace-volver ruta="/mas" texto="Volver a Más" class="-mb-3 self-start" />
 
   <app-cabecera-pagina
     titulo="Traer del registro"
@@ -234,45 +219,21 @@
     <div class="flex flex-col gap-2 empty:hidden">
       @for (grupo of grupos(); track grupo.titulo) {
         @if (grupo.filas.length > 0) {
-          <details class="group rounded-2xl bg-surface-container">
-            <summary
-              class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-2 font-semibold text-on-surface transition-colors group-open:rounded-b-none hover:bg-surface-container-high focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
-            >
-              <span class="min-w-0">{{ grupo.titulo }} ({{ grupo.filas.length }})</span>
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                class="h-5 w-5 shrink-0 text-on-surface-variant transition-transform group-open:rotate-180 motion-reduce:transition-none"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" d="m5 7.5 5 5 5-5" />
-              </svg>
-            </summary>
+          <app-seccion-plegable
+            aspecto="suave"
+            titulo="{{ grupo.titulo }} ({{ grupo.filas.length }})"
+          >
             <p class="px-4 pt-1 text-sm text-on-surface-variant">{{ grupo.explicacion }}</p>
             <app-lista-importacion class="px-2 pt-2 pb-2" [filas]="grupo.filas" />
-          </details>
+          </app-seccion-plegable>
         }
       }
 
       @if (previa.sinLeer.length > 0) {
-        <details class="group rounded-2xl bg-surface-container">
-          <summary
-            class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-2 font-semibold text-on-surface transition-colors group-open:rounded-b-none hover:bg-surface-container-high focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
-          >
-            <span class="min-w-0">No se han podido leer ({{ previa.sinLeer.length }})</span>
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              class="h-5 w-5 shrink-0 text-on-surface-variant transition-transform group-open:rotate-180 motion-reduce:transition-none"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="m5 7.5 5 5 5-5" />
-            </svg>
-          </summary>
+        <app-seccion-plegable
+          aspecto="suave"
+          titulo="No se han podido leer ({{ previa.sinLeer.length }})"
+        >
           <p class="px-4 pt-1 text-sm text-on-surface-variant">{{ explicacionSinLeer }}</p>
           <ul class="flex flex-col gap-2 px-2 pt-2 text-sm text-on-surface">
             @for (fila of previa.sinLeer; track fila.linea) {
@@ -293,7 +254,7 @@
               Volver a leer
             </button>
           </div>
-        </details>
+        </app-seccion-plegable>
       }
     </div>
   }

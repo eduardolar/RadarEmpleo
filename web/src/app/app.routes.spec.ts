@@ -36,6 +36,21 @@ describe('Navegación', () => {
       .flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
   }
 
+  // Rastreos busca informes nuevos al entrar y después pide la lista. Pide también las candidaturas,
+  // para avisar de ofertas que ya pueden estar en el tablero
+  function responderRastreos(): void {
+    http.expectOne('/api/candidaturas').flush([]);
+    http.expectOne('/api/rastreos/escanear').flush({
+      rastreosNuevos: 0,
+      rastreosActualizados: 0,
+      ofertasNuevas: 0,
+      yaEnElTablero: 0,
+      lineasSinLeer: 0,
+      avisos: [],
+    });
+    http.expectOne('/api/rastreos').flush([]);
+  }
+
   it('«/» redirige a «/hoy» y su enlace lleva aria-current="page"', async () => {
     const harness = await RouterTestingHarness.create('/');
     responderInfo();
@@ -68,6 +83,7 @@ describe('Navegación', () => {
     http.expectOne('/api/candidaturas/1').flush(crearDetalle({ id: 1 }));
 
     await harness.navigateByUrl('/rastreos');
+    responderRastreos();
 
     const activos = harness.routeNativeElement!.querySelectorAll('a[aria-current="page"]');
     expect(activos).toHaveLength(2);
@@ -104,6 +120,32 @@ describe('Navegación', () => {
     activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/mas'));
   });
 
+  it('desde Más se llega al perfil, que resalta Más y lo pide', async () => {
+    const harness = await RouterTestingHarness.create('/mas');
+    const pagina = harness.routeNativeElement!;
+
+    pagina.querySelector<HTMLAnchorElement>('main a[href="/perfil"]')!.click();
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/perfil');
+    expect(TestBed.inject(Title).getTitle()).toBe('Perfil y filtros · RadarEmpleo');
+    http.expectOne('/api/perfil').flush({
+      titulo: 'Perfil de ejemplo',
+      fechaModificacion: '2026-11-06T10:00:00Z',
+      introduccion: null,
+      secciones: [{ titulo: 'Filtros de búsqueda', markdown: '- Remoto' }],
+    });
+    await harness.fixture.whenStable();
+
+    expect(pagina.querySelector('h1')?.textContent).toContain('Perfil y filtros');
+    expect(pagina.querySelector('details[open] summary')?.textContent).toContain(
+      'Filtros de búsqueda',
+    );
+    const activos = pagina.querySelectorAll('a[aria-current="page"]');
+    expect(activos).toHaveLength(2);
+    activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/mas'));
+  });
+
   describe('salir de Apuntar', () => {
     async function apuntarConAlgoEscrito(): Promise<void> {
       const harness = await RouterTestingHarness.create('/apuntar');
@@ -129,6 +171,7 @@ describe('Navegación', () => {
       abrirDialogo.mockReturnValue({ afterClosed: () => of(true) });
 
       await TestBed.inject(Router).navigateByUrl('/rastreos');
+      responderRastreos();
 
       expect(TestBed.inject(Router).url).toBe('/rastreos');
     });
@@ -137,6 +180,7 @@ describe('Navegación', () => {
       await RouterTestingHarness.create('/apuntar');
 
       await TestBed.inject(Router).navigateByUrl('/rastreos');
+      responderRastreos();
 
       expect(abrirDialogo).not.toHaveBeenCalled();
       expect(TestBed.inject(Router).url).toBe('/rastreos');

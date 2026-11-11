@@ -1,4 +1,294 @@
-<app-cabecera-pagina
-  titulo="Rastreos"
-  descripcion="Las ofertas que encuentran los rastreos semanales."
-/>
+<!-- overflow-wrap se hereda: los informes traen URL largas que no deben ensanchar la página -->
+<section aria-label="Rastreos" class="flex max-w-6xl flex-col gap-5 [overflow-wrap:anywhere]">
+  <app-cabecera-pagina
+    titulo="Rastreos"
+    descripcion="Las ofertas que encuentran los rastreos. Pasa al tablero las que te interesen."
+  />
+
+  <!-- Arriba, lo único que se elige: qué rastreo mirar. «Volver a buscar» es secundario y va a su lado -->
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+    @if (opciones().length > 0) {
+      <mat-form-field appearance="outline" class="w-full sm:max-w-md" subscriptSizing="dynamic">
+        <mat-label>Rastreo</mat-label>
+        <mat-select [value]="seleccionado()" (selectionChange)="elegir($event.value)">
+          @for (opcion of opciones(); track opcion.id) {
+            <mat-option [value]="opcion.id">
+              {{ opcion.etiqueta }}
+              @if (opcion.pendientes > 0) {
+                · {{ textoNuevas(opcion.pendientes) }}
+              }
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+    <button
+      mat-stroked-button
+      type="button"
+      class="w-full shrink-0 [--mat-button-outlined-container-height:48px] sm:ml-auto sm:w-auto"
+      disabledInteractive
+      [disabled]="escaneando()"
+      (click)="volverABuscar()"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        class="mr-1 inline-block h-4 w-4 align-[-0.15em] motion-reduce:animate-none"
+        [class.animate-spin]="escaneando()"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M16 10a6 6 0 1 1-1.76-4.24M16 4v3.5h-3.5"
+        />
+      </svg>
+      {{ escaneando() ? 'Buscando...' : 'Volver a buscar' }}
+    </button>
+  </div>
+
+  <!-- Hueco fijo para que la barra no empuje la página al aparecer -->
+  <div class="-my-2 h-1 shrink-0">
+    @if (escaneando() || cargando()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Buscando rastreos" />
+    }
+  </div>
+
+  <!-- Contenedor fijo: los lectores de pantalla solo anuncian cambios en regiones que ya existían -->
+  <div role="status" aria-live="polite" class="empty:hidden">
+    @if (escaneando()) {
+      <p class="text-sm text-on-surface-variant">Buscando informes nuevos en tu carpeta...</p>
+    } @else if (textoResultado(); as texto) {
+      <div
+        class="flex items-start gap-2 rounded-xl bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          class="mt-0.5 h-4 w-4 shrink-0"
+        >
+          <circle cx="10" cy="10" r="7" />
+          <path stroke-linecap="round" d="M10 9.5v4M10 6.5h.01" />
+        </svg>
+        <div class="min-w-0 space-y-1">
+          <p class="font-medium text-on-surface">{{ texto }}</p>
+          @if (avisoSinLeer(); as aviso) {
+            <p>{{ aviso }}</p>
+          }
+          @for (aviso of resultado()?.avisos ?? []; track $index) {
+            <p>{{ aviso }}</p>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  @if (errorEscaneo(); as mensaje) {
+    <!-- Lo leído otras veces se sigue enseñando debajo: aquí solo se avisa -->
+    <div
+      role="alert"
+      class="flex items-start gap-3 rounded-2xl bg-error-container p-4 text-on-error-container"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        class="mt-0.5 h-5 w-5 shrink-0"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path stroke-linecap="round" d="M12 7.5v5.5M12 16.5h.01" />
+      </svg>
+      <p class="min-w-0">{{ mensaje }}</p>
+    </div>
+  }
+
+  @if (error(); as mensaje) {
+    <div
+      role="alert"
+      class="flex items-start gap-3 rounded-2xl bg-error-container p-4 text-on-error-container"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        class="mt-0.5 h-5 w-5 shrink-0"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path stroke-linecap="round" d="M12 7.5v5.5M12 16.5h.01" />
+      </svg>
+      <div class="min-w-0">
+        <p>{{ mensaje }}</p>
+        <button
+          mat-button
+          type="button"
+          class="mt-2 [--mat-button-text-container-height:48px]"
+          (click)="volverABuscar()"
+        >
+          Reintentar
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (sinRastreos()) {
+    <div
+      class="flex flex-col items-center rounded-2xl bg-surface-container-lowest px-6 py-8 text-center ring-1 ring-outline-variant"
+    >
+      <!-- Los círculos del radar, todavía sin nada dentro -->
+      <svg aria-hidden="true" viewBox="0 0 96 96" class="h-20 w-20">
+        <circle cx="48" cy="48" r="44" class="fill-surface-container" />
+        <circle
+          cx="48"
+          cy="48"
+          r="31"
+          fill="none"
+          class="stroke-outline-variant"
+          stroke-width="2"
+        />
+        <circle
+          cx="48"
+          cy="48"
+          r="16"
+          fill="none"
+          class="stroke-outline-variant"
+          stroke-width="2"
+        />
+        <path d="M48 48 70 26" class="stroke-primary" stroke-width="3" stroke-linecap="round" />
+        <circle cx="48" cy="48" r="4" class="fill-primary" />
+      </svg>
+      <p class="mt-4 max-w-md font-medium text-on-surface">Todavía no hay rastreos.</p>
+      <p class="mt-1 max-w-md text-sm text-on-surface-variant">
+        Cuando el equipo /empleo apunte uno en tu registro, saldrá aquí.
+      </p>
+    </div>
+  }
+
+  @if (detalle(); as rastreo) {
+    <!-- Desde 1024 px: informe abierto a la izquierda y ofertas a la derecha. Más estrecho, el informe
+         va arriba plegado en una línea (InformeRastreo usa el mismo corte), así que no empuja las
+         ofertas fuera de la vista y el orden del teclado es el mismo que el que se ve -->
+    <div class="grid gap-6 lg:grid-cols-2 lg:items-start">
+      <app-informe-rastreo [rastreo]="rastreo" />
+
+      <section aria-labelledby="titulo-ofertas" class="flex min-w-0 flex-col gap-3">
+        <!-- tabindex -1: el foco vuelve aquí al apartar la última o todas las que quedaban -->
+        <h2
+          id="titulo-ofertas"
+          tabindex="-1"
+          class="text-lg font-semibold text-on-surface focus:outline-none"
+        >
+          Ofertas ({{ rastreo.ofertas.length }})
+        </h2>
+
+        @if (rastreo.ofertas.length === 0) {
+          <p
+            class="rounded-2xl bg-surface-container-lowest p-6 text-center text-sm text-on-surface-variant ring-1 ring-outline-variant"
+          >
+            En este rastreo no hay ofertas que pueda leer. Mira el informe.
+          </p>
+        } @else if (porDecidir().length === 0) {
+          <!-- Todas miradas: se dice, en vez de dejar la lista empezando por las del tablero, y si
+               otro rastreo tiene ofertas por mirar se lleva a él sin abrir el selector -->
+          <div
+            class="flex items-start gap-2 rounded-xl bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              class="mt-0.5 h-4 w-4 shrink-0 text-primary"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="m5 10.5 3 3 7-7" />
+            </svg>
+            <div class="min-w-0">
+              <p>Ya has mirado todas las ofertas de este rastreo.</p>
+              @if (otroPorMirar(); as otro) {
+                <p class="mt-1">
+                  En el {{ otro.etiqueta.charAt(0).toLowerCase() + otro.etiqueta.slice(1) }} quedan
+                  {{ textoNuevas(otro.pendientes) }}.
+                </p>
+                <button
+                  mat-button
+                  type="button"
+                  class="-ml-3 [--mat-button-text-container-height:48px]"
+                  [attr.aria-label]="'Ver las ofertas del ' + otro.etiqueta.toLowerCase()"
+                  (click)="elegir(otro.id)"
+                >
+                  Verlas
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        @for (oferta of grupos().pendientes; track oferta.id) {
+          <app-tarjeta-oferta
+            [oferta]="oferta"
+            [ocupada]="ocupadas().has(oferta.id)"
+            [parecidas]="parecidasDe(oferta)"
+            (detectar)="detectar($event)"
+            (ignorar)="ignorar($event)"
+          />
+        }
+
+        @if (porDecidir().length >= 2) {
+          <!-- Al final de la lista, cuando ya se han visto todas: el resto de una vez en vez de una a
+               una. Sin confirmar: se recuperan desde «No me interesan» -->
+          <button
+            mat-stroked-button
+            type="button"
+            class="w-full [--mat-button-outlined-container-height:48px] sm:w-auto sm:self-start"
+            disabledInteractive
+            [disabled]="apartando()"
+            (click)="ignorarLasDemas()"
+          >
+            {{
+              apartando()
+                ? 'Apartando...'
+                : 'No me interesan las que quedan (' + porDecidir().length + ')'
+            }}
+          </button>
+        }
+
+        @if (grupos().enElTablero.length > 0) {
+          <h3 class="mt-3 text-base font-semibold text-on-surface">
+            Ya en el tablero ({{ grupos().enElTablero.length }})
+          </h3>
+          @for (oferta of grupos().enElTablero; track oferta.id) {
+            <app-tarjeta-oferta [oferta]="oferta" [ocupada]="ocupadas().has(oferta.id)" />
+          }
+        }
+
+        @if (grupos().ignoradas.length > 0) {
+          <app-seccion-plegable
+            aspecto="suave"
+            class="mt-3"
+            titulo="No me interesan ({{ grupos().ignoradas.length }})"
+          >
+            <div class="flex flex-col gap-3 px-2 pt-1 pb-2">
+              @for (oferta of grupos().ignoradas; track oferta.id) {
+                <app-tarjeta-oferta
+                  [oferta]="oferta"
+                  [ocupada]="ocupadas().has(oferta.id)"
+                  [parecidas]="parecidasDe(oferta)"
+                  (detectar)="detectar($event)"
+                />
+              }
+            </div>
+          </app-seccion-plegable>
+        }
+      </section>
+    </div>
+  }
+</section>

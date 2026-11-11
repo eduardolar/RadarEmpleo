@@ -3,7 +3,14 @@
   descripcion="Agenda, estadísticas, perfil, importación y ajustes."
 />
 
-<div class="mt-5">
+<div class="mt-5 flex flex-col gap-3 sm:flex-row">
+  <a
+    mat-stroked-button
+    routerLink="/perfil"
+    class="w-full [--mat-button-outlined-container-height:48px] sm:w-auto"
+  >
+    Perfil y filtros
+  </a>
   <a
     mat-stroked-button
     routerLink="/importacion"

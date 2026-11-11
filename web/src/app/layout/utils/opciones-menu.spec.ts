@@ -11,8 +11,9 @@ describe('opcionDeUrl', () => {
     expect(opcionDeUrl('/candidaturas/12')?.etiqueta).toBe('Tablero');
   });
 
-  it('la importación cuenta como Más', () => {
+  it('la importación y el perfil cuentan como Más', () => {
     expect(opcionDeUrl('/importacion')?.etiqueta).toBe('Más');
+    expect(opcionDeUrl('/perfil')?.etiqueta).toBe('Más');
   });
 
   it('no tiene en cuenta los parámetros de la URL', () => {

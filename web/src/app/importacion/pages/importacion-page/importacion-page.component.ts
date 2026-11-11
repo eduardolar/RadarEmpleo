@@ -16,6 +16,8 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { ErrorApi } from '../../../core/interfaces/error-api.interface';
 import { CabeceraPagina } from '../../../shared/components/cabecera-pagina/cabecera-pagina';
+import { EnlaceVolver } from '../../../shared/components/enlace-volver/enlace-volver';
+import { SeccionPlegable } from '../../../shared/components/seccion-plegable/seccion-plegable';
 import { AvisosService } from '../../../shared/services/avisos.service';
 import { ListaImportacion } from '../../components/lista-importacion/lista-importacion';
 import { ResultadoAplicacion } from '../../interfaces/importacion.interface';
@@ -38,11 +40,13 @@ import {
 @Component({
   imports: [
     CabeceraPagina,
+    EnlaceVolver,
     ListaImportacion,
     MatButtonModule,
     MatProgressBarModule,
     NgTemplateOutlet,
     RouterLink,
+    SeccionPlegable,
   ],
   selector: 'app-importacion-page',
   templateUrl: './importacion-page.component.html',

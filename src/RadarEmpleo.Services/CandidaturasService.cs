@@ -19,12 +19,17 @@ public class CandidaturasService
     private readonly IDbContextFactory<AppDbContext> _factory;
     private readonly IClock _reloj;
     private readonly IExportadorRadar _exportador;
+    private readonly RutasCurriculum? _rutas;
 
-    public CandidaturasService(IDbContextFactory<AppDbContext> factory, IClock reloj, IExportadorRadar exportador)
+    /// <param name="rutas">Carpeta Curriculum, para decir en la ficha si cada documento sigue en su sitio.
+    /// Sin ella, todos salen como no encontrados.</param>
+    public CandidaturasService(IDbContextFactory<AppDbContext> factory, IClock reloj, IExportadorRadar exportador,
+        RutasCurriculum? rutas = null)
     {
         _factory = factory;
         _reloj = reloj;
         _exportador = exportador;
+        _rutas = rutas;
     }
 
     /// <summary>
@@ -66,7 +71,7 @@ public class CandidaturasService
         return lista.Select(AResumen).ToList();
     }
 
-    /// <summary>Ficha completa con historial, notas y recordatorios; null si no existe.</summary>
+    /// <summary>Ficha completa con historial, notas, recordatorios y documentos; null si no existe.</summary>
     public async Task<CandidaturaDetalleDto?> ObtenerAsync(int id)
     {
         await using var db = await _factory.CreateDbContextAsync();
@@ -230,6 +235,7 @@ public class CandidaturasService
             .Include(c => c.Historial)
             .Include(c => c.Notas)
             .Include(c => c.Recordatorios)
+            .Include(c => c.Documentos)
             .AsSplitQuery();
         if (!seguimiento) consulta = consulta.AsNoTracking();
         return consulta.FirstOrDefaultAsync(c => c.Id == id);
@@ -283,7 +289,7 @@ public class CandidaturasService
         c.Id, c.EmpresaId, c.Empresa.Nombre, c.Puesto, c.Enlace, c.Portal, c.Modalidad, c.Ubicacion,
         c.Encaje, c.Pega, c.Estado, c.FechaDeteccion, c.FechaEnvio, c.FechaEstado, c.FechaUltimoCambio, c.MotivoDescarte, c.Origen);
 
-    private static CandidaturaDetalleDto ADetalle(Candidatura c) => new(
+    private CandidaturaDetalleDto ADetalle(Candidatura c) => new(
         c.Id, c.EmpresaId, c.Empresa.Nombre, c.Puesto, c.Enlace, c.Portal, c.Modalidad, c.ModalidadDetalle,
         c.Ubicacion, c.Encaje, c.Pega, c.Analisis, c.Salario, c.Estado, c.FechaDeteccion, c.FechaEnvio,
         c.FechaEstado, c.FechaUltimoCambio, c.MotivoDescarte, c.MotivoDescarteTexto, c.Origen, c.SeccionOrigen,
@@ -292,7 +298,10 @@ public class CandidaturasService
             .Select(h => new CambioEstadoDto(h.Id, h.De, h.A, h.Fecha, h.Comentario, h.Origen)).ToList(),
         c.Notas.OrderByDescending(n => n.Fecha).ThenByDescending(n => n.Id).Select(ANota).ToList(),
         c.Recordatorios.OrderBy(r => r.FechaHora).ThenBy(r => r.Id)
-            .Select(r => new RecordatorioDto(r.Id, r.CandidaturaId, r.Tipo, r.Titulo, r.FechaHora, r.Hecho, r.Notas)).ToList());
+            .Select(r => new RecordatorioDto(r.Id, r.CandidaturaId, r.Tipo, r.Titulo, r.FechaHora, r.Hecho, r.Notas)).ToList(),
+        c.Documentos.OrderBy(d => d.Tipo).ThenByDescending(d => d.Vigente).ThenByDescending(d => d.FechaAlta).ThenByDescending(d => d.Id)
+            .Select(d => DocumentosService.ADto(d, _rutas)).ToList(),
+        _rutas?.HayCarpeta ?? false);
 
     private static NotaDto ANota(Nota n) => new(n.Id, n.CandidaturaId, n.Texto, n.Fecha, n.Origen);
 }
