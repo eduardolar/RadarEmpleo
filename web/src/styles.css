@@ -14,6 +14,11 @@
 @import '@fontsource/roboto/500.css';
 @import '@fontsource/roboto/600.css';
 @import '@fontsource/roboto/700.css';
+/* Titulares: Bricolage Grotesque, una grotesca ancha y pesada que aguanta el tamaño grande. Solo
+   700 y 800 (titulares, marca, sello): unos 22 kB cada una en latin. Los datos van en la
+   monoespaciada del sistema (--font-mono, abajo), que no pesa nada */
+@import '@fontsource/bricolage-grotesque/latin-700.css';
+@import '@fontsource/bricolage-grotesque/latin-800.css';
 
 /* Una sola fuente de colores: el tema de Material (mat.theme en material-theme.scss) genera los
    roles de Material 3 como --mat-sys-* y aquí se exponen a Tailwind (bg-primary, text-on-surface,
@@ -49,6 +54,149 @@
   --color-estado-suave: var(--estado-suave);
   --color-estado-borde: var(--estado-borde);
   --color-on-estado: var(--estado-texto);
+
+  /* Marca (docs/DISENO.md): colores propios de RadarEmpleo, definidos más abajo en :root */
+  --color-tinta: var(--re-tinta);
+  --color-tinta-noche: var(--re-tinta-noche);
+  --color-tinta-clara: var(--re-tinta-clara);
+  --color-papel: var(--re-papel);
+  --color-fosforito: var(--re-fosforito);
+  --color-on-fosforito: var(--re-on-fosforito);
+  --color-fosforito-borde: var(--re-fosforito-borde);
+  --color-fosforito-suave: var(--re-fosforito-suave);
+  --color-on-fosforito-suave: var(--re-on-fosforito-suave);
+  --color-humo: var(--re-humo);
+  --color-humo-suave: var(--re-humo-suave);
+  --color-humo-borde: var(--re-humo-borde);
+  --color-ok: var(--re-ok);
+  --color-ok-suave: var(--re-ok-suave);
+  --color-ok-borde: var(--re-ok-borde);
+  --color-on-ok: var(--re-on-ok);
+  --color-trazo: var(--re-trazo);
+
+  /* Chip del encaje: toma el color del [data-encaje] más cercano (ver «Colores por encaje») */
+  --color-encaje: var(--encaje-fondo);
+  --color-on-encaje: var(--encaje-texto);
+
+  /* Sombra dura: sin difuminar, desplazada abajo a la derecha. sm para chips y elementos pequeños,
+     la normal para tarjetas y botones, lg para el documento principal, diálogos y estados vacíos */
+  --shadow-dura-sm: 3px 3px 0 0 var(--re-sombra);
+  --shadow-dura: 4px 4px 0 0 var(--re-sombra);
+  --shadow-dura-lg: 6px 6px 0 0 var(--re-sombra);
+  /* La del lima: la del enlace activo del menú y la de los avisos */
+  --shadow-lima: 4px 4px 0 0 var(--re-fosforito);
+
+  --font-display: 'Bricolage Grotesque', Roboto, system-ui, sans-serif;
+  --font-sans: Roboto, system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, 'Cascadia Mono', 'Cascadia Code', Consolas, 'SF Mono', Menlo, monospace;
+
+  /* El sello de «Enviada» cae sobre la ficha (sin animación con movimiento reducido) */
+  --animate-sello: sello-entra 520ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+  @keyframes sello-entra {
+    0% {
+      opacity: 0;
+      scale: 1.9;
+    }
+    55% {
+      opacity: 1;
+      scale: 0.92;
+    }
+    100% {
+      opacity: 1;
+      scale: 1;
+    }
+  }
+}
+
+/* Esquinas casi rectas: se redefinen los radios de Tailwind, así que todo lo que usa rounded-xl o
+   rounded-2xl pasa a 4-6 px sin tocar las plantillas. rounded-full no cambia: los círculos de verdad
+   (puntos de estado, iconos redondos) siguen redondos. Los de Material, en material-theme.scss */
+@theme {
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+  --radius-3xl: 8px;
+}
+
+/* Colores de marca (grises + lima, el claro como espejo del oscuro; docs/DISENO.md). Los nombres
+   vienen de la ventanilla: tinta (el texto y los bordes), papel (el texto claro del menú) y
+   fosforito (el lima con el que se marca lo importante). El menú es de tinta en los dos modos y el
+   lima lleva siempre #111827 encima. Contraste comprobado (WCAG AA):
+   - #111827 sobre lima 11:1; papel sobre tinta-noche 16:1; tinta-clara (#d1d5db) sobre tinta-noche
+     11,7:1; en la sección activa (#1f2937), lima 9,7:1 y papel 13:1
+   - humo (la pega, «Tiro largo»): en claro #b4410f, 5,7:1 sobre la tarjeta (#ffffff), 5,2:1 sobre
+     surface-container (#f3f4f6) y 4,9:1 sobre humo-suave; en oscuro #fdba74, 11:1 sobre la tarjeta
+     (#0b1120), 10,4:1 sobre el fondo (#111827), 8,7:1 sobre surface-container (#1f2937) y 8,9:1
+     sobre humo-suave
+   - on-ok sobre ok-suave 6,3:1 (claro) y 10,4:1 (oscuro)
+   - trazo (bordes) sobre el fondo: 17:1 en claro y 12:1 en oscuro; la sombra de noche (#6b7280)
+     sobre #111827, 3,6:1, para que se siga viendo */
+:root {
+  /* Modo oscuro con la paleta de Eduardo: fondo #111827, texto #f3f4f6 y acento lima #a3e635
+     (el fosforito de noche). #111827 sobre lima 11:1; lima sobre #111827 11:1. */
+  --re-tinta: light-dark(#1f2937, #1f2937);
+  --re-tinta-noche: light-dark(#111827, #0b1120);
+  --re-tinta-clara: #d1d5db;
+  --re-papel: #f3f4f6;
+  --re-fosforito: #a3e635;
+  --re-on-fosforito: #111827;
+  --re-fosforito-borde: light-dark(#65a30d, #a3e635);
+  --re-fosforito-suave: light-dark(#ecfccb, #1f2b0e);
+  --re-on-fosforito-suave: light-dark(#3f6212, #d9f99d);
+  --re-humo: light-dark(#b4410f, #fdba74);
+  --re-humo-suave: light-dark(#fdece3, #3b1f14);
+  --re-humo-borde: light-dark(#f0b496, #7a3a20);
+  --re-ok: light-dark(#15803d, #5fcf86);
+  --re-ok-suave: light-dark(#e3f6e8, #0f3320);
+  --re-ok-borde: light-dark(#a9dfb8, #1f5e38);
+  --re-on-ok: light-dark(#166534, #b2ecc4);
+  --re-trazo: light-dark(#111827, #d1d5db);
+  --re-sombra: light-dark(#111827, #6b7280);
+}
+
+/* Títulos de página y de sección con la fuente de marca, pesados y apretados; los de las tarjetas
+   (h3) siguen en Roboto, que son datos (el puesto) */
+@layer base {
+  h1,
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Insignia: EL patrón de etiqueta de la app (estado, encaje, contadores). Bloque plano sin borde,
+   24 px de alto, mayúsculas pequeñas, icono + texto. El color lo pone quien la usa y codifica el
+   significado: bg-encaje/text-on-encaje con data-encaje, bg-estado-suave/text-on-estado con
+   data-estado, o bg-surface-container-high/text-on-surface para lo neutro */
+@utility insignia {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.3125rem;
+  height: 1.5rem;
+  padding-inline: 0.5rem;
+  border-radius: 2px;
+  font-size: 0.6875rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Etiqueta de formulario de ventanilla: pequeña, en mayúsculas y con aire entre letras. Para rótulos
+   cortos («Cambiar estado», «Modalidad», cabeceras de columna), nunca para frases */
+@utility etiqueta {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* Barra de desplazamiento oculta (la fila de filtros del móvil se sigue pudiendo deslizar) */
@@ -115,40 +263,62 @@
   --estado-texto: light-dark(#4b5563, #d5d9de);
 }
 
+/* Colores por encaje: se pone data-encaje="Alto" en el chip y dentro bg-encaje y text-on-encaje.
+   Bloques de color plano, sin borde. De un vistazo: lo que tiene buena pinta va en lima (como el
+   anuncio que se marca con rotulador) y lo que huele a red flag, en «humo». Cada chip lleva además texto e
+   icono, así que no depende solo del color. Contraste del texto: de 4,9:1 (Tiro largo) a 11:1. */
+[data-encaje='Alto'] {
+  --encaje-fondo: var(--re-fosforito);
+  --encaje-texto: var(--re-on-fosforito);
+}
+[data-encaje='Medio'] {
+  --encaje-fondo: var(--mat-sys-surface-container-high);
+  --encaje-texto: var(--mat-sys-on-surface);
+}
+/* Sin valorar: el mismo gris neutro que Medio, con su icono de interrogación */
+[data-encaje='SinValorar'] {
+  --encaje-fondo: var(--mat-sys-surface-container-high);
+  --encaje-texto: var(--mat-sys-on-surface-variant);
+}
+[data-encaje='TiroLargo'] {
+  --encaje-fondo: var(--re-humo-suave);
+  --encaje-texto: var(--re-humo);
+}
+[data-encaje='No'] {
+  --encaje-fondo: var(--re-humo);
+  --encaje-texto: light-dark(#ffffff, #2a1208);
+}
+
 /* Tablero: arrastrar y soltar. Son las clases que pone el CDK; la vista previa se pinta fuera del
    componente (en <body>), por eso va aquí y no en la plantilla. */
 .cdk-drag-preview {
   box-sizing: border-box;
   cursor: grabbing;
 }
-/* La tarjeta «cogida»: levantada, algo girada y con el borde del color primario */
+/* La tarjeta «cogida»: levantada, algo girada y con la sombra de lima */
 .cdk-drag-preview .tarjeta-candidatura {
   rotate: 2deg;
-  box-shadow: var(--mat-sys-level4);
-  outline: 2px solid var(--mat-sys-primary);
-  outline-offset: 0;
+  box-shadow: 8px 8px 0 0 var(--re-fosforito);
 }
 /* El hueco donde caerá: un recuadro discontinuo en lugar de la tarjeta */
 .cdk-drag-placeholder {
-  border-radius: 0.75rem;
-  outline: 2px dashed var(--mat-sys-outline);
+  border-radius: 4px;
+  outline: 2px dashed var(--re-trazo);
   outline-offset: -2px;
-  background-color: color-mix(in srgb, var(--mat-sys-primary) 6%, transparent);
+  background-color: var(--mat-sys-surface-container-high);
 }
 .cdk-drag-placeholder > * {
   opacity: 0;
 }
 /* Columnas donde se puede soltar (las demás ya se atenúan desde la plantilla) */
 .zona-soltar.cdk-drop-list-receiving {
-  outline: 2px dashed color-mix(in srgb, var(--mat-sys-primary) 45%, transparent);
+  outline: 2px dashed var(--re-trazo);
   outline-offset: -2px;
-  background-color: color-mix(in srgb, var(--mat-sys-primary) 4%, transparent);
 }
 /* Y la columna sobre la que está ahora mismo la tarjeta (al entrar deja de ser «receiving») */
 .zona-soltar.cdk-drop-list-dragging {
-  outline-style: solid;
-  outline-color: var(--mat-sys-primary);
-  background-color: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
+  outline: 3px solid var(--re-trazo);
+  background-color: var(--re-fosforito-suave);
 }
 .cdk-drag-animating {
   transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
@@ -190,6 +360,8 @@
     --mat-dialog-container-shape: 0;
   }
   .dialogo-movil-completo .mat-mdc-dialog-surface {
+    border: 0;
+    box-shadow: none;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
       env(safe-area-inset-left);
   }
@@ -223,4 +395,113 @@
   --mat-snack-bar-container-color: var(--mat-sys-error-container);
   --mat-snack-bar-supporting-text-color: var(--mat-sys-on-error-container);
   --mat-snack-bar-button-color: var(--mat-sys-on-error-container);
+}
+
+/* Avisos (snackbar) de tinta con borde y sombra de lima: el «hecho» de cada acción. Los de error
+   mantienen su color (.aviso-error, más arriba, gana por estar en el propio aviso) */
+html {
+  --mat-snack-bar-container-color: var(--re-tinta-noche);
+  --mat-snack-bar-supporting-text-color: var(--re-papel);
+  --mat-snack-bar-button-color: var(--re-fosforito);
+}
+.mat-mdc-snack-bar-container .mdc-snackbar__surface {
+  border: 2px solid var(--re-trazo);
+  box-shadow: 4px 4px 0 0 var(--re-sombra);
+}
+.mat-mdc-snack-bar-container:not(.aviso-error) .mdc-snackbar__surface {
+  border-color: var(--re-fosforito);
+  box-shadow: 4px 4px 0 0 var(--re-fosforito);
+}
+
+/* Material en brutalista. Las formas y el grosor de los bordes van en material-theme.scss con los
+   *-overrides; aquí, lo que no tiene token: el borde de los paneles flotantes y las sombras duras.
+   «html» delante: los estilos de cada componente de Material se cargan después que este archivo y,
+   con la misma especificidad, ganarían ellos. */
+
+/* El botón principal (relleno) es el único con sombra dura: al pasar el ratón se levanta 1 px y al
+   pulsarlo se hunde hasta tapar la sombra, como una tecla. Los de borde (secundarios) llevan solo su
+   borde de 2 px, y los de texto («Editar», «Mover a…») van planos, como enlaces. Con movimiento
+   reducido no se desplaza: solo cambia la sombra. El borde interior de #111827 de día se funde con
+   el botón y de noche recorta el lima */
+html .mat-mdc-unelevated-button {
+  box-shadow:
+    inset 0 0 0 2px var(--re-on-fosforito),
+    3px 3px 0 0 var(--re-sombra);
+  transition:
+    translate 100ms ease-out,
+    box-shadow 100ms ease-out;
+}
+html .mat-mdc-unelevated-button:hover {
+  translate: -1px -1px;
+  box-shadow:
+    inset 0 0 0 2px var(--re-on-fosforito),
+    4px 4px 0 0 var(--re-sombra);
+}
+html .mat-mdc-unelevated-button:active {
+  translate: 3px 3px;
+  box-shadow: inset 0 0 0 2px var(--re-on-fosforito);
+}
+/* Desactivado (o bloqueado un instante tras un cambio): plano, sin sombra ni movimiento */
+html .mat-mdc-button-base.mat-mdc-button-disabled {
+  translate: none;
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html .mat-mdc-unelevated-button {
+    transition: none;
+  }
+  html .mat-mdc-unelevated-button:hover,
+  html .mat-mdc-unelevated-button:active {
+    translate: none;
+  }
+}
+
+/* Etiquetas de los campos: siempre arriba (floatLabel="always" en cada mat-form-field), en mayúsculas
+   pequeñas y en negrita, como los rótulos de un formulario de ventanilla */
+html .mat-mdc-form-field .mdc-floating-label--float-above {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Paneles flotantes (diálogos, menús, desplegables, autocompletar): borde de 2 px y sombra dura en
+   vez de la elevación difuminada de Material */
+html .mat-mdc-dialog-surface {
+  border: 2px solid var(--re-trazo);
+  box-shadow: 8px 8px 0 0 var(--re-sombra);
+}
+html .mat-mdc-menu-panel,
+html .mat-mdc-select-panel,
+html .mat-mdc-autocomplete-panel {
+  border: 2px solid var(--re-trazo);
+  border-radius: 4px;
+  box-shadow: 4px 4px 0 0 var(--re-sombra);
+}
+
+/* El momento cumbre: «Marcar enviada» cuando es el siguiente paso. El único botón de lima de día:
+   más grueso, con borde de #111827 de 3 px y la sombra más larga; al pulsarlo se hunde igual que
+   los demás. */
+html .boton-enviar {
+  --mat-button-filled-container-color: var(--re-fosforito);
+  --mat-button-filled-label-text-color: var(--re-on-fosforito);
+  --mat-button-filled-state-layer-color: var(--re-on-fosforito);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow:
+    inset 0 0 0 3px var(--re-on-fosforito),
+    5px 5px 0 0 var(--re-sombra);
+}
+html .boton-enviar:hover {
+  box-shadow:
+    inset 0 0 0 3px var(--re-on-fosforito),
+    6px 6px 0 0 var(--re-sombra);
+}
+html .boton-enviar:active {
+  translate: 5px 5px;
+  box-shadow: inset 0 0 0 3px var(--re-on-fosforito);
+}
+@media (prefers-reduced-motion: reduce) {
+  html .boton-enviar:active {
+    translate: none;
+  }
 }

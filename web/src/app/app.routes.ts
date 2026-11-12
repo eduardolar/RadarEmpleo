@@ -42,7 +42,7 @@ export const routes: Routes = [
       },
       {
         path: 'importacion',
-        title: 'Traer del registro · RadarEmpleo',
+        title: 'Importar del registro · RadarEmpleo',
         loadComponent: () =>
           import('./importacion/pages/importacion-page/importacion-page.component'),
       },

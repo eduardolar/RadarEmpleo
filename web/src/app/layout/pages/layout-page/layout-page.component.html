@@ -2,12 +2,13 @@
 <a
   href="#principal"
   (click)="saltarAlContenido($event)"
-  class="fixed top-3 left-3 z-50 -translate-y-[200%] rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-on-primary shadow-lg transition focus:translate-y-0 focus:outline-2 focus:outline-offset-2 focus:outline-primary"
+  class="fixed top-3 left-3 z-50 -translate-y-[200%] rounded-xl border-2 border-on-fosforito bg-fosforito px-4 py-3 text-sm font-bold text-on-fosforito shadow-dura transition focus:translate-y-0 focus:outline-2 focus:outline-offset-2 focus:outline-primary motion-reduce:transition-none"
 >
   Saltar al contenido
 </a>
 
-<div class="min-h-screen bg-surface-container-low text-on-surface antialiased">
+<!-- Fondo plano: #f9fafb de día y #111827 de noche (surface) -->
+<div class="min-h-screen bg-surface text-on-surface antialiased">
   <app-menu-lateral />
 
   <!-- Abajo deja sitio a la barra de pestañas del móvil y a la zona de gestos del sistema -->

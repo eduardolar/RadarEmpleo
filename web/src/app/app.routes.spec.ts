@@ -74,8 +74,9 @@ describe('Navegación', () => {
     const activos = pagina.querySelectorAll('a[aria-current="page"]');
     expect(activos).toHaveLength(2);
     activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/tablero'));
-    expect(activos[0].classList.contains('bg-blue-500/10')).toBe(true);
-    expect(activos[1].classList.contains('text-white')).toBe(true);
+    // Marcada con el fondo gris y la barra de lima en el menú lateral, y en lima en la barra inferior
+    expect(activos[0].classList.contains('bg-tinta')).toBe(true);
+    expect(activos[1].classList.contains('text-fosforito')).toBe(true);
   });
 
   it('al salir de la ficha, Tablero deja de estar resaltado', async () => {
@@ -98,7 +99,7 @@ describe('Navegación', () => {
     await harness.fixture.whenStable();
 
     expect(TestBed.inject(Router).url).toBe('/importacion');
-    expect(TestBed.inject(Title).getTitle()).toBe('Traer del registro · RadarEmpleo');
+    expect(TestBed.inject(Title).getTitle()).toBe('Importar del registro · RadarEmpleo');
     http.expectOne('/api/importacion/tabla/previsualizar').flush({
       lote: { version: 1, origen: 'Tabla', filas: [] },
       resumen: {
@@ -114,7 +115,7 @@ describe('Navegación', () => {
     });
     await harness.fixture.whenStable();
 
-    expect(pagina.querySelector('h1')?.textContent).toContain('Traer del registro');
+    expect(pagina.querySelector('h1')?.textContent).toContain('Importar del registro');
     const activos = pagina.querySelectorAll('a[aria-current="page"]');
     expect(activos).toHaveLength(2);
     activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/mas'));

@@ -1,21 +1,96 @@
-<app-cabecera-pagina
-  titulo="Más"
-  descripcion="Agenda, estadísticas, perfil, importación y ajustes."
-/>
+<!-- Página de rejilla: alineada a la izquierda con el título, como Tablero y Rastreos, y con un ancho
+     máximo para que las tarjetas no se estiren (docs/DISENO.md, «Maquetación de página») -->
+<section class="flex w-full max-w-4xl flex-col gap-6">
+  <app-cabecera-pagina titulo="Más" descripcion="Perfil e importación." />
 
-<div class="mt-5 flex flex-col gap-3 sm:flex-row">
-  <a
-    mat-stroked-button
-    routerLink="/perfil"
-    class="w-full [--mat-button-outlined-container-height:48px] sm:w-auto"
-  >
-    Perfil y filtros
-  </a>
-  <a
-    mat-stroked-button
-    routerLink="/importacion"
-    class="w-full [--mat-button-outlined-container-height:48px] sm:w-auto"
-  >
-    Traer del registro
-  </a>
-</div>
+  <!-- Cada tarjeta es entera el enlace: borde de 2 px y sombra dura, que se levanta al pasar por
+       encima y se hunde al pulsarla (sin desplazamiento si se ha pedido menos movimiento) -->
+  <ul class="grid gap-4 sm:grid-cols-2">
+    <li class="flex">
+      <a
+        routerLink="/perfil"
+        class="group flex min-h-24 flex-1 items-start gap-4 rounded-md border-2 border-trazo bg-surface-container-lowest p-5 shadow-dura transition-[translate,box-shadow] duration-100 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-dura-lg focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none active:translate-x-1 active:translate-y-1 active:shadow-none motion-reduce:transition-none motion-reduce:hover:translate-none motion-reduce:active:translate-none"
+      >
+        <span
+          aria-hidden="true"
+          class="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm bg-surface-container-high text-on-surface"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            class="h-6 w-6"
+          >
+            <path stroke-linecap="square" d="M4 7h9M19 7h1M4 17h1M11 17h9" />
+            <circle cx="16" cy="7" r="2.5" />
+            <circle cx="8" cy="17" r="2.5" />
+          </svg>
+        </span>
+        <span class="flex min-w-0 flex-1 flex-col gap-1">
+          <span class="flex items-center gap-2 font-display text-lg leading-tight font-extrabold">
+            Perfil y filtros
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              class="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+            >
+              <path stroke-linecap="square" d="M4 10h11m-4-4 4 4-4 4" />
+            </svg>
+          </span>
+          <span class="text-sm text-on-surface-variant">
+            Lo que buscas, tu stack y los filtros con los que se valoran las ofertas.
+          </span>
+        </span>
+      </a>
+    </li>
+    <li class="flex">
+      <a
+        routerLink="/importacion"
+        class="group flex min-h-24 flex-1 items-start gap-4 rounded-md border-2 border-trazo bg-surface-container-lowest p-5 shadow-dura transition-[translate,box-shadow] duration-100 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-dura-lg focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none active:translate-x-1 active:translate-y-1 active:shadow-none motion-reduce:transition-none motion-reduce:hover:translate-none motion-reduce:active:translate-none"
+      >
+        <span
+          aria-hidden="true"
+          class="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm bg-surface-container-high text-on-surface"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            class="h-6 w-6"
+          >
+            <path stroke-linecap="square" d="M12 3v11m-4.5-4.5L12 14l4.5-4.5M4 14v6h16v-6" />
+          </svg>
+        </span>
+        <span class="flex min-w-0 flex-1 flex-col gap-1">
+          <span class="flex items-center gap-2 font-display text-lg leading-tight font-extrabold">
+            Importar del registro
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              class="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+            >
+              <path stroke-linecap="square" d="M4 10h11m-4-4 4 4-4 4" />
+            </svg>
+          </span>
+          <span class="text-sm text-on-surface-variant">
+            Trae a la app las candidaturas que llevabas apuntadas en tu registro, sin duplicar las
+            que ya están.
+          </span>
+        </span>
+      </a>
+    </li>
+  </ul>
+
+  <!-- Lo que vendrá, sin botones: no se promete nada que no exista todavía -->
+  <p class="font-mono text-sm text-on-surface-variant">
+    Más adelante llegarán aquí la agenda y los recordatorios.
+  </p>
+</section>

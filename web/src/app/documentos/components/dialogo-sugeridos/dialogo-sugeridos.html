@@ -97,7 +97,7 @@
     </div>
   } @else {
     @if (sinCoincidencias()) {
-      <p class="mb-3 flex items-start gap-2 rounded-xl bg-surface-container-low p-3 text-sm">
+      <p class="mb-3 flex items-start gap-2 rounded-md bg-surface-container p-3 text-sm">
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"
@@ -146,17 +146,11 @@
               <span aria-hidden="true">·</span>
               <span>{{ fila.sugerido.extension === 'pdf' ? 'PDF' : 'Word' }}</span>
               @if (fila.sugerido.esAntiguo) {
-                <span
-                  class="rounded-full bg-surface-container-high px-2 py-0.5 font-medium text-on-surface-variant"
-                >
-                  Antiguo
-                </span>
+                <span class="insignia bg-surface-container-high text-on-surface"> Antiguo </span>
               }
               <!-- Hecho después de enviarla: no puede ser el CV que se mandó -->
               @if (fila.sugerido.posteriorAlEnvio) {
-                <span
-                  class="rounded-full bg-surface-container-high px-2 py-0.5 font-medium text-on-surface-variant"
-                >
+                <span class="insignia bg-surface-container-high text-on-surface">
                   Posterior al envío
                 </span>
               }

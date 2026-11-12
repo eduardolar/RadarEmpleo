@@ -3,37 +3,100 @@
      pequeño) y en fila cuando caben, mida lo que mida la pantalla -->
 <!-- tabindex -1 y data-oferta: tras pasarla o apartarla, la página deja el foco aquí o en la siguiente
      (el botón pulsado desaparece y el teclado no debe volver al principio de la página) -->
+<!-- Como las tarjetas del tablero: el elemento principal de su nivel, con borde de 2 px y sombra
+     dura. Dentro, nada lleva marco propio -->
 <article
   tabindex="-1"
-  class="@container rounded-xl bg-surface-container-lowest p-4 shadow-sm ring-1 ring-outline-variant focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+  class="@container rounded-md border-2 border-trazo bg-surface-container-lowest p-4 shadow-dura-sm focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
   [attr.aria-label]="oferta().puesto + ' en ' + oferta().empresa"
   [attr.data-oferta]="oferta().id"
 >
   <div class="flex items-start justify-between gap-2">
-    <p class="min-w-0 pt-0.5 text-xs font-medium text-on-surface-variant">
+    <p class="etiqueta min-w-0 pt-0.5 text-on-surface-variant">
       {{ oferta().empresa }}
     </p>
-    <!-- Mismos colores que el encaje del tablero: solo «Alto» destaca -->
-    <span
-      class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
-      [class]="
-        oferta().encaje === 'Alto'
-          ? 'bg-primary-container text-on-primary-container'
-          : 'bg-surface-container-high text-on-surface-variant'
-      "
-    >
+    <!-- La misma insignia de encaje que en el tablero (styles.css, «insignia» y «Colores por encaje») -->
+    <span [attr.data-encaje]="oferta().encaje" class="insignia bg-encaje text-on-encaje">
+      @switch (oferta().encaje) {
+        @case ('Alto') {
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3 shrink-0">
+            <path
+              d="M10 2.5 12.2 7l5 .7-3.6 3.5.85 4.95L10 13.8l-4.45 2.35.85-4.95L2.8 7.7l5-.7L10 2.5Z"
+            />
+          </svg>
+        }
+        @case ('Medio') {
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3 shrink-0">
+            <path d="M10 3a7 7 0 1 0 0 14V3Zm0 1.8a5.2 5.2 0 0 1 0 10.4V4.8Z" />
+          </svg>
+        }
+        @case ('SinValorar') {
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            class="h-3 w-3 shrink-0"
+          >
+            <path
+              stroke-linecap="square"
+              d="M7 7.5a3 3 0 1 1 4.2 2.7c-.8.4-1.2 1-1.2 1.8v.5M10 16v.5"
+            />
+          </svg>
+        }
+        @case ('TiroLargo') {
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            class="h-3 w-3 shrink-0"
+          >
+            <path stroke-linecap="square" d="M3 16c1.5-6 6-10 13-10.5M12.5 3l3.5 2.5-2.5 3.5" />
+          </svg>
+        }
+        @case ('No') {
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            class="h-3 w-3 shrink-0"
+          >
+            <path stroke-linecap="square" d="M5 17.5v-14M5 4h9.5l-2 3.25 2 3.25H5" />
+          </svg>
+        }
+      }
       {{ encaje() }}
     </span>
   </div>
 
-  <h3 class="mt-1 text-[0.9375rem] leading-snug font-semibold text-on-surface">
+  <h3 class="mt-1 text-base leading-snug font-bold text-on-surface">
     {{ oferta().puesto }}
   </h3>
 
   @if (oferta().pega; as pega) {
-    <!-- Recortada a dos líneas a la vista; el lector de pantalla la lee entera -->
-    <p class="mt-1.5 line-clamp-2 text-sm text-on-surface-variant">
-      <span class="font-medium text-on-surface">Pega:</span> {{ pega }}
+    <!-- Recortada a dos líneas a la vista; el lector de pantalla la lee entera. En «humo» y con
+         la banderita, como en el tablero -->
+    <p class="mt-1.5 flex items-start gap-1.5 text-sm text-humo">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        class="mt-0.5 h-4 w-4 shrink-0"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M5 17.5v-14M5 4h9.5l-2 3.25 2 3.25H5"
+        />
+      </svg>
+      <span class="line-clamp-2"><span class="font-bold">Pega:</span> {{ pega }}</span>
     </p>
   }
 
@@ -42,7 +105,7 @@
     [href]="oferta().enlace"
     target="_blank"
     rel="noopener noreferrer"
-    class="-ml-1 inline-flex min-h-12 items-center gap-1 rounded-lg px-1 text-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+    class="-ml-1 inline-flex min-h-12 items-center gap-1 rounded-lg px-1 text-sm font-medium text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
   >
     Ver la oferta<span class="sr-only"> (se abre en otra pestaña)</span>
     <svg
@@ -64,23 +127,31 @@
   @if (oferta().estado !== 'Convertida' && parecidas().length > 0) {
     <!-- Las candidaturas del registro no tienen enlace: la app no sabe si es la misma y lo pregunta
          aquí, justo encima de «Pasar al tablero», en vez de dejar que salga repetida -->
+    <!-- Detector de repetidas: dos fichas superpuestas con una lupa («esto ya lo he visto»), en un
+         bloque plano de lima suave, sin marco, para que no se pase por alto -->
     <div
-      class="mt-1 mb-2 flex items-start gap-2 rounded-xl bg-surface-container px-3 pt-2.5 pb-1 text-sm text-on-surface-variant"
+      class="mt-2 mb-3 flex items-start gap-2 rounded-md bg-fosforito-suave px-3 pt-2.5 pb-1 text-sm text-on-surface"
     >
       <svg
         aria-hidden="true"
         viewBox="0 0 20 20"
         fill="none"
         stroke="currentColor"
-        stroke-width="1.8"
-        class="mt-0.5 h-4 w-4 shrink-0"
+        stroke-width="1.6"
+        class="mt-0.5 h-5 w-5 shrink-0 text-on-fosforito-suave"
       >
-        <circle cx="10" cy="10" r="7" />
-        <path stroke-linecap="round" d="M10 9.5v4M10 6.5h.01" />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M4.5 13.5h-1a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v1"
+        />
+        <rect x="6.5" y="5.5" width="9" height="12" rx="1" />
+        <circle cx="11" cy="11" r="2.25" />
+        <path stroke-linecap="round" d="m12.75 12.75 1.5 1.5" />
       </svg>
       <div class="min-w-0">
         <p>
-          <span class="font-medium text-on-surface">Puede que ya la tengas.</span>
+          <span class="font-extrabold text-on-surface">Puede que ya la tengas.</span>
           {{ textoParecidas() }} Si es la misma, no hace falta pasarla.
         </p>
         <ul>
@@ -88,7 +159,7 @@
             <li>
               <a
                 [routerLink]="['/candidaturas', candidatura.id]"
-                class="-mx-1 inline-flex min-h-12 items-center gap-0.5 rounded-lg px-1 font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                class="-mx-1 inline-flex min-h-12 items-center gap-0.5 rounded-lg px-1 font-medium text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
               >
                 {{ candidatura.puesto }} · {{ etiquetasEstado[candidatura.estado] }}
                 <span class="sr-only">: abrir su ficha</span>
@@ -117,7 +188,7 @@
     @case ('Convertida') {
       <!-- Ya está en el tablero: en vez de botones, dónde encontrarla -->
       <p
-        class="mt-1 flex min-h-12 flex-wrap items-center gap-x-2 rounded-xl bg-surface-container-low px-3 text-sm font-medium text-on-surface"
+        class="mt-1 flex min-h-12 flex-wrap items-center gap-x-2 rounded-md bg-surface-container px-3 text-sm font-medium text-on-surface"
       >
         <svg
           aria-hidden="true"
@@ -135,7 +206,7 @@
           <a
             [routerLink]="['/candidaturas', id]"
             [attr.aria-label]="'Abrir ficha: ' + oferta().puesto"
-            class="-mx-1 inline-flex min-h-12 items-center gap-0.5 rounded-lg px-1 text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+            class="-mx-1 inline-flex min-h-12 items-center gap-0.5 rounded-lg px-1 text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
           >
             Abrir ficha
             <svg

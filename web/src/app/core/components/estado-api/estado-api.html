@@ -1,29 +1,34 @@
+<!-- Indicador discreto: bloque plano del color del estado, sin marco. Solo colores del
+     tema y de marca (ok, error): se leen bien en claro y en oscuro -->
 <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
   <!-- Contenedor fijo: los lectores de pantalla solo anuncian cambios en regiones que ya existían -->
   <!-- tabindex="-1": recibe el foco al pulsar «Reintentar», que desaparece y lo dejaría en <body> -->
-  <div #indicador role="status" aria-live="polite" tabindex="-1" class="rounded-full outline-none">
+  <div #indicador role="status" aria-live="polite" tabindex="-1" class="rounded-sm outline-none">
     @switch (sistemaService.estado()) {
       @case ('conectada') {
         <p
-          class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200"
+          class="inline-flex items-center gap-2 rounded-sm bg-ok-suave px-2.5 py-1 text-sm font-semibold text-on-ok"
         >
-          <span class="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
+          <span class="h-2 w-2 rounded-full bg-ok" aria-hidden="true"></span>
           Conectado · modo {{ sistemaService.info()?.modo }}
         </p>
       }
       @case ('sin-conexion') {
         <p
-          class="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm font-medium text-red-800 ring-1 ring-red-200"
+          class="inline-flex items-center gap-2 rounded-sm bg-error-container px-2.5 py-1 text-sm font-semibold text-on-error-container"
         >
-          <span class="h-2 w-2 rounded-full bg-red-500" aria-hidden="true"></span>
+          <span class="h-2 w-2 rounded-full bg-error" aria-hidden="true"></span>
           No se puede conectar con RadarEmpleo
         </p>
       }
       @default {
         <p
-          class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-600 ring-1 ring-slate-200"
+          class="inline-flex items-center gap-2 rounded-sm bg-surface-container-high px-2.5 py-1 text-sm font-semibold text-on-surface-variant"
         >
-          <span class="h-2 w-2 animate-pulse rounded-full bg-slate-400" aria-hidden="true"></span>
+          <span
+            class="h-2 w-2 animate-pulse rounded-full bg-outline motion-reduce:animate-none"
+            aria-hidden="true"
+          ></span>
           Comprobando la conexión...
         </p>
       }
@@ -34,7 +39,7 @@
     <button
       type="button"
       (click)="reintentar()"
-      class="inline-flex min-h-12 items-center rounded-lg px-3 text-sm font-semibold text-primary underline hover:bg-primary-container focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+      class="inline-flex min-h-12 items-center rounded-sm px-3 text-sm font-bold text-primary underline decoration-2 underline-offset-4 hover:bg-primary-container focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
     >
       Reintentar
     </button>

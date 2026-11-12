@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="titulo-logo">
+  <title id="titulo-logo">RadarEmpleo</title>
+  <!-- Isotipo de RadarEmpleo: un radar sobre un bloque de tinta (#111827) que ha encontrado una
+       oferta y la ha marcado con lima (#a3e635). Neobrutalista: esquinas casi rectas, trazo grueso
+       y la oferta como un cuadrado macizo con su sombra dura (docs/DISENO.md) -->
+  <rect width="64" height="64" rx="6" fill="#111827" />
+  <g fill="none" stroke="#9ca3af" stroke-width="3">
+    <circle cx="30" cy="34" r="20" />
+    <circle cx="30" cy="34" r="10" />
+  </g>
+  <path d="M30 34 46 18" stroke="#a3e635" stroke-width="5" stroke-linecap="square" />
+  <rect x="26" y="30" width="8" height="8" fill="#f3f4f6" />
+  <rect x="44" y="41" width="12" height="12" fill="#f3f4f6" />
+  <rect x="41" y="38" width="12" height="12" fill="#a3e635" stroke="#111827" stroke-width="2.5" />
+</svg>

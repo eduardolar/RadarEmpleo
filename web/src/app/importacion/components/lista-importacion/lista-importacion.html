@@ -8,7 +8,7 @@
           ? (fila.estadoActual ?? fila.estadoRegistro)
           : fila.estadoRegistro
       "
-      class="relative overflow-hidden rounded-xl bg-surface-container-lowest py-3 pr-3 pl-4 shadow-sm ring-1 ring-outline-variant"
+      class="relative overflow-hidden rounded-md bg-surface-container-lowest py-3 pr-3 pl-4 border-2 border-trazo shadow-dura-sm"
     >
       <span aria-hidden="true" class="absolute inset-y-0 left-0 w-1 bg-estado"></span>
 
@@ -18,9 +18,7 @@
       </p>
 
       <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        <span
-          class="inline-flex items-center gap-1 rounded-full bg-estado-suave px-2 py-0.5 font-medium text-on-estado ring-1 ring-estado-borde"
-        >
+        <span class="insignia bg-estado-suave text-on-estado">
           <span aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full bg-estado"></span>
           <span class="sr-only">Estado: </span>{{ textoEstado(fila) }}
         </span>
@@ -28,7 +26,7 @@
       </p>
 
       @if (fila.motivo) {
-        <p class="mt-2 rounded-xl bg-surface-container-low px-3 py-2 text-sm text-on-surface">
+        <p class="mt-2 rounded-md bg-surface-container px-3 py-2 text-sm text-on-surface">
           {{ fila.motivo }}
         </p>
       }
@@ -54,7 +52,7 @@
         <a
           [routerLink]="['/candidaturas', fila.candidaturaId]"
           [attr.aria-label]="'Ver la que tienes: ' + fila.puesto + ' en ' + fila.empresa"
-          class="-mb-2 -ml-1 inline-flex min-h-12 items-center gap-1 rounded-lg px-1 text-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          class="-mb-2 -ml-1 inline-flex min-h-12 items-center gap-1 rounded-lg px-1 text-sm font-medium text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
         >
           Ver la que tienes
           <svg

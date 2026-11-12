@@ -1,38 +1,137 @@
-// Include theming for Angular Material with `mat.theme()`.
-// This Sass mixin will define CSS variables that are used for styling Angular Material
-// components according to the Material 3 design spec.
-// Learn more about theming and how to use it for your application's
-// custom components at https://material.angular.dev/guide/theming
+// Tema de Angular Material de RadarEmpleo: neobrutalismo con grises y lima («Ventanilla brutalista»,
+// docs/DISENO.md). mat.theme() genera los roles de Material 3 como variables --mat-sys-*; styles.css
+// los expone a Tailwind, así que lo maquetado con Tailwind y los componentes de Material salen de la
+// misma paleta. Las formas (esquinas casi rectas, bordes de 2 px) se fijan aquí con los *-overrides;
+// las sombras duras y el «hundirse» al pulsar, en styles.css («Material en brutalista»).
+// Más información: https://material.angular.dev/guide/theming
 @use '@angular/material' as mat;
+@use './theme-colors' as marca;
 
 html {
   height: 100%;
+  // Tipografía: titulares (display, headline y title, también los títulos de los diálogos) con la
+  // fuente de marca; textos, etiquetas y datos con Roboto
   @include mat.theme(
     (
       color: (
-        primary: mat.$azure-palette,
-        tertiary: mat.$blue-palette,
+        primary: marca.$primary-palette,
+        tertiary: marca.$tertiary-palette,
       ),
-      typography: Roboto,
+      typography: (
+        brand-family: 'Bricolage Grotesque',
+        plain-family: Roboto,
+      ),
       density: 0,
+    )
+  );
+
+  // Paleta de Eduardo (11/11/2026): grises + lima, el claro como espejo del oscuro.
+  // - Claro: fondo #f9fafb, tarjetas #ffffff, texto #111827, botón principal #111827.
+  // - Oscuro: fondo #111827, texto #f3f4f6, botón principal lima #a3e635 con texto #111827.
+  // Contrastes: #111827 sobre #f9fafb 17:1; lima sobre #111827 y al revés 11:1.
+  @include mat.theme-overrides(
+    (
+      primary: light-dark(#111827, #a3e635),
+      on-primary: light-dark(#f3f4f6, #111827),
+      primary-container: light-dark(#ecfccb, #365314),
+      on-primary-container: light-dark(#3f6212, #d9f99d),
+      secondary-container: light-dark(#f3f4f6, #1f2937),
+      on-secondary-container: light-dark(#111827, #f3f4f6),
+      surface: light-dark(#f9fafb, #111827),
+      surface-dim: light-dark(#e5e7eb, #0b1120),
+      surface-bright: light-dark(#ffffff, #273449),
+      surface-container-lowest: light-dark(#ffffff, #0b1120),
+      surface-container-low: light-dark(#ffffff, #172033),
+      surface-container: light-dark(#f3f4f6, #1f2937),
+      surface-container-high: light-dark(#e5e7eb, #273449),
+      surface-container-highest: light-dark(#d1d5db, #374151),
+      on-surface: light-dark(#111827, #f3f4f6),
+      on-surface-variant: light-dark(#4b5563, #d1d5db),
+      outline: light-dark(#6b7280, #9ca3af),
+      outline-variant: light-dark(#e5e7eb, #374151),
+    )
+  );
+
+  // Enlaces y botones de texto («Abrir la oferta», «Mover a…»): lima oscuro de día (5:1 sobre
+  // blanco; el lima normal no se lee sobre blanco) y lima de noche
+  @include mat.button-overrides(
+    (
+      text-label-text-color: light-dark(#4d7c0f, #a3e635),
+    )
+  );
+
+  // Esquinas casi rectas y bordes de 2 px del color del texto en todo lo de Material. Los botones
+  // son rectángulos de 4 px de radio; los campos, también, con el borde más grueso al enfocar
+  @include mat.button-overrides(
+    (
+      filled-container-shape: 4px,
+      outlined-container-shape: 4px,
+      text-container-shape: 4px,
+      tonal-container-shape: 4px,
+      protected-container-shape: 4px,
+      outlined-outline-width: 2px,
+      outlined-outline-color: var(--re-trazo),
+    )
+  );
+  @include mat.form-field-overrides(
+    (
+      outlined-container-shape: 4px,
+      outlined-outline-width: 2px,
+      outlined-focus-outline-width: 3px,
+      outlined-outline-color: var(--re-trazo),
+      outlined-hover-outline-color: var(--re-trazo),
+      outlined-focus-outline-color: var(--re-trazo),
+      filled-container-shape: 4px,
+    )
+  );
+  @include mat.dialog-overrides(
+    (
+      container-shape: 6px,
+      container-color: var(--mat-sys-surface-container-lowest),
+    )
+  );
+  @include mat.menu-overrides(
+    (
+      container-shape: 4px,
+      container-color: var(--mat-sys-surface-container-lowest),
+    )
+  );
+  @include mat.snack-bar-overrides(
+    (
+      container-shape: 4px,
+    )
+  );
+  @include mat.tooltip-overrides(
+    (
+      container-shape: 2px,
+    )
+  );
+  @include mat.progress-bar-overrides(
+    (
+      track-shape: 0,
+    )
+  );
+
+  // Foco de teclado bien visible en botones, menús, pestañas, etc. de Material: un borde de 3 px
+  // del color primario (tinta de día, lima de noche) en vez del velo casi transparente de serie
+  @include mat.strong-focus-indicators(
+    (
+      border-color: var(--mat-sys-primary),
+      border-width: 3px,
     )
   );
 }
 
 body {
-  // Default the application to a light color theme. This can be changed to
-  // `dark` to enable the dark color theme, or to `light dark` to defer to the
-  // user's system settings.
-  color-scheme: light;
+  // Sigue el modo del sistema: el claro es el espejo del oscuro. Todos los colores (los de Material y
+  // los propios de styles.css) tienen su versión oscura con light-dark(). Para fijar un modo, poner
+  // `light` o `dark`.
+  color-scheme: light dark;
 
-  // Set a default background, font and text colors for the application using
-  // Angular Material's system-level CSS variables. Learn more about these
-  // variables at https://material.angular.dev/guide/system-variables
   background-color: var(--mat-sys-surface);
   color: var(--mat-sys-on-surface);
   font: var(--mat-sys-body-medium);
 
-  // Reset the user agent margin.
   margin: 0;
   height: 100%;
 }

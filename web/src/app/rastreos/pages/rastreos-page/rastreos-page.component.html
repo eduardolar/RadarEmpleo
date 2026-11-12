@@ -1,5 +1,8 @@
 <!-- overflow-wrap se hereda: los informes traen URL largas que no deben ensanchar la página -->
-<section aria-label="Rastreos" class="flex max-w-6xl flex-col gap-5 [overflow-wrap:anywhere]">
+<section
+  aria-label="Rastreos"
+  class="flex w-full max-w-6xl flex-col gap-5 [overflow-wrap:anywhere]"
+>
   <app-cabecera-pagina
     titulo="Rastreos"
     descripcion="Las ofertas que encuentran los rastreos. Pasa al tablero las que te interesen."
@@ -8,7 +11,12 @@
   <!-- Arriba, lo único que se elige: qué rastreo mirar. «Volver a buscar» es secundario y va a su lado -->
   <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
     @if (opciones().length > 0) {
-      <mat-form-field appearance="outline" class="w-full sm:max-w-md" subscriptSizing="dynamic">
+      <mat-form-field
+        floatLabel="always"
+        appearance="outline"
+        class="w-full sm:max-w-md"
+        subscriptSizing="dynamic"
+      >
         <mat-label>Rastreo</mat-label>
         <mat-select [value]="seleccionado()" (selectionChange)="elegir($event.value)">
           @for (opcion of opciones(); track opcion.id) {
@@ -62,7 +70,7 @@
       <p class="text-sm text-on-surface-variant">Buscando informes nuevos en tu carpeta...</p>
     } @else if (textoResultado(); as texto) {
       <div
-        class="flex items-start gap-2 rounded-xl bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
+        class="flex items-start gap-2 rounded-md bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
       >
         <svg
           aria-hidden="true"
@@ -92,7 +100,7 @@
     <!-- Lo leído otras veces se sigue enseñando debajo: aquí solo se avisa -->
     <div
       role="alert"
-      class="flex items-start gap-3 rounded-2xl bg-error-container p-4 text-on-error-container"
+      class="flex items-start gap-3 rounded-2xl border-2 border-error bg-error-container p-4 text-on-error-container"
     >
       <svg
         aria-hidden="true"
@@ -112,7 +120,7 @@
   @if (error(); as mensaje) {
     <div
       role="alert"
-      class="flex items-start gap-3 rounded-2xl bg-error-container p-4 text-on-error-container"
+      class="flex items-start gap-3 rounded-2xl border-2 border-error bg-error-container p-4 text-on-error-container"
     >
       <svg
         aria-hidden="true"
@@ -141,33 +149,33 @@
 
   @if (sinRastreos()) {
     <div
-      class="flex flex-col items-center rounded-2xl bg-surface-container-lowest px-6 py-8 text-center ring-1 ring-outline-variant"
+      class="flex flex-col items-center rounded-2xl border-2 border-trazo bg-surface-container-lowest px-6 py-8 text-center shadow-dura-lg"
     >
-      <!-- Los círculos del radar, todavía sin nada dentro -->
-      <svg aria-hidden="true" viewBox="0 0 96 96" class="h-20 w-20">
-        <circle cx="48" cy="48" r="44" class="fill-surface-container" />
-        <circle
-          cx="48"
-          cy="48"
-          r="31"
-          fill="none"
-          class="stroke-outline-variant"
-          stroke-width="2"
+      <!-- El radar de la marca, encendido y barriendo, todavía sin nada dentro -->
+      <svg aria-hidden="true" viewBox="0 0 96 96" class="h-24 w-24">
+        <rect x="6" y="6" width="88" height="88" rx="6" class="fill-on-surface" />
+        <rect
+          x="2"
+          y="2"
+          width="88"
+          height="88"
+          rx="6"
+          class="fill-tinta-noche stroke-trazo"
+          stroke-width="3"
         />
-        <circle
-          cx="48"
-          cy="48"
-          r="16"
-          fill="none"
-          class="stroke-outline-variant"
-          stroke-width="2"
-        />
-        <path d="M48 48 70 26" class="stroke-primary" stroke-width="3" stroke-linecap="round" />
-        <circle cx="48" cy="48" r="4" class="fill-primary" />
+        <circle cx="46" cy="46" r="31" fill="none" class="stroke-tinta-clara" stroke-width="2" />
+        <circle cx="46" cy="46" r="16" fill="none" class="stroke-tinta-clara" stroke-width="2" />
+        <path d="M46 46 68 24" class="stroke-fosforito" stroke-width="4" stroke-linecap="square" />
+        <rect x="42" y="42" width="8" height="8" class="fill-papel" />
       </svg>
-      <p class="mt-4 max-w-md font-medium text-on-surface">Todavía no hay rastreos.</p>
+      <p class="mt-4 max-w-md font-display text-2xl font-extrabold text-on-surface">
+        Todavía no hay rastreos.
+      </p>
       <p class="mt-1 max-w-md text-sm text-on-surface-variant">
         Cuando el equipo /empleo apunte uno en tu registro, saldrá aquí.
+      </p>
+      <p class="mt-3 max-w-md font-mono text-xs text-on-surface-variant">
+        El radar está encendido. Solo falta que pase algo por delante.
       </p>
     </div>
   }
@@ -184,35 +192,54 @@
         <h2
           id="titulo-ofertas"
           tabindex="-1"
-          class="text-lg font-semibold text-on-surface focus:outline-none"
+          class="text-xl font-extrabold text-on-surface focus:outline-none"
         >
           Ofertas ({{ rastreo.ofertas.length }})
         </h2>
 
         @if (rastreo.ofertas.length === 0) {
           <p
-            class="rounded-2xl bg-surface-container-lowest p-6 text-center text-sm text-on-surface-variant ring-1 ring-outline-variant"
+            class="rounded-2xl border-2 border-dashed border-trazo bg-surface-container-lowest p-6 text-center text-sm text-on-surface-variant"
           >
             En este rastreo no hay ofertas que pueda leer. Mira el informe.
           </p>
         } @else if (porDecidir().length === 0) {
           <!-- Todas miradas: se dice, en vez de dejar la lista empezando por las del tablero, y si
                otro rastreo tiene ofertas por mirar se lleva a él sin abrir el selector -->
+          <!-- Bandeja a cero: una bandeja vacía con su marca de fosforito -->
           <div
-            class="flex items-start gap-2 rounded-xl bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
+            class="flex items-start gap-3 rounded-2xl border-2 border-dashed border-trazo bg-surface-container-lowest p-4 text-sm text-on-surface-variant"
           >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              class="mt-0.5 h-4 w-4 shrink-0 text-primary"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="m5 10.5 3 3 7-7" />
+            <svg aria-hidden="true" viewBox="0 0 48 48" class="h-12 w-12 shrink-0">
+              <rect
+                x="2"
+                y="2"
+                width="44"
+                height="44"
+                rx="3"
+                class="fill-fosforito stroke-on-fosforito"
+                stroke-width="2"
+              />
+              <path
+                d="M10 27h8l2 4h8l2-4h8v7a2 2 0 0 1-2 2H12a2 2 0 0 1-2-2v-7Zm0 0 4-11h20l4 11"
+                fill="none"
+                class="stroke-on-fosforito"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+              <path
+                d="m19 20 3.5 3.5L29 17"
+                fill="none"
+                class="stroke-on-fosforito"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
             <div class="min-w-0">
-              <p>Ya has mirado todas las ofertas de este rastreo.</p>
+              <p class="font-medium text-on-surface">
+                Ya has mirado todas las ofertas de este rastreo.
+              </p>
               @if (otroPorMirar(); as otro) {
                 <p class="mt-1">
                   En el {{ otro.etiqueta.charAt(0).toLowerCase() + otro.etiqueta.slice(1) }} quedan
@@ -227,6 +254,8 @@
                 >
                   Verlas
                 </button>
+              } @else {
+                <p class="mt-1">Bandeja a cero. Hasta el próximo rastreo.</p>
               }
             </div>
           </div>
@@ -262,7 +291,7 @@
         }
 
         @if (grupos().enElTablero.length > 0) {
-          <h3 class="mt-3 text-base font-semibold text-on-surface">
+          <h3 class="etiqueta mt-3 text-on-surface-variant">
             Ya en el tablero ({{ grupos().enElTablero.length }})
           </h3>
           @for (oferta of grupos().enElTablero; track oferta.id) {

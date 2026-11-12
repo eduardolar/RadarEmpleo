@@ -1,5 +1,19 @@
-<header class="space-y-1">
-  <h1 class="text-2xl font-semibold text-on-surface">{{ titulo() }}</h1>
+<!-- Titular grande y pesado con una franja de lima debajo, recta y sin degradado. Solo colores del
+     tema: se lee igual en claro y en oscuro -->
+<header class="space-y-3">
+  <h1
+    class="font-display text-[2rem] leading-none font-extrabold tracking-tight text-on-surface sm:text-[2.5rem]"
+  >
+    <!-- La franja va por debajo de la línea base para no tapar las letras. isolate: la franja
+         (z-index negativo) queda detrás del texto pero delante del fondo -->
+    <span class="relative isolate">
+      {{ titulo() }}
+      <span
+        aria-hidden="true"
+        class="absolute inset-x-[-0.1em] bottom-[-0.12em] -z-10 h-[0.28em] bg-fosforito"
+      ></span>
+    </span>
+  </h1>
   @if (descripcion()) {
     <p class="text-sm text-on-surface-variant">{{ descripcion() }}</p>
   }

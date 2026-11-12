@@ -3,7 +3,7 @@
 <div
   #inicio
   tabindex="-1"
-  class="flex max-w-5xl flex-col gap-6 [overflow-wrap:anywhere] outline-none"
+  class="flex w-full max-w-5xl flex-col gap-6 [overflow-wrap:anywhere] outline-none"
 >
   <app-enlace-volver ruta="/tablero" texto="Volver al tablero" />
 
@@ -18,9 +18,9 @@
     @if (problema.estado === 404) {
       <div
         role="alert"
-        class="flex flex-col items-center rounded-2xl bg-surface-container-lowest px-6 py-10 text-center ring-1 ring-outline-variant"
+        class="flex flex-col items-center rounded-2xl border-2 border-trazo bg-surface-container-lowest px-6 py-10 text-center shadow-dura-lg"
       >
-        <!-- Una ficha vacía con un interrogante -->
+        <!-- Una ficha vacía con un interrogante en fosforito -->
         <svg aria-hidden="true" viewBox="0 0 120 120" class="h-28 w-28">
           <circle cx="60" cy="60" r="56" class="fill-surface-container" />
           <rect
@@ -42,19 +42,21 @@
             cx="82"
             cy="80"
             r="18"
-            class="fill-primary-container stroke-primary"
+            class="fill-fosforito stroke-on-surface"
             stroke-width="3"
           />
           <path
             d="M76.5 75.5a5.5 5.5 0 1 1 7.8 5c-1.5.7-2.3 1.7-2.3 3.2v.8"
             fill="none"
-            class="stroke-primary"
+            class="stroke-tinta"
             stroke-width="3"
             stroke-linecap="round"
           />
-          <circle cx="82" cy="90.5" r="2" class="fill-primary" />
+          <circle cx="82" cy="90.5" r="2" class="fill-tinta" />
         </svg>
-        <p class="mt-4 text-lg font-medium">Esta candidatura no existe o se ha borrado.</p>
+        <p class="mt-4 font-display text-2xl font-extrabold">
+          Esta candidatura no existe o se ha borrado.
+        </p>
         <p class="mt-1 max-w-sm text-sm text-on-surface-variant">
           Puede que el enlace sea antiguo. Las demás siguen en el tablero.
         </p>
@@ -63,7 +65,7 @@
     } @else {
       <div
         role="alert"
-        class="flex items-start gap-3 rounded-2xl bg-error-container p-4 text-on-error-container"
+        class="flex items-start gap-3 rounded-2xl border-2 border-error bg-error-container p-4 text-on-error-container"
       >
         <svg
           aria-hidden="true"
@@ -91,18 +93,19 @@
   }
 
   @if (candidatura(); as c) {
-    <!-- data-estado: la franja de arriba y el chip del estado toman su color (styles.css) -->
+    <!-- data-estado: la franja de arriba, el chip y el sello toman el color del estado (styles.css).
+         Es el documento principal de la página: borde de tinta y sombra dura, como las tarjetas -->
     <header
       [attr.data-estado]="c.estado"
-      class="overflow-hidden rounded-2xl bg-surface-container-lowest ring-1 ring-outline-variant"
+      class="overflow-hidden rounded-2xl border-2 border-trazo bg-surface-container-lowest shadow-dura-lg"
     >
-      <span aria-hidden="true" class="block h-1.5 bg-estado"></span>
+      <span aria-hidden="true" class="block h-3 bg-estado"></span>
 
       <div class="space-y-5 p-5 sm:p-6">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div class="min-w-0 space-y-1">
-            <p class="text-sm font-medium text-on-surface-variant">{{ c.empresa }}</p>
-            <h1 class="text-2xl leading-tight font-semibold text-on-surface sm:text-3xl">
+            <p class="etiqueta text-on-surface-variant">{{ c.empresa }}</p>
+            <h1 class="text-[1.75rem] leading-tight font-extrabold text-on-surface sm:text-4xl">
               {{ c.puesto }}
             </h1>
 
@@ -110,12 +113,12 @@
               <span
                 #estadoActual
                 tabindex="-1"
-                class="inline-flex items-center gap-1.5 rounded-full bg-estado-suave px-3 py-1 font-medium text-on-estado ring-1 ring-estado-borde outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                class="insignia bg-estado-suave text-on-estado outline-none focus-visible:ring-3 focus-visible:ring-primary"
               >
                 <span aria-hidden="true" class="h-2 w-2 rounded-full bg-estado"></span>
                 <span class="sr-only">Estado: </span>{{ etiquetas.estado[c.estado] }}
               </span>
-              <span class="inline-flex items-center gap-1 text-on-surface-variant">
+              <span class="inline-flex items-center gap-1 font-mono text-on-surface-variant">
                 <svg
                   aria-hidden="true"
                   viewBox="0 0 20 20"
@@ -130,6 +133,31 @@
                 En este estado: {{ diasEnEstado() }}
               </span>
             </p>
+
+            <!-- El momento cumbre: al pasar a Enviada cae un sello sobre la ficha (animate-sello, sin
+                 movimiento si se ha pedido así). Es decorativo: el estado y la fecha ya están en el
+                 chip y en «Datos» -->
+            @if (c.estado === 'Enviada') {
+              <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-4">
+                <div
+                  aria-hidden="true"
+                  class="inline-flex -rotate-6 animate-sello flex-col items-center rounded-sm border-4 border-double border-estado bg-estado-suave px-4 py-1.5 text-on-estado motion-reduce:animate-none"
+                >
+                  <span
+                    class="font-display text-2xl leading-tight font-extrabold tracking-[0.2em] uppercase"
+                    >Enviada</span
+                  >
+                  @if (c.fechaEnvio) {
+                    <span class="font-mono text-xs font-bold">{{
+                      c.fechaEnvio | fechaMadrid
+                    }}</span>
+                  }
+                </div>
+                <p class="font-mono text-sm text-on-surface-variant">
+                  La pelota está en su tejado.
+                </p>
+              </div>
+            }
           </div>
 
           <!-- Acciones sobre la ficha (no cambian el estado) -->
@@ -169,19 +197,36 @@
 
         @if (accionesALaVista().length > 0) {
           <div class="border-t border-outline-variant pt-4">
-            <p id="titulo-acciones" class="mb-2 text-xs font-medium text-on-surface-variant">
-              Cambiar estado
-            </p>
-            <div role="group" aria-labelledby="titulo-acciones" class="flex flex-wrap gap-2">
+            <p id="titulo-acciones" class="etiqueta mb-3 text-on-surface-variant">Cambiar estado</p>
+            <div role="group" aria-labelledby="titulo-acciones" class="flex flex-wrap gap-3">
               @for (accion of accionesALaVista(); track accion.destino) {
+                <!-- «Marcar enviada» lleva su avión de papel y, si es el siguiente paso, el botón
+                     grande de fosforito (boton-enviar, styles.css) -->
                 @if (accion.destacada) {
                   <button
                     mat-flat-button
                     type="button"
+                    [class.boton-enviar]="accion.destino === 'Enviada'"
                     disabledInteractive
                     [disabled]="bloqueado()"
                     (click)="cambiarEstado(accion.destino)"
                   >
+                    @if (accion.destino === 'Enviada') {
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        class="mr-1.5 inline-block h-[1.125rem] w-[1.125rem] align-[-0.2em]"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M17.5 2.5 2.5 9l5.5 2.5m9.5-9-4 15-5.5-6m9.5-9L8 11.5m0 0V16l2.25-2.25"
+                        />
+                      </svg>
+                    }
                     {{ accion.texto }}
                   </button>
                 } @else {
@@ -193,6 +238,22 @@
                     [disabled]="bloqueado()"
                     (click)="cambiarEstado(accion.destino)"
                   >
+                    @if (accion.destino === 'Enviada') {
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        class="mr-1.5 inline-block h-[1.125rem] w-[1.125rem] align-[-0.2em]"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M17.5 2.5 2.5 9l5.5 2.5m9.5-9-4 15-5.5-6m9.5-9L8 11.5m0 0V16l2.25-2.25"
+                        />
+                      </svg>
+                    }
                     {{ accion.texto }}
                   </button>
                 }
@@ -220,12 +281,12 @@
     <div class="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <section
         aria-labelledby="titulo-datos"
-        class="min-w-0 rounded-2xl bg-surface-container-lowest p-5 ring-1 ring-outline-variant sm:p-6"
+        class="min-w-0 rounded-2xl bg-surface-container-lowest p-5 sm:p-6"
       >
-        <h2 id="titulo-datos" class="mb-4 text-lg font-semibold">Datos</h2>
+        <h2 id="titulo-datos" class="mb-4 pb-2 text-xl font-extrabold">Datos</h2>
         <dl class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3 lg:grid-cols-2">
           <div>
-            <dt class="text-xs font-medium text-on-surface-variant">Modalidad</dt>
+            <dt class="etiqueta text-on-surface-variant">Modalidad</dt>
             <dd class="mt-0.5">
               {{ etiquetas.modalidad[c.modalidad] }}
               @if (c.modalidadDetalle) {
@@ -235,59 +296,121 @@
           </div>
 
           <div>
-            <dt class="text-xs font-medium text-on-surface-variant">Ubicación</dt>
+            <dt class="etiqueta text-on-surface-variant">Ubicación</dt>
             <dd class="mt-0.5">{{ c.ubicacion || '—' }}</dd>
           </div>
 
           <div>
-            <dt class="text-xs font-medium text-on-surface-variant">Encaje</dt>
+            <dt class="etiqueta text-on-surface-variant">Encaje</dt>
             <dd class="mt-1">
-              <span
-                class="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium"
-                [class]="
-                  c.encaje === 'Alto'
-                    ? 'bg-primary-container text-on-primary-container'
-                    : 'bg-surface-container-high text-on-surface-variant'
-                "
-              >
+              <!-- Mismo chip que en el tablero (styles.css, «Colores por encaje») -->
+              <span [attr.data-encaje]="c.encaje" class="insignia bg-encaje text-on-encaje">
+                @switch (c.encaje) {
+                  @case ('Alto') {
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      class="h-3 w-3 shrink-0"
+                    >
+                      <path
+                        d="M10 2.5 12.2 7l5 .7-3.6 3.5.85 4.95L10 13.8l-4.45 2.35.85-4.95L2.8 7.7l5-.7L10 2.5Z"
+                      />
+                    </svg>
+                  }
+                  @case ('Medio') {
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      class="h-3 w-3 shrink-0"
+                    >
+                      <path d="M10 3a7 7 0 1 0 0 14V3Zm0 1.8a5.2 5.2 0 0 1 0 10.4V4.8Z" />
+                    </svg>
+                  }
+                  @case ('SinValorar') {
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.2"
+                      class="h-3 w-3 shrink-0"
+                    >
+                      <path
+                        stroke-linecap="square"
+                        d="M7 7.5a3 3 0 1 1 4.2 2.7c-.8.4-1.2 1-1.2 1.8v.5M10 16v.5"
+                      />
+                    </svg>
+                  }
+                  @case ('TiroLargo') {
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.2"
+                      class="h-3 w-3 shrink-0"
+                    >
+                      <path
+                        stroke-linecap="square"
+                        d="M3 16c1.5-6 6-10 13-10.5M12.5 3l3.5 2.5-2.5 3.5"
+                      />
+                    </svg>
+                  }
+                  @case ('No') {
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.2"
+                      class="h-3 w-3 shrink-0"
+                    >
+                      <path stroke-linecap="square" d="M5 17.5v-14M5 4h9.5l-2 3.25 2 3.25H5" />
+                    </svg>
+                  }
+                }
                 {{ etiquetas.encaje[c.encaje] }}
               </span>
             </dd>
           </div>
 
           <div>
-            <dt class="text-xs font-medium text-on-surface-variant">Portal</dt>
+            <dt class="etiqueta text-on-surface-variant">Portal</dt>
             <dd class="mt-0.5">{{ c.portal || '—' }}</dd>
           </div>
 
           <div>
-            <dt class="text-xs font-medium text-on-surface-variant">Salario</dt>
+            <dt class="etiqueta text-on-surface-variant">Salario</dt>
             <dd class="mt-0.5">{{ c.salario || '—' }}</dd>
           </div>
 
           <div>
-            <dt class="text-xs font-medium text-on-surface-variant">Origen</dt>
+            <dt class="etiqueta text-on-surface-variant">Origen</dt>
             <dd class="mt-0.5">{{ etiquetas.origen[c.origen] }}</dd>
           </div>
 
           <div>
-            <dt class="text-xs font-medium text-on-surface-variant">Detectada</dt>
-            <dd class="mt-0.5">{{ c.fechaDeteccion | fechaMadrid }}</dd>
+            <dt class="etiqueta text-on-surface-variant">Detectada</dt>
+            <dd class="mt-0.5 font-mono">{{ c.fechaDeteccion | fechaMadrid }}</dd>
           </div>
 
           <div>
-            <dt class="text-xs font-medium text-on-surface-variant">Enviada</dt>
-            <dd class="mt-0.5">{{ c.fechaEnvio ? (c.fechaEnvio | fechaMadrid) : '—' }}</dd>
+            <dt class="etiqueta text-on-surface-variant">Enviada</dt>
+            <dd class="mt-0.5 font-mono">
+              {{ c.fechaEnvio ? (c.fechaEnvio | fechaMadrid) : '—' }}
+            </dd>
           </div>
 
           <div>
-            <dt class="text-xs font-medium text-on-surface-variant">Última modificación</dt>
-            <dd class="mt-0.5">{{ c.fechaUltimoCambio | fechaMadrid: 'dia-hora' }}</dd>
+            <dt class="etiqueta text-on-surface-variant">Última modificación</dt>
+            <dd class="mt-0.5 font-mono">{{ c.fechaUltimoCambio | fechaMadrid: 'dia-hora' }}</dd>
           </div>
 
           @if (c.motivoDescarte) {
-            <div class="col-span-full rounded-xl bg-surface-container-low p-3">
-              <dt class="text-xs font-medium text-on-surface-variant">Motivo de descarte</dt>
+            <div class="col-span-full rounded-md bg-surface-container p-3">
+              <dt class="etiqueta text-on-surface-variant">Motivo de descarte</dt>
               <dd class="mt-0.5">
                 {{ etiquetas.motivo[c.motivoDescarte] }}
                 @if (c.motivoDescarteTexto) {
@@ -301,16 +424,35 @@
         @if (c.pega || c.analisis) {
           <div class="mt-5 space-y-4 border-t border-outline-variant pt-5">
             @if (c.pega) {
+              <!-- En «humo», con la banderita de las tarjetas: lo que conviene mirar antes de seguir -->
               <div>
-                <h3 class="text-sm font-semibold">Inconveniente</h3>
-                <p class="mt-1 rounded-xl bg-surface-container-low p-3 text-sm whitespace-pre-line">
+                <h3 class="etiqueta flex items-center gap-1.5 text-humo">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    class="h-4 w-4 shrink-0"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M5 17.5v-14M5 4h9.5l-2 3.25 2 3.25H5"
+                    />
+                  </svg>
+                  Inconveniente
+                </h3>
+                <p
+                  class="mt-1.5 rounded-md bg-humo-suave p-3 text-sm whitespace-pre-line text-on-surface"
+                >
                   {{ c.pega }}
                 </p>
               </div>
             }
             @if (c.analisis) {
               <div>
-                <h3 class="text-sm font-semibold">Análisis</h3>
+                <h3 class="etiqueta text-on-surface-variant">Análisis</h3>
                 <p class="mt-1 text-sm leading-relaxed whitespace-pre-line">{{ c.analisis }}</p>
               </div>
             }
@@ -320,16 +462,16 @@
 
       <section
         aria-labelledby="titulo-recordatorios"
-        class="min-w-0 self-start rounded-2xl bg-surface-container-lowest p-5 ring-1 ring-outline-variant sm:p-6"
+        class="min-w-0 self-start rounded-2xl bg-surface-container-lowest p-5 sm:p-6"
       >
-        <h2 id="titulo-recordatorios" class="mb-4 text-lg font-semibold">Recordatorios</h2>
+        <h2 id="titulo-recordatorios" class="mb-4 pb-2 text-xl font-extrabold">Recordatorios</h2>
         @if (c.recordatorios.length > 0) {
           <ul class="space-y-2 text-sm">
             @for (recordatorio of c.recordatorios; track recordatorio.id) {
-              <li class="flex gap-3 rounded-xl bg-surface-container-low p-3">
+              <li class="flex gap-3 rounded-md bg-surface-container p-3">
                 <span
                   aria-hidden="true"
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border-2 border-trazo"
                   [class]="
                     recordatorio.hecho
                       ? 'bg-surface-container-high text-on-surface-variant'
@@ -371,7 +513,7 @@
                     }
                   </p>
                   <p class="mt-0.5 text-xs text-on-surface-variant">
-                    <time [attr.datetime]="recordatorio.fechaHora" class="font-medium">{{
+                    <time [attr.datetime]="recordatorio.fechaHora" class="font-mono font-medium">{{
                       recordatorio.fechaHora | fechaMadrid: 'dia-hora'
                     }}</time>
                     · {{ etiquetas.recordatorio[recordatorio.tipo] }}
@@ -393,19 +535,19 @@
 
     <section
       aria-labelledby="titulo-historial"
-      class="rounded-2xl bg-surface-container-lowest p-5 ring-1 ring-outline-variant sm:p-6"
+      class="rounded-2xl bg-surface-container-lowest p-5 sm:p-6"
     >
       <h2
         #tituloHistorial
         id="titulo-historial"
         tabindex="-1"
-        class="mb-4 text-lg font-semibold outline-none"
+        class="mb-4 pb-2 text-xl font-extrabold outline-none"
       >
         Historial y notas
       </h2>
 
       <form [formGroup]="formularioNota" (ngSubmit)="anadirNota()" class="mb-6">
-        <mat-form-field appearance="outline" class="w-full">
+        <mat-form-field floatLabel="always" appearance="outline" class="w-full">
           <mat-label>Nueva nota</mat-label>
           <textarea
             #entradaNota
@@ -433,7 +575,7 @@
             @if (!ultimo) {
               <span
                 aria-hidden="true"
-                class="absolute top-9 bottom-1 left-4 w-0.5 -translate-x-1/2 rounded-full bg-outline-variant"
+                class="absolute top-9 bottom-1 left-4 w-0.5 -translate-x-1/2 bg-trazo"
               ></span>
             }
             @switch (elemento.tipo) {
@@ -441,7 +583,7 @@
                 <span
                   aria-hidden="true"
                   [attr.data-estado]="elemento.cambio.a"
-                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-estado-suave text-on-estado ring-1 ring-estado-borde"
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-estado-suave text-on-estado"
                 >
                   <svg
                     viewBox="0 0 20 20"
@@ -462,12 +604,12 @@
                   </svg>
                 </span>
                 <div class="min-w-0 flex-1 pt-1">
-                  <p class="text-xs text-on-surface-variant">
+                  <p class="font-mono text-xs text-on-surface-variant">
                     <time [attr.datetime]="elemento.fecha">{{
                       elemento.fecha | fechaMadrid: 'dia-hora'
                     }}</time>
                   </p>
-                  <p class="mt-0.5 font-medium">
+                  <p class="mt-0.5 font-bold">
                     @if (elemento.cambio.de) {
                       {{ etiquetas.estado[elemento.cambio.de] }} →
                       {{ etiquetas.estado[elemento.cambio.a] }}
@@ -485,7 +627,7 @@
               @case ('nota') {
                 <span
                   aria-hidden="true"
-                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant"
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-surface-container-high text-on-surface-variant"
                 >
                   <svg
                     viewBox="0 0 20 20"
@@ -503,7 +645,7 @@
                 </span>
                 <div class="min-w-0 flex-1 pt-1">
                   <div class="flex items-start justify-between gap-2">
-                    <p class="text-xs text-on-surface-variant">
+                    <p class="font-mono text-xs text-on-surface-variant">
                       <time [attr.datetime]="elemento.fecha">{{
                         elemento.fecha | fechaMadrid: 'dia-hora'
                       }}</time>
@@ -521,7 +663,7 @@
                       Borrar
                     </button>
                   </div>
-                  <p class="mt-1 rounded-xl bg-surface-container-low px-3 py-2 whitespace-pre-line">
+                  <p class="mt-1 rounded-md bg-surface-container px-3 py-2 whitespace-pre-line">
                     {{ elemento.nota.texto }}
                   </p>
                 </div>

@@ -2,7 +2,7 @@
   @if (erroresGenerales().length > 0) {
     <div
       role="alert"
-      class="rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container"
+      class="rounded-md border-2 border-error bg-error-container px-4 py-3 text-sm text-on-error-container"
     >
       @for (mensaje of erroresGenerales(); track $index) {
         <p>{{ mensaje }}</p>
@@ -17,7 +17,7 @@
     }
     <div class="grid gap-x-4 gap-y-1 sm:grid-cols-2">
       <!-- El enlace va primero: lo normal es venir de la oferta con él copiado -->
-      <mat-form-field appearance="outline" class="sm:col-span-2">
+      <mat-form-field floatLabel="always" appearance="outline" class="sm:col-span-2">
         <mat-label>Enlace a la oferta</mat-label>
         <input matInput formControlName="enlace" type="url" inputmode="url" />
         @if (soloBasicos() && portalDetectado()) {
@@ -26,7 +26,7 @@
         <mat-error>{{ mensajeError(formulario.controls.enlace.errors, campos.enlace) }}</mat-error>
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field floatLabel="always" appearance="outline">
         <mat-label>Empresa</mat-label>
         <input
           matInput
@@ -51,7 +51,7 @@
         }}</mat-error>
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field floatLabel="always" appearance="outline">
         <mat-label>Puesto</mat-label>
         <input matInput formControlName="puesto" required />
         @if (puestoDelEnlace()) {
@@ -61,7 +61,7 @@
       </mat-form-field>
 
       @if (!soloBasicos()) {
-        <mat-form-field appearance="outline">
+        <mat-form-field floatLabel="always" appearance="outline">
           <mat-label>Portal</mat-label>
           <input matInput formControlName="portal" placeholder="LinkedIn, InfoJobs..." />
           <mat-error>{{
@@ -69,7 +69,7 @@
           }}</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field floatLabel="always" appearance="outline">
           <mat-label>Ubicación</mat-label>
           <input matInput formControlName="ubicacion" />
           <mat-error>{{
@@ -77,7 +77,7 @@
           }}</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field floatLabel="always" appearance="outline">
           <mat-label>Modalidad</mat-label>
           <mat-select formControlName="modalidad">
             @for (opcion of modalidades; track opcion.valor) {
@@ -86,7 +86,7 @@
           </mat-select>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field floatLabel="always" appearance="outline">
           <mat-label>Detalle de la modalidad</mat-label>
           <input matInput formControlName="modalidadDetalle" placeholder="2 días en oficina..." />
           <mat-error>{{
@@ -98,10 +98,27 @@
   </fieldset>
 
   @if (soloBasicos()) {
-    <!-- -ml-3: alinea el texto del botón con el borde de los campos. mb-2: su zona táctil (48 px)
-         sobresale del botón y, sin margen, en el diálogo sacaría una barra de desplazamiento -->
-    <button mat-button type="button" class="mb-2 -ml-3" (click)="mostrarMasDatos()">
+    <!-- Desplegable secundario: botón de texto gris (nunca lima, que es el de la acción principal)
+         con su ▾. mb-2: su zona táctil (48 px) sobresale del botón y, sin margen, en el diálogo
+         sacaría una barra de desplazamiento -->
+    <button
+      mat-button
+      type="button"
+      class="mb-2 bg-surface-container-high! [--mat-button-text-horizontal-padding:14px] [--mat-button-text-label-text-color:var(--mat-sys-on-surface)] [--mat-button-text-state-layer-color:var(--mat-sys-on-surface)]"
+      [attr.aria-expanded]="!soloBasicos()"
+      (click)="mostrarMasDatos()"
+    >
       Añadir más datos
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        class="ml-1.5 inline-block h-4 w-4 align-[-0.2em]"
+      >
+        <path stroke-linecap="square" d="m5 7.5 5 5 5-5" />
+      </svg>
     </button>
   } @else {
     <fieldset class="min-w-0 border-t border-outline-variant pt-4">
@@ -109,7 +126,7 @@
         Valoración
       </legend>
       <div class="clear-left grid gap-x-4 sm:grid-cols-2">
-        <mat-form-field appearance="outline">
+        <mat-form-field floatLabel="always" appearance="outline">
           <mat-label>Encaje</mat-label>
           <mat-select formControlName="encaje">
             @for (opcion of encajes; track opcion.valor) {
@@ -118,7 +135,7 @@
           </mat-select>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field floatLabel="always" appearance="outline">
           <mat-label>Salario</mat-label>
           <input matInput formControlName="salario" />
           <mat-error>{{
@@ -126,7 +143,7 @@
           }}</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline" class="sm:col-span-2">
+        <mat-form-field floatLabel="always" appearance="outline" class="sm:col-span-2">
           <mat-label>Inconveniente</mat-label>
           <textarea matInput formControlName="pega" rows="2"></textarea>
           <mat-hint>Lo que no encaja o puede frenar la candidatura.</mat-hint>
@@ -139,7 +156,7 @@
       <legend class="float-left mb-3 w-full text-sm font-semibold text-on-surface">
         Notas internas
       </legend>
-      <mat-form-field appearance="outline" class="clear-left w-full">
+      <mat-form-field floatLabel="always" appearance="outline" class="clear-left w-full">
         <mat-label>Análisis</mat-label>
         <textarea matInput formControlName="analisis" rows="4"></textarea>
         <mat-error>{{
@@ -151,8 +168,15 @@
 
   <!-- En el diálogo los botones van en mat-dialog-actions (fijos abajo) con form="idFormulario" -->
   @if (conBotones()) {
-    <div class="flex flex-wrap justify-end gap-2">
-      <button mat-flat-button type="submit" disabledInteractive [disabled]="guardando()">
+    <!-- Separado del último campo; en el móvil, de ancho completo -->
+    <div class="flex flex-wrap justify-end gap-2 pt-4">
+      <button
+        mat-flat-button
+        type="submit"
+        class="w-full sm:w-auto"
+        disabledInteractive
+        [disabled]="guardando()"
+      >
         {{ guardando() ? 'Guardando...' : textoGuardar() }}
       </button>
     </div>

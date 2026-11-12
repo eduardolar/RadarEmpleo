@@ -1,6 +1,9 @@
+<!-- De tinta como el menú lateral, con una raya gruesa encima. La pestaña activa, como en el menú:
+     fondo gris (#1f2937), barra de lima abajo y texto e icono en lima; el relleno de lima es solo
+     para el botón principal. Color plano: sin transparencia ni desenfoque -->
 <nav
   aria-label="Navegación principal"
-  class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-slate-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden"
+  class="fixed inset-x-0 bottom-0 z-30 border-t-2 border-trazo bg-tinta-noche pb-[env(safe-area-inset-bottom)] md:hidden"
 >
   <ul class="grid grid-cols-5 gap-1 px-1 py-1">
     @for (opcion of opciones; track opcion.ruta) {
@@ -8,15 +11,15 @@
       <li>
         <a
           [routerLink]="opcion.ruta"
-          [class.text-white]="activa"
+          [class]="
+            activa
+              ? 'bg-tinta font-extrabold text-fosforito shadow-[inset_0_-4px_0_0_var(--re-fosforito)]'
+              : 'font-semibold text-tinta-clara hover:text-papel'
+          "
           [attr.aria-current]="activa ? 'page' : null"
-          class="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-xs font-medium text-slate-400 transition hover:text-white focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none"
+          class="flex min-h-14 flex-col items-center justify-center gap-1 rounded-md px-1 py-1.5 text-[0.6875rem] tracking-wider uppercase transition-colors focus-visible:ring-3 focus-visible:ring-fosforito focus-visible:outline-none motion-reduce:transition-none"
         >
-          <span
-            class="flex h-7 w-12 items-center justify-center rounded-full transition"
-            [class.bg-blue-400/15]="activa"
-            [class.text-blue-300]="activa"
-          >
+          <span class="flex h-7 w-12 items-center justify-center">
             <app-icono-menu class="h-5 w-5" [icono]="opcion.icono" />
           </span>
           <span>{{ opcion.etiqueta }}</span>

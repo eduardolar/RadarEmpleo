@@ -2,16 +2,13 @@
 
 <form [formGroup]="formulario" (ngSubmit)="confirmar()">
   <mat-dialog-content>
-    <div class="mb-5 rounded-xl bg-surface-container-low p-3 text-sm">
+    <div class="mb-5 rounded-md bg-surface-container p-3 text-sm">
       <p class="font-medium text-on-surface">{{ datos.puesto }}</p>
       <p class="text-on-surface-variant">{{ datos.empresa }}</p>
       <!-- De un estado a otro, cada uno con su color (styles.css) -->
       <p class="mt-2 flex flex-wrap items-center gap-2">
         <span class="sr-only">De</span>
-        <span
-          [attr.data-estado]="datos.actual"
-          class="inline-flex items-center gap-1.5 rounded-full bg-estado-suave px-2.5 py-0.5 text-xs font-medium text-on-estado ring-1 ring-estado-borde"
-        >
+        <span [attr.data-estado]="datos.actual" class="insignia bg-estado-suave text-on-estado">
           <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-estado"></span>
           {{ etiquetaActual }}
         </span>
@@ -26,10 +23,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 10h11m-4-4 4 4-4 4" />
         </svg>
         <span class="sr-only">a</span>
-        <span
-          [attr.data-estado]="datos.destino"
-          class="inline-flex items-center gap-1.5 rounded-full bg-estado-suave px-2.5 py-0.5 text-xs font-medium text-on-estado ring-1 ring-estado-borde"
-        >
+        <span [attr.data-estado]="datos.destino" class="insignia bg-estado-suave text-on-estado">
           <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-estado"></span>
           {{ etiquetaDestino }}
         </span>
@@ -69,7 +63,7 @@
           </p>
         }
 
-        <mat-form-field appearance="outline" class="w-full">
+        <mat-form-field floatLabel="always" appearance="outline" class="w-full">
           <mat-label>Detalle del motivo (opcional)</mat-label>
           <textarea matInput formControlName="motivoDescarteTexto" rows="2"></textarea>
           <mat-error>{{
@@ -79,7 +73,7 @@
       </fieldset>
     }
 
-    <mat-form-field appearance="outline" class="w-full">
+    <mat-form-field floatLabel="always" appearance="outline" class="w-full">
       <mat-label>Comentario (opcional)</mat-label>
       <textarea matInput formControlName="comentario" rows="2"></textarea>
       <mat-hint>Queda en el historial de la candidatura.</mat-hint>

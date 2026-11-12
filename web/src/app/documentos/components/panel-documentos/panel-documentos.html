@@ -1,9 +1,9 @@
 <section
   aria-labelledby="titulo-documentos"
-  class="rounded-2xl bg-surface-container-lowest p-5 ring-1 ring-outline-variant sm:p-6"
+  class="rounded-2xl bg-surface-container-lowest p-5 sm:p-6"
 >
   <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-    <h2 #titulo id="titulo-documentos" tabindex="-1" class="text-lg font-semibold outline-none">
+    <h2 #titulo id="titulo-documentos" tabindex="-1" class="text-xl font-extrabold outline-none">
       CV y carta
     </h2>
     <!-- Con documentos, buscar otro pasa a ser secundario (contorno) y va arriba: con el visor de
@@ -44,11 +44,11 @@
   @if (!hayDocumentos()) {
     <!-- Vacío: un único botón destacado -->
     <div
-      class="flex flex-col items-start gap-4 rounded-xl bg-surface-container-low p-4 sm:flex-row sm:items-center"
+      class="flex flex-col items-start gap-4 rounded-md bg-surface-container p-4 sm:flex-row sm:items-center"
     >
       <span
         aria-hidden="true"
-        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-container text-on-primary-container"
+        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-primary-container text-on-primary-container"
       >
         <svg
           viewBox="0 0 24 24"
@@ -146,7 +146,7 @@
               </div>
             } @else if (vista.documento.extension !== 'pdf') {
               <div
-                class="flex flex-col items-start gap-3 rounded-xl bg-surface-container-low p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                class="flex flex-col items-start gap-3 rounded-md bg-surface-container p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
                   <p class="font-medium text-on-surface">Es un documento de Word.</p>
@@ -162,7 +162,7 @@
               <iframe
                 [src]="vista.urlVisor"
                 [title]="vista.tituloVisor"
-                class="block h-[75vh] min-h-[480px] w-full rounded-xl bg-surface-container-low ring-1 ring-outline-variant"
+                class="block h-[75vh] min-h-[480px] w-full rounded-md bg-surface-container shadow-dura"
               ></iframe>
             } @else {
               <!-- Móvil: sin visor (el iframe ni se crea, para no descargar el PDF) -->
@@ -189,18 +189,18 @@
 
   @if (otros().length > 0) {
     <div class="mt-5 border-t border-outline-variant pt-4">
-      <h3 class="mb-2 text-sm font-semibold">Otros documentos</h3>
+      <h3 class="etiqueta mb-2 text-on-surface-variant">Otros documentos</h3>
       <ul class="space-y-2">
         @for (vista of otros(); track vista.documento.id) {
           <li
-            class="flex min-h-12 flex-wrap items-center justify-between gap-x-3 rounded-xl bg-surface-container-low py-1 pr-1 pl-3"
+            class="flex min-h-12 flex-wrap items-center justify-between gap-x-3 rounded-md bg-surface-container py-1 pr-1 pl-3"
           >
             <div class="min-w-0 flex-1 py-1.5">
               <p class="text-sm font-medium text-on-surface [overflow-wrap:anywhere]">
                 {{ vista.nombre }}
                 @if (!vista.documento.vigente) {
                   <span
-                    class="ml-1 inline-block rounded-full bg-surface-container-high px-2 py-0.5 align-[0.1em] text-xs font-medium text-on-surface-variant"
+                    class="insignia ml-1 bg-surface-container-high align-[0.1em] text-on-surface"
                   >
                     Anterior
                   </span>

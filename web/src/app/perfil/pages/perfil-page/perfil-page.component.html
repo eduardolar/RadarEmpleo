@@ -1,7 +1,7 @@
 <!-- overflow-wrap se hereda: el perfil trae enlaces largos que no deben ensanchar la página en el móvil -->
 <section
   aria-label="Perfil y filtros"
-  class="flex max-w-3xl flex-col gap-5 [overflow-wrap:anywhere]"
+  class="flex w-full max-w-3xl flex-col gap-5 [overflow-wrap:anywhere]"
 >
   <app-enlace-volver ruta="/mas" texto="Volver a Más" class="-mb-3 self-start" />
 
@@ -28,7 +28,7 @@
   @if (error(); as mensaje) {
     <div
       role="alert"
-      class="flex items-start gap-3 rounded-2xl bg-error-container p-4 text-on-error-container"
+      class="flex items-start gap-3 rounded-2xl border-2 border-error bg-error-container p-4 text-on-error-container"
     >
       <svg
         aria-hidden="true"
@@ -57,13 +57,11 @@
 
   @if (perfil(); as datos) {
     <!-- De qué perfil se trata, cuándo se cambió y quién lo cambia -->
-    <div
-      class="flex flex-col gap-4 rounded-2xl bg-surface-container-lowest p-4 ring-1 ring-outline-variant sm:p-5"
-    >
+    <div class="flex flex-col gap-4 rounded-2xl bg-surface-container-lowest p-4 sm:p-5">
       <div class="flex items-start gap-3">
         <span
           aria-hidden="true"
-          class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-container text-on-primary-container"
+          class="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-primary-container text-on-primary-container"
         >
           <svg
             viewBox="0 0 24 24"
@@ -89,7 +87,7 @@
       }
 
       <p
-        class="flex items-start gap-2 rounded-xl bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
+        class="flex items-start gap-2 rounded-md bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
       >
         <svg
           aria-hidden="true"
@@ -114,7 +112,7 @@
         </app-seccion-plegable>
       } @empty {
         <p
-          class="rounded-2xl bg-surface-container-lowest p-6 text-center text-sm text-on-surface-variant ring-1 ring-outline-variant"
+          class="rounded-2xl bg-surface-container-lowest p-6 text-center text-sm text-on-surface-variant"
         >
           El perfil todavía no tiene secciones.
         </p>

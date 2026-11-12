@@ -29,9 +29,16 @@ import { CandidaturaResumen, EstadoCandidatura } from '../../interfaces/candidat
 import { CambioEstadoService } from '../../services/cambio-estado.service';
 import { CandidaturasService } from '../../services/candidaturas.service';
 import { FiltroMovil, VistaTableroService } from '../../services/vista-tablero.service';
-import { agruparPorEstado } from '../../utils/agrupar-por-estado';
+import { agruparPorEstado, ColumnaTablero } from '../../utils/agrupar-por-estado';
 import { ETIQUETAS_ESTADO } from '../../utils/etiquetas';
 import { puedePasar } from '../../utils/transiciones-permitidas';
+
+/** Columnas que cierran el proceso: en el PC salen plegadas en una tira para que quepan las demás */
+const PLEGADAS_DE_SERIE: ReadonlySet<EstadoCandidatura> = new Set([
+  'Oferta',
+  'Descartada',
+  'Cerrada',
+]);
 
 @Component({
   imports: [
@@ -73,6 +80,13 @@ export default class TableroPageComponent {
   protected readonly esEscritorio = senalEscritorio();
 
   protected readonly columnas = computed(() => agruparPorEstado(this.candidaturas()));
+
+  /**
+   * Columnas plegables que se han desplegado a mano (o al mover una tarjeta a ellas). Es solo
+   * presentación: se pliegan las de PLEGADAS_DE_SERIE y las vacías, para que el tablero quepa sin
+   * desplazamiento lateral en el PC
+   */
+  protected readonly expandidas = signal<ReadonlySet<EstadoCandidatura>>(new Set());
 
   /** Candidatura que se está arrastrando, para atenuar las columnas donde no se puede soltar */
   protected readonly arrastrando = signal<CandidaturaResumen | null>(null);
@@ -138,6 +152,32 @@ export default class TableroPageComponent {
     });
   }
 
+  /** Las terminales y las vacías salen plegadas, salvo que se hayan desplegado */
+  protected plegable(columna: ColumnaTablero): boolean {
+    return PLEGADAS_DE_SERIE.has(columna.estado) || columna.candidaturas.length === 0;
+  }
+
+  protected plegada(columna: ColumnaTablero): boolean {
+    return this.plegable(columna) && !this.expandidas().has(columna.estado);
+  }
+
+  protected alternarColumna(estado: EstadoCandidatura): void {
+    this.expandidas.update((actuales) => {
+      const nuevas = new Set(actuales);
+      if (!nuevas.delete(estado)) {
+        nuevas.add(estado);
+      }
+      return nuevas;
+    });
+  }
+
+  /** Al mover una tarjeta a una columna plegada, se despliega para que se vea (y reciba el foco) */
+  private desplegar(estado: EstadoCandidatura): void {
+    if (!this.expandidas().has(estado)) {
+      this.expandidas.update((actuales) => new Set(actuales).add(estado));
+    }
+  }
+
   /** Para cdkDropListEnterPredicate: solo deja entrar en las columnas permitidas */
   protected readonly sePuedeSoltar = (
     drag: CdkDrag<CandidaturaResumen>,
@@ -162,11 +202,13 @@ export default class TableroPageComponent {
       return;
     }
     // La tarjeta no se mueve aquí: cambia de columna cuando el servicio actualiza la lista
+    this.desplegar(evento.container.data);
     this.cambioEstado.mover(evento.item.data, evento.container.data);
   }
 
   protected mover(candidatura: CandidaturaResumen, destino: EstadoCandidatura): void {
     this.enfocarTrasMover.set({ id: candidatura.id, destino });
+    this.desplegar(destino);
     this.cambioEstado.mover(candidatura, destino, (resultado) => {
       if (resultado !== 'hecho') {
         this.enfocarTrasMover.set(null);

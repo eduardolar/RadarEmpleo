@@ -3,14 +3,14 @@
 <section
   #inicio
   tabindex="-1"
-  aria-label="Traer del registro"
-  class="flex max-w-3xl flex-col gap-5 [overflow-wrap:anywhere] outline-none"
+  aria-label="Importar del registro"
+  class="flex w-full max-w-3xl flex-col gap-5 [overflow-wrap:anywhere] outline-none"
 >
   <!-- Como en la ficha: en el móvil la única salida sería la pestaña «Más» de abajo -->
   <app-enlace-volver ruta="/mas" texto="Volver a Más" class="-mb-3 self-start" />
 
   <app-cabecera-pagina
-    titulo="Traer del registro"
+    titulo="Importar del registro"
     descripcion="Copia en la app las candidaturas de la tabla de tu registro (ofertas-enviadas.md). El archivo no se cambia."
   />
 
@@ -30,16 +30,22 @@
     }
     @if (resultado() || todoAlDia()) {
       <div
-        class="flex flex-col items-center rounded-2xl bg-surface-container-lowest px-6 py-8 text-center ring-1 ring-outline-variant"
+        class="flex flex-col items-center rounded-2xl bg-surface-container-lowest px-6 py-8 text-center"
       >
         <!-- Una marca de hecho dentro de los círculos del radar -->
         <svg aria-hidden="true" viewBox="0 0 96 96" class="h-20 w-20">
-          <circle cx="48" cy="48" r="44" class="fill-primary-container" />
-          <circle cx="48" cy="48" r="31" fill="none" class="stroke-primary/30" stroke-width="2" />
+          <circle
+            cx="48"
+            cy="48"
+            r="44"
+            class="fill-fosforito stroke-on-fosforito"
+            stroke-width="3"
+          />
+          <circle cx="48" cy="48" r="31" fill="none" class="stroke-on-fosforito" stroke-width="2" />
           <path
             d="m35 49 9.5 9.5L62 38"
             fill="none"
-            class="stroke-primary"
+            class="stroke-on-fosforito"
             stroke-width="5"
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -47,7 +53,7 @@
         </svg>
         <div class="mt-4 max-w-md space-y-1">
           @if (todoAlDia()) {
-            <p class="text-lg font-medium text-on-surface">{{ tituloAlDia() }}</p>
+            <p class="font-display text-2xl font-extrabold text-on-surface">{{ tituloAlDia() }}</p>
           }
           @if (resultado(); as hecho) {
             <p class="font-medium text-on-surface">{{ textoResultado(hecho) }}</p>
@@ -88,7 +94,7 @@
   @if (error(); as mensaje) {
     <div
       role="alert"
-      class="flex items-start gap-3 rounded-2xl bg-error-container p-4 text-on-error-container"
+      class="flex items-start gap-3 rounded-2xl border-2 border-error bg-error-container p-4 text-on-error-container"
     >
       <svg
         aria-hidden="true"
@@ -133,14 +139,12 @@
   @if (vista(); as previa) {
     @if (lineasResumen().length > 0 || porAplicar().length > 0) {
       <div
-        class="flex flex-col gap-4 rounded-2xl bg-surface-container-lowest p-4 ring-1 ring-outline-variant sm:flex-row sm:items-center sm:justify-between sm:p-5"
+        class="flex flex-col gap-4 rounded-2xl bg-surface-container-lowest p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
       >
         @if (lineasResumen().length > 0) {
           <ul aria-label="Resumen del registro" class="flex min-w-0 flex-wrap gap-2">
             @for (linea of lineasResumen(); track linea) {
-              <li
-                class="rounded-full bg-surface-container px-3 py-1 text-sm font-medium text-on-surface"
-              >
+              <li class="insignia bg-surface-container-high text-on-surface">
                 {{ linea }}
               </li>
             }
@@ -168,7 +172,7 @@
 
     @if (avisoEnvios(); as aviso) {
       <p
-        class="flex items-start gap-2 rounded-xl bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
+        class="flex items-start gap-2 rounded-md bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
       >
         <svg
           aria-hidden="true"
@@ -188,7 +192,7 @@
     <!-- Separadas: el chip «Enviada» de una nueva no se confunde con el de una que ya existe -->
     @if (nuevas().length > 0) {
       <section aria-labelledby="titulo-nuevas" class="flex flex-col gap-3">
-        <h2 id="titulo-nuevas" class="text-lg font-semibold text-on-surface">
+        <h2 id="titulo-nuevas" class="text-xl font-extrabold text-on-surface">
           Se van a añadir ({{ nuevas().length }})
         </h2>
         <app-lista-importacion [filas]="nuevas()" />
@@ -198,7 +202,7 @@
     @if (avanzan().length > 0) {
       <section aria-labelledby="titulo-avanzan" class="flex flex-col gap-3">
         <div class="space-y-1">
-          <h2 id="titulo-avanzan" class="text-lg font-semibold text-on-surface">
+          <h2 id="titulo-avanzan" class="text-xl font-extrabold text-on-surface">
             Cambian de estado ({{ avanzan().length }})
           </h2>
           <p class="text-sm text-on-surface-variant">
@@ -237,7 +241,7 @@
           <p class="px-4 pt-1 text-sm text-on-surface-variant">{{ explicacionSinLeer }}</p>
           <ul class="flex flex-col gap-2 px-2 pt-2 text-sm text-on-surface">
             @for (fila of previa.sinLeer; track fila.linea) {
-              <li class="rounded-xl bg-surface-container-lowest p-3 ring-1 ring-outline-variant">
+              <li class="rounded-md bg-surface-container-lowest p-3">
                 Línea {{ fila.linea }}: {{ fila.motivo }}
               </li>
             }

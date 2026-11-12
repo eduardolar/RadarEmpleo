@@ -6,8 +6,8 @@ import { ETIQUETAS_ESTADO } from '../../utils/etiquetas';
 import { estadosPosibles } from '../../utils/transiciones-permitidas';
 
 /**
- * Botón «Mover a…» con los estados a los que se puede pasar. Es la forma de cambiar de estado en el
- * móvil y, en el PC, la alternativa con teclado al arrastrar.
+ * Botón de icono «⋮» («Mover a…») con los estados a los que se puede pasar. Es la forma de cambiar
+ * de estado en el móvil y, en el PC, la alternativa con teclado al arrastrar.
  */
 @Component({
   imports: [MatButtonModule, MatMenuModule],
@@ -17,7 +17,7 @@ import { estadosPosibles } from '../../utils/transiciones-permitidas';
 })
 export class MenuMover {
   readonly estado = input.required<EstadoCandidatura>();
-  /** Para el aria-label, que empieza por el texto visible: «Mover a… (Desarrollador Angular)» */
+  /** Para el aria-label: «Mover a otro estado: Desarrollador Angular» */
   readonly descripcion = input.required<string>();
   readonly elegir = output<EstadoCandidatura>();
 

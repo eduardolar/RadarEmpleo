@@ -144,6 +144,73 @@ describe('TableroPageComponent', () => {
       expect(columnaDe()).toBe('Preparada');
     });
 
+    describe('columnas plegadas', () => {
+      function columna(estado: EstadoCandidatura): HTMLElement {
+        return elemento().querySelector<HTMLElement>(`section[data-estado="${estado}"]`)!;
+      }
+
+      /** El de plegar o desplegar la columna (el «⋮» de las tarjetas también lleva aria-expanded) */
+      function botonDe(estado: EstadoCandidatura): HTMLButtonElement | null {
+        return columna(estado).querySelector<HTMLButtonElement>('button[aria-label*="la columna"]');
+      }
+
+      it('Oferta, Descartada, Cerrada y las vacías salen plegadas; las demás, abiertas', async () => {
+        await cargarTablero([TARJETA, crearResumen({ id: 2, estado: 'Oferta' })]);
+
+        for (const estado of ['Oferta', 'Descartada', 'Cerrada', 'Detectada'] as const) {
+          expect(botonDe(estado)?.getAttribute('aria-expanded')).toBe('false');
+        }
+        // Abierta y con tarjetas: no se puede plegar
+        expect(botonDe('Preparada')).toBeNull();
+        // Plegada, la tarjeta no se pinta, pero la columna dice cuántas tiene
+        expect(columna('Oferta').querySelector('[data-candidatura]')).toBeNull();
+        expect(botonDe('Oferta')?.getAttribute('aria-label')).toBe(
+          'Desplegar la columna Oferta (1 candidatura)',
+        );
+      });
+
+      it('al pulsarla se despliega y se puede volver a plegar', async () => {
+        await cargarTablero([crearResumen({ id: 2, estado: 'Oferta' })]);
+
+        botonDe('Oferta')!.click();
+        await fixture.whenStable();
+
+        expect(columnaDe(2)).toBe('Oferta');
+        expect(botonDe('Oferta')?.getAttribute('aria-expanded')).toBe('true');
+
+        botonDe('Oferta')!.click();
+        await fixture.whenStable();
+
+        expect(columna('Oferta').querySelector('[data-candidatura]')).toBeNull();
+      });
+
+      it('al mover una tarjeta a una columna plegada, esa columna se despliega', async () => {
+        await cargarTablero([TARJETA]);
+
+        mover(TARJETA, 'Oferta');
+        await fixture.whenStable();
+
+        expect(columnaDe()).toBe('Oferta');
+        expect(botonDe('Oferta')?.getAttribute('aria-expanded')).toBe('true');
+        cambioDeEstado().flush(crearDetalle({ id: 1, estado: 'Oferta' }));
+        lista().flush([{ ...TARJETA, estado: 'Oferta' }]);
+      });
+
+      it('al soltar en una columna plegada, también', async () => {
+        await cargarTablero([TARJETA]);
+        expect(botonDe('Enviada')?.getAttribute('aria-expanded')).toBe('false');
+
+        soltar(TARJETA, 'Preparada', 'Enviada', true);
+        await fixture.whenStable();
+
+        // Ya tiene una tarjeta, así que queda abierta (y sin botón de plegar) con la tarjeta a la vista
+        expect(columnaDe()).toBe('Enviada');
+        expect(botonDe('Enviada')).toBeNull();
+        cambioDeEstado().flush(crearDetalle({ id: 1, estado: 'Enviada' }));
+        lista().flush([{ ...TARJETA, estado: 'Enviada' }]);
+      });
+    });
+
     it('en táctil hay que mantener pulsado para arrastrar: deslizar desplaza la página', async () => {
       await cargarTablero([TARJETA]);
 

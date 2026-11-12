@@ -128,7 +128,7 @@ describe('ImportacionPageComponent', () => {
     it('enseña el título y que el archivo no se cambia', async () => {
       await abrirCon([]);
 
-      expect(elemento().querySelector('h1')?.textContent).toContain('Traer del registro');
+      expect(elemento().querySelector('h1')?.textContent).toContain('Importar del registro');
       expect(elemento().textContent).toContain('ofertas-enviadas.md');
       expect(elemento().textContent).toContain('El archivo no se cambia');
     });
