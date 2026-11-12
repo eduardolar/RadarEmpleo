@@ -258,6 +258,8 @@ public sealed class RutaSeguraTests : IDisposable
     [Fact]
     public void ComprobarAbierto_AbiertoAtravesDeUnaUnionHaciaFuera_LoRechaza()
     {
+        if (!OperatingSystem.IsWindows()) return; // la comprobación del archivo abierto es solo de Windows (la app solo corre en Windows)
+
         // Lo que pasaría si cambian la carpeta por una unión justo entre Resolver y abrir el archivo.
         CrearUnion(Path.Combine(_raiz, "Candidaturas", "Semana trampa"), _fuera);
 
@@ -267,6 +269,8 @@ public sealed class RutaSeguraTests : IDisposable
     [Fact]
     public void ComprobarAbierto_AbiertoAtravesDeUnaUnionHaciaDocumentosPersonales_LoRechaza()
     {
+        if (!OperatingSystem.IsWindows()) return; // la comprobación del archivo abierto es solo de Windows (la app solo corre en Windows)
+
         CrearUnion(Path.Combine(_raiz, "Candidaturas", "Semana trampa"), Path.Combine(_raiz, "Documentos personales"));
 
         AssertAbiertoNoValido(Path.Combine(_raiz, "Candidaturas", "Semana trampa", "DNI.pdf"));
