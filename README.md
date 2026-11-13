@@ -8,16 +8,20 @@ Aplicación para llevar mi propia búsqueda de empleo: un tablero con las candid
 
 ![RadarEmpleo en el móvil: tablero, ficha y rastreo](docs/img/movil.png)
 
+![Tablero de RadarEmpleo en modo oscuro](docs/img/tablero-oscuro.png)
+
 _Las capturas son con datos de ejemplo._
 
 ## Qué hace
 
-- **Tablero por estados**: Detectada, Preparada, Enviada, Entrevista, Oferta, Descartada y Cerrada. Las transiciones válidas las decide el dominio, no el front.
+- **Tablero por estados**: Detectada, Preparada, Enviada, Entrevista, Oferta, Descartada y Cerrada. Las transiciones válidas las decide el dominio, no el front. Se mueve arrastrando o con el menú ⋮, y las columnas sin uso se pliegan para que todo quepa sin desplazamiento lateral.
+- **Deshacer**: cualquier cambio de estado se puede deshacer durante 10 minutos desde el aviso o con Ctrl+Z. Vuelve exactamente a como estaba: fechas, motivo de descarte y seguimientos.
 - **Ficha de candidatura**: historial de estados, notas, motivo de descarte y los documentos enviados (CV y carta), que se abren dentro de la propia ficha.
 - **Importar del registro**: importa la tabla de candidaturas que llevaba a mano en Markdown, con vista previa y sin duplicar lo que ya está.
 - **Rastreos**: lee los informes semanales de ofertas y deja pasar al tablero las que interesan. Si la empresa ya tiene una candidatura, avisa antes de duplicarla.
 - **Perfil de búsqueda**: muestra los filtros y el stack con los que se valoran las ofertas.
 - **Pensada para el móvil**: navegación inferior, zonas de toque de 48 px y textos sin jerga.
+- **Diseño propio**: neobrutalismo con grises y lima, en modo claro y oscuro, con contraste AA. La guía está en [docs/DISENO.md](docs/DISENO.md).
 
 ## Stack
 
