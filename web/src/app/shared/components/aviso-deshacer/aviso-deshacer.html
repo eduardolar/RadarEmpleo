@@ -1,0 +1,23 @@
+<div matSnackBarLabel>
+  {{ datos.mensaje }}
+  @if (esperando()) {
+    <span class="mt-1 block font-semibold">Espera a que termine el cambio.</span>
+  }
+</div>
+<div matSnackBarActions class="flex-wrap">
+  <button
+    mat-button
+    matSnackBarAction
+    type="button"
+    aria-keyshortcuts="Control+Z"
+    title="Deshacer (Ctrl+Z)"
+    (click)="deshacer()"
+  >
+    Deshacer
+  </button>
+  @if (datos.otra; as otra) {
+    <button mat-button matSnackBarAction type="button" (click)="pulsarOtra(otra)">
+      {{ otra.texto }}
+    </button>
+  }
+</div>

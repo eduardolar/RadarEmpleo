@@ -116,8 +116,8 @@ export function textoEnviosEnTexto(enviosEnTexto: number): string | null {
     return null;
   }
   return enviosEnTexto === 1
-    ? 'Hay 1 envío escrito como texto; ese se podrá traer más adelante.'
-    : `Hay unos ${enviosEnTexto} envíos escritos como texto; esos se podrán traer más adelante.`;
+    ? 'Hay 1 envío escrito como texto; ese se podrá importar más adelante.'
+    : `Hay unos ${enviosEnTexto} envíos escritos como texto; esos se podrán importar más adelante.`;
 }
 
 /** «De Enviada a Entrevista» si cambia; si ya existe, cómo está en la app; si no, cómo llega */

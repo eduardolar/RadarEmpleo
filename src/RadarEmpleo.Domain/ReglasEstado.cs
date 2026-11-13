@@ -16,6 +16,9 @@ public static class ReglasEstado
     /// <summary>Días que pasan entre el envío y el recordatorio de seguimiento automático.</summary>
     public const int DiasSeguimiento = 7;
 
+    /// <summary>Tiempo durante el que se puede deshacer un cambio de estado (<see cref="Candidatura.DeshacerUltimoCambio"/>).</summary>
+    public static readonly TimeSpan VentanaDeshacer = TimeSpan.FromMinutes(10);
+
     /// <summary>Hora de Madrid a la que se programa el seguimiento (las 09:00 del día que toque).</summary>
     public static readonly TimeSpan HoraSeguimiento = TimeSpan.FromHours(9);
 

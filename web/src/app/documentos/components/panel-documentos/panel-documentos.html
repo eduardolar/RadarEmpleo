@@ -68,8 +68,9 @@
         <p class="font-medium text-on-surface">Todavía no hay ningún CV en esta ficha.</p>
         <p class="mt-0.5 text-sm text-on-surface-variant">Lo busco en tu carpeta Curriculum.</p>
       </div>
+      <!-- Con borde: el relleno lima de la ficha es solo para el cambio de estado -->
       <button
-        mat-flat-button
+        mat-stroked-button
         type="button"
         class="min-h-12 w-full shrink-0 sm:w-auto"
         (click)="buscar()"

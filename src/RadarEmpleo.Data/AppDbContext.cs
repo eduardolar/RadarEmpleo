@@ -48,6 +48,7 @@ public class AppDbContext : DbContext
         b.Entity<CambioEstado>().Property(x => x.De).HasConversion<string>();
         b.Entity<CambioEstado>().Property(x => x.A).HasConversion<string>();
         b.Entity<CambioEstado>().Property(x => x.Origen).HasConversion<string>();
+        b.Entity<CambioEstado>().Property(x => x.MotivoDescarte).HasConversion<string>();
         b.Entity<Nota>().Property(x => x.Origen).HasConversion<string>();
         b.Entity<Recordatorio>().Property(x => x.Tipo).HasConversion<string>();
         b.Entity<Documento>().Property(x => x.Tipo).HasConversion<string>();
@@ -81,6 +82,15 @@ public class AppDbContext : DbContext
             .HasOne(x => x.Candidatura).WithMany(c => c.Recordatorios)
             .HasForeignKey(x => x.CandidaturaId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
         b.Entity<Recordatorio>().HasIndex(r => r.FechaHora);
+
+        // --- El historial apunta qué seguimiento creó o cerró cada cambio (para deshacerlo con exactitud).
+        // Si el recordatorio desaparece, el apunte se queda sin él ---
+        b.Entity<CambioEstado>()
+            .HasOne(x => x.SeguimientoCreado).WithMany()
+            .HasForeignKey(x => x.SeguimientoCreadoId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<CambioEstado>()
+            .HasOne(x => x.SeguimientoCerrado).WithMany()
+            .HasForeignKey(x => x.SeguimientoCerradoId).OnDelete(DeleteBehavior.SetNull);
 
         // --- Candidatura 1-N Documento, en cascada (solo borra filas: el archivo no se toca nunca) ---
         b.Entity<Documento>()

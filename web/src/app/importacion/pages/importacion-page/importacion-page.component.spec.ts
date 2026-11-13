@@ -447,7 +447,7 @@ describe('ImportacionPageComponent', () => {
       await abrir({ ...vista, resumen: { ...vista.resumen, enviosEnTexto: 41 } });
 
       expect(elemento().textContent).toContain(
-        'Hay unos 41 envíos escritos como texto; esos se podrán traer más adelante.',
+        'Hay unos 41 envíos escritos como texto; esos se podrán importar más adelante.',
       );
     });
   });

@@ -87,6 +87,7 @@ export default class FichaPageComponent {
   private readonly injector = inject(Injector);
   private readonly inicio = viewChild.required<ElementRef<HTMLElement>>('inicio');
   private readonly estadoActual = viewChild<ElementRef<HTMLElement>>('estadoActual');
+  private readonly bloqueAcciones = viewChild<ElementRef<HTMLElement>>('bloqueAcciones');
   private readonly elementoNota = viewChild<ElementRef<HTMLTextAreaElement>>('entradaNota');
   private readonly tituloHistorial = viewChild<ElementRef<HTMLElement>>('tituloHistorial');
 
@@ -144,6 +145,8 @@ export default class FichaPageComponent {
 
   // Estado que se estaba enseñando, para saber cuándo cambia en esta misma ficha
   private estadoVisto: { id: number; estado: EstadoCandidatura } | null = null;
+  // El próximo cambio de estado es un «Deshacer» del aviso: el foco vuelve a los botones de estado
+  private enfocarAcciones = false;
 
   constructor() {
     effect(() => {
@@ -160,13 +163,16 @@ export default class FichaPageComponent {
     });
 
     // Tras un cambio de estado, el botón pulsado desaparece y el foco caería en <body>: se lleva
-    // al estado nuevo, que es lo que acaba de cambiar
+    // al estado nuevo, que es lo que acaba de cambiar. Tras deshacerlo, al bloque «Cambiar estado»,
+    // para seguir desde donde se estaba
     afterRenderEffect(() => {
       const c = this.candidatura();
       const visto = this.estadoVisto;
       this.estadoVisto = c ? { id: c.id, estado: c.estado } : null;
       if (c && visto?.id === c.id && visto.estado !== c.estado) {
-        this.estadoActual()?.nativeElement.focus();
+        const acciones = this.enfocarAcciones ? this.bloqueAcciones() : undefined;
+        this.enfocarAcciones = false;
+        (acciones ?? this.estadoActual())?.nativeElement.focus();
       }
     });
 
@@ -195,7 +201,7 @@ export default class FichaPageComponent {
     // Los botones siguen recibiendo clics mientras están bloqueados (disabledInteractive, para no
     // perder el foco) y, si la API ya ha respondido, el del paso siguiente sale bajo el mismo cursor
     if (c && !this.bloqueado()) {
-      this.cambioEstado.mover(c, destino);
+      this.cambioEstado.mover(c, destino, undefined, () => (this.enfocarAcciones = true));
     }
   }
 

@@ -198,7 +198,14 @@
         @if (accionesALaVista().length > 0) {
           <div class="border-t border-outline-variant pt-4">
             <p id="titulo-acciones" class="etiqueta mb-3 text-on-surface-variant">Cambiar estado</p>
-            <div role="group" aria-labelledby="titulo-acciones" class="flex flex-wrap gap-3">
+            <!-- tabindex="-1": recibe el foco al deshacer un cambio desde el aviso -->
+            <div
+              #bloqueAcciones
+              role="group"
+              tabindex="-1"
+              aria-labelledby="titulo-acciones"
+              class="flex flex-wrap gap-3 outline-none"
+            >
               @for (accion of accionesALaVista(); track accion.destino) {
                 <!-- «Marcar enviada» lleva su avión de papel y, si es el siguiente paso, el botón
                      grande de fosforito (boton-enviar, styles.css) -->
@@ -560,8 +567,9 @@
           <mat-hint class="max-md:hidden">Ctrl + Intro para añadirla</mat-hint>
           <mat-error>{{ mensajeError(formularioNota.controls.texto.errors, campoNota) }}</mat-error>
         </mat-form-field>
+        <!-- Con borde: el relleno lima de la ficha es solo para el cambio de estado -->
         <div class="flex justify-end">
-          <button mat-flat-button type="submit" disabledInteractive [disabled]="guardandoNota()">
+          <button mat-stroked-button type="submit" disabledInteractive [disabled]="guardandoNota()">
             {{ guardandoNota() ? 'Guardando...' : 'Añadir nota' }}
           </button>
         </div>

@@ -19,7 +19,7 @@ describe('FichaPageComponent', () => {
   let fixture: ComponentFixture<FichaPageComponent>;
   let http: HttpTestingController;
   let abrirDialogo: ReturnType<typeof vi.fn>;
-  let avisos: { exito: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+  let avisos: Record<'exito' | 'error' | 'deshacible', ReturnType<typeof vi.fn>>;
 
   const NOTA: Nota = {
     id: 9,
@@ -31,7 +31,7 @@ describe('FichaPageComponent', () => {
 
   async function crear(detalle: Partial<CandidaturaDetalle>): Promise<void> {
     abrirDialogo = vi.fn(() => ({ afterClosed: () => of(undefined) }));
-    avisos = { exito: vi.fn(), error: vi.fn() };
+    avisos = { exito: vi.fn(), error: vi.fn(), deshacible: vi.fn() };
     TestBed.configureTestingModule({
       imports: [FichaPageComponent],
       providers: [
@@ -436,10 +436,39 @@ describe('FichaPageComponent', () => {
       await fixture.whenStable();
       expect(document.activeElement).toBe(estadoActual());
 
-      (avisos.exito.mock.calls[0][1] as AccionAviso).alPulsar();
+      (avisos.deshacible.mock.calls[0][2] as AccionAviso).alPulsar();
       await fixture.whenStable();
 
       expect(document.activeElement).toBe(campoNota());
+    });
+
+    it('«Deshacer» del aviso devuelve la ficha al estado anterior con lo que dice la API', async () => {
+      await crear({ estado: 'Preparada' });
+      boton('Marcar enviada').click();
+      responderEstado('Enviada');
+      await fixture.whenStable();
+      expect(estadoActual().textContent).toContain('Enviada');
+
+      // Pasada la pausa del doble clic, que también frena el deshacer
+      await new Promise((listo) => setTimeout(listo, 510));
+      (document.activeElement as HTMLElement | null)?.blur();
+      (avisos.deshacible.mock.calls[0][1] as () => boolean)();
+      http.expectOne('/api/candidaturas/1/estado/deshacer').flush(
+        crearDetalle({
+          id: 1,
+          estado: 'Preparada',
+          estadosPosibles: estadosPosibles('Preparada'),
+        }),
+      );
+      await fixture.whenStable();
+
+      expect(estadoActual().textContent).toContain('Preparada');
+      expect(boton('Marcar enviada')).toBeDefined();
+      expect(avisos.exito).toHaveBeenCalledWith('Cambio deshecho.');
+      // El foco vuelve al bloque «Cambiar estado», no a <body>
+      expect(document.activeElement).toBe(
+        elemento().querySelector('[aria-labelledby="titulo-acciones"]'),
+      );
     });
 
     it('al borrar una nota, el foco va al título del historial', async () => {

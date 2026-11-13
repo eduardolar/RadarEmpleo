@@ -12,6 +12,10 @@ public interface ILectorCurriculum
     /// <exception cref="ReglaNegocioException">Falta la carpeta o el registro, o no se puede leer.</exception>
     Task<string> LeerRegistroAsync(CancellationToken cancelacion = default);
 
+    /// <summary>Texto completo del registro y su fecha de modificación (para el año de los rastreos «DD/MM»).</summary>
+    /// <exception cref="ReglaNegocioException">Falta la carpeta o el registro, o no se puede leer.</exception>
+    Task<TextoLeido> LeerRegistroConFechaAsync(CancellationToken cancelacion = default);
+
     /// <summary>Texto completo del perfil de búsqueda y su fecha de modificación.</summary>
     /// <exception cref="ReglaNegocioException">Falta la carpeta o el perfil, o no se puede leer.</exception>
     Task<TextoLeido> LeerPerfilAsync(CancellationToken cancelacion = default);

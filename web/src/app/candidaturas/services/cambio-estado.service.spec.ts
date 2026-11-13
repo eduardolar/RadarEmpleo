@@ -7,16 +7,25 @@ import { of, Subject, throwError } from 'rxjs';
 import { ErrorApi } from '../../core/interfaces/error-api.interface';
 import { AccionAviso, AvisosService } from '../../shared/services/avisos.service';
 import { DatosCambioEstado } from '../components/dialogo-cambio-estado/dialogo-cambio-estado';
-import { CambiarEstado, CandidaturaDetalle } from '../interfaces/candidatura.interface';
+import {
+  CambiarEstado,
+  CandidaturaDetalle,
+  EstadoCandidatura,
+} from '../interfaces/candidatura.interface';
 import { crearDetalle, crearResumen } from '../utils/candidatura-de-prueba';
 import { CambioEstadoService } from './cambio-estado.service';
 import { CandidaturasService } from './candidaturas.service';
 
+type AvisosFalsos = Record<'exito' | 'error' | 'deshacible', ReturnType<typeof vi.fn>>;
+
+const avisosFalsos = (): AvisosFalsos => ({ exito: vi.fn(), error: vi.fn(), deshacible: vi.fn() });
+
 describe('CambioEstadoService', () => {
   let service: CambioEstadoService;
   let cambiarEstado: ReturnType<typeof vi.fn>;
+  let deshacerCambioEstado: ReturnType<typeof vi.fn>;
   let abrirDialogo: ReturnType<typeof vi.fn>;
-  let avisos: { exito: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+  let avisos: AvisosFalsos;
   let navegar: ReturnType<typeof vi.fn>;
 
   const CANDIDATURA = {
@@ -30,13 +39,14 @@ describe('CambioEstadoService', () => {
 
   beforeEach(() => {
     cambiarEstado = vi.fn(() => of(crearDetalle()));
+    deshacerCambioEstado = vi.fn(() => of(crearDetalle()));
     abrirDialogo = vi.fn();
-    avisos = { exito: vi.fn(), error: vi.fn() };
+    avisos = avisosFalsos();
     navegar = vi.fn(() => Promise.resolve(true));
 
     TestBed.configureTestingModule({
       providers: [
-        { provide: CandidaturasService, useValue: { cambiarEstado } },
+        { provide: CandidaturasService, useValue: { cambiarEstado, deshacerCambioEstado } },
         { provide: MatDialog, useValue: { open: abrirDialogo } },
         { provide: AvisosService, useValue: avisos },
         { provide: Router, useValue: { navigate: navegar } },
@@ -51,7 +61,11 @@ describe('CambioEstadoService', () => {
   }
 
   function accionDelAviso(): AccionAviso {
-    return avisos.exito.mock.calls[0][1] as AccionAviso;
+    return avisos.deshacible.mock.calls[0][2] as AccionAviso;
+  }
+
+  function deshacerDelAviso(): () => boolean {
+    return avisos.deshacible.mock.calls[0][1] as () => boolean;
   }
 
   describe('avanzar o reabrir', () => {
@@ -69,11 +83,12 @@ describe('CambioEstadoService', () => {
       expect(cambiarEstado).toHaveBeenCalledWith(7, { estado: 'Detectada' });
     });
 
-    it('avisa del cambio y ofrece «Añadir nota» para comentar después', () => {
+    it('avisa del cambio con «Deshacer» y ofrece «Añadir nota» para comentar después', () => {
       service.mover(CANDIDATURA, 'Entrevista');
 
-      expect(avisos.exito).toHaveBeenCalledWith(
+      expect(avisos.deshacible).toHaveBeenCalledWith(
         '«Desarrollador Angular» pasa a Entrevista.',
+        expect.any(Function),
         expect.objectContaining({ texto: 'Añadir nota' }),
       );
     });
@@ -81,7 +96,7 @@ describe('CambioEstadoService', () => {
     it('al marcar enviada avisa del seguimiento que programa la API', () => {
       service.mover(CANDIDATURA, 'Enviada');
 
-      expect(avisos.exito.mock.calls[0][0]).toBe(
+      expect(avisos.deshacible.mock.calls[0][0]).toBe(
         '«Desarrollador Angular» pasa a Enviada. Seguimiento programado dentro de 7 días.',
       );
     });
@@ -123,7 +138,7 @@ describe('CambioEstadoService', () => {
       service.mover(CANDIDATURA, 'Cerrada');
 
       expect(cambiarEstado).not.toHaveBeenCalled();
-      expect(avisos.exito).not.toHaveBeenCalled();
+      expect(avisos.deshacible).not.toHaveBeenCalled();
     });
 
     it('al confirmar manda lo que devuelve el diálogo, con motivo y comentario', () => {
@@ -170,7 +185,11 @@ describe('CambioEstadoService', () => {
 
       service.mover(CANDIDATURA, 'Cerrada');
 
-      expect(avisos.exito).toHaveBeenCalledWith('«Desarrollador Angular» pasa a Cerrada.');
+      expect(avisos.deshacible).toHaveBeenCalledWith(
+        '«Desarrollador Angular» pasa a Cerrada.',
+        expect.any(Function),
+        undefined,
+      );
     });
 
     it('sin comentario, el aviso sí la ofrece', () => {
@@ -179,6 +198,120 @@ describe('CambioEstadoService', () => {
       service.mover(CANDIDATURA, 'Cerrada');
 
       expect(accionDelAviso().texto).toBe('Añadir nota');
+    });
+  });
+
+  describe('deshacer', () => {
+    // El cambio que crea el movimiento: el último apunte del historial que devuelve la API
+    const MOVIDA = crearDetalle({
+      id: 7,
+      estado: 'Enviada',
+      historial: [
+        {
+          id: 40,
+          de: null,
+          a: 'Detectada',
+          fecha: '2026-10-27T08:00:00Z',
+          comentario: null,
+          origen: 'Manual',
+        },
+        {
+          id: 41,
+          de: 'Preparada',
+          a: 'Enviada',
+          fecha: '2026-10-28T08:00:00Z',
+          comentario: null,
+          origen: 'Manual',
+        },
+      ],
+    });
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      cambiarEstado.mockReturnValue(of(MOVIDA));
+    });
+
+    /** Pasada la pausa del doble clic, que también frena el deshacer */
+    function moverYEsperar(destino: EstadoCandidatura = 'Enviada'): void {
+      service.mover(CANDIDATURA, destino);
+      vi.advanceTimersByTime(500);
+    }
+
+    it('«Deshacer» pide a la API deshacer el cambio que creó ese movimiento y lo confirma', () => {
+      moverYEsperar();
+
+      expect(deshacerDelAviso()()).toBe(true);
+
+      expect(deshacerCambioEstado).toHaveBeenCalledWith(7, 41);
+      expect(avisos.exito).toHaveBeenCalledWith('Cambio deshecho.');
+    });
+
+    it('también tras descartar en el diálogo', () => {
+      responderDialogo({ estado: 'Descartada', motivoDescarte: 'Zona' });
+      moverYEsperar('Descartada');
+
+      deshacerDelAviso()();
+
+      expect(deshacerCambioEstado).toHaveBeenCalledWith(7, 41);
+    });
+
+    it('avisa a quien movió del estado al que ha vuelto, para el foco', () => {
+      const alDeshacer = vi.fn();
+      deshacerCambioEstado.mockReturnValue(of(crearDetalle({ id: 7, estado: 'Preparada' })));
+      service.mover(CANDIDATURA, 'Enviada', undefined, alDeshacer);
+      vi.advanceTimersByTime(500);
+
+      deshacerDelAviso()();
+
+      expect(alDeshacer).toHaveBeenCalledWith('Preparada');
+    });
+
+    it('si la API responde 409, enseña su mensaje', () => {
+      const error: ErrorApi = {
+        estado: 409,
+        mensaje: 'Ese cambio ya no es el último.',
+        errores: {},
+      };
+      deshacerCambioEstado.mockReturnValue(throwError(() => error));
+      moverYEsperar();
+
+      deshacerDelAviso()();
+
+      expect(avisos.error).toHaveBeenCalledWith('Ese cambio ya no es el último.');
+      expect(avisos.exito).not.toHaveBeenCalled();
+      expect(service.cambiando()).toBe(false);
+    });
+
+    it('en la pausa del doble clic no deshace: devuelve false para que el aviso pida esperar', () => {
+      service.mover(CANDIDATURA, 'Enviada');
+
+      expect(deshacerDelAviso()()).toBe(false);
+      expect(deshacerCambioEstado).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(500);
+      expect(deshacerDelAviso()()).toBe(true);
+      expect(deshacerCambioEstado).toHaveBeenCalledTimes(1);
+    });
+
+    it('con otro deshacer de la misma tarjeta en marcha, tampoco', () => {
+      deshacerCambioEstado.mockReturnValue(new Subject<CandidaturaDetalle>());
+      moverYEsperar();
+
+      expect(deshacerDelAviso()()).toBe(true);
+      expect(deshacerDelAviso()()).toBe(false);
+
+      expect(deshacerCambioEstado).toHaveBeenCalledTimes(1);
+    });
+
+    it('mientras deshace, «cambiando» está activo y no admite otro movimiento de esa tarjeta', () => {
+      deshacerCambioEstado.mockReturnValue(new Subject<CandidaturaDetalle>());
+      moverYEsperar();
+
+      deshacerDelAviso()();
+      service.mover(CANDIDATURA, 'Entrevista');
+
+      expect(service.cambiando()).toBe(true);
+      expect(cambiarEstado).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -205,7 +338,7 @@ describe('CambioEstadoService', () => {
       service.mover(CANDIDATURA, 'Enviada');
 
       expect(avisos.error).toHaveBeenCalledWith(error.mensaje);
-      expect(avisos.exito).not.toHaveBeenCalled();
+      expect(avisos.deshacible).not.toHaveBeenCalled();
       expect(service.cambiando()).toBe(false);
     });
   });
@@ -327,12 +460,12 @@ describe('CambioEstadoService con CandidaturasService', () => {
   let service: CambioEstadoService;
   let candidaturas: CandidaturasService;
   let http: HttpTestingController;
-  let avisos: { exito: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+  let avisos: AvisosFalsos;
 
   const TARJETA = crearResumen({ id: 1, estado: 'Preparada' });
 
   beforeEach(() => {
-    avisos = { exito: vi.fn(), error: vi.fn() };
+    avisos = avisosFalsos();
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -373,7 +506,7 @@ describe('CambioEstadoService con CandidaturasService', () => {
     http.expectOne('/api/candidaturas').flush([{ ...TARJETA, estado: 'Enviada' }]);
 
     expect(avisos.error).not.toHaveBeenCalled();
-    expect(avisos.exito).toHaveBeenCalledTimes(1);
+    expect(avisos.deshacible).toHaveBeenCalledTimes(1);
   });
 
   it('doble clic en «Mover a…» con la API rápida: el segundo clic llega ya respondido', () => {
@@ -385,5 +518,46 @@ describe('CambioEstadoService con CandidaturasService', () => {
 
     http.expectNone('/api/candidaturas/1/estado');
     expect(avisos.error).not.toHaveBeenCalled();
+  });
+
+  describe('deshacer', () => {
+    const pulsarDeshacer = () => (avisos.deshacible.mock.calls[0][1] as () => boolean)();
+
+    afterEach(() => vi.useRealTimers());
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      service.mover(TARJETA, 'Enviada');
+      peticionEstado().flush(crearDetalle({ id: 1, estado: 'Enviada' }));
+      http.expectOne('/api/candidaturas').flush([{ ...TARJETA, estado: 'Enviada' }]);
+      vi.advanceTimersByTime(500);
+    });
+
+    it('manda el POST con el cambio del aviso y deja la tarjeta como la devuelve la API', () => {
+      pulsarDeshacer();
+      const peticion = http.expectOne('/api/candidaturas/1/estado/deshacer');
+      expect(peticion.request.method).toBe('POST');
+      // El último apunte del historial que devolvió el cambio de estado
+      expect(peticion.request.body).toEqual({ cambioId: 1 });
+      peticion.flush(crearDetalle({ id: 1, estado: 'Preparada' }));
+
+      expect(estadoEnLista()).toBe('Preparada');
+      http.expectOne('/api/candidaturas').flush([TARJETA]);
+      expect(avisos.exito).toHaveBeenCalledWith('Cambio deshecho.');
+    });
+
+    it('con un 409 enseña el mensaje de la API y vuelve a pedir la lista', () => {
+      pulsarDeshacer();
+      http
+        .expectOne('/api/candidaturas/1/estado/deshacer')
+        .flush(
+          { status: 409, detail: 'Ya no se puede deshacer este cambio.' },
+          { status: 409, statusText: 'Conflict' },
+        );
+
+      expect(avisos.error).toHaveBeenCalledWith('Ya no se puede deshacer este cambio.');
+      http.expectOne('/api/candidaturas').flush([{ ...TARJETA, estado: 'Enviada' }]);
+      expect(estadoEnLista()).toBe('Enviada');
+    });
   });
 });

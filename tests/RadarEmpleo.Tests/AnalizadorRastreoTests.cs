@@ -309,8 +309,9 @@ public class AnalizadorRastreoTests
         var rastreos = AnalizadorRastreo.AnalizarRegistro(Registro, Hoy).Rastreos;
 
         Assert.All(rastreos, r => Assert.Equal(new DateOnly(2026, 10, 30), r.Fecha));
-        Assert.Equal("registro:rastreo 30/10 (viernes, lo publicado desde el 26/10)", rastreos[0].Clave);
-        Assert.Equal("registro:rastreo 30/10 (tarde, con el chrome)", rastreos[1].Clave);
+        Assert.Equal("registro:2026-10-30:rastreo 30/10 (viernes, lo publicado desde el 26/10)", rastreos[0].Clave);
+        Assert.Equal("registro:2026-10-30:rastreo 30/10 (tarde, con el chrome)", rastreos[1].Clave);
+        Assert.Equal("registro:rastreo 30/10 (tarde, con el chrome)", rastreos[1].ClaveAnterior);
         Assert.Equal(2, rastreos[1].Ofertas.Count);
     }
 
@@ -321,7 +322,21 @@ public class AnalizadorRastreoTests
 
         var rastreos = AnalizadorRastreo.AnalizarRegistro(texto, Hoy).Rastreos;
 
-        Assert.Equal(["registro:rastreo 03/11", "registro:rastreo 03/11#2"], rastreos.Select(r => r.Clave));
+        Assert.Equal(["registro:2026-11-03:rastreo 03/11", "registro:2026-11-03:rastreo 03/11#2"], rastreos.Select(r => r.Clave));
+        Assert.Equal(["registro:rastreo 03/11", "registro:rastreo 03/11#2"], rastreos.Select(r => r.ClaveAnterior));
+    }
+
+    [Fact]
+    public void AnalizarRegistro_ElAnioDeLaClaveSaleDeLaFechaDeReferencia()
+    {
+        const string texto = "## Rastreo 03/11\n- **A — B** https://ejemplo.com/o/1\n";
+
+        var deEsteAnio = Assert.Single(AnalizadorRastreo.AnalizarRegistro(texto, new DateOnly(2026, 11, 8)).Rastreos);
+        var delSiguiente = Assert.Single(AnalizadorRastreo.AnalizarRegistro(texto, new DateOnly(2027, 11, 8)).Rastreos);
+
+        Assert.Equal("registro:2026-11-03:rastreo 03/11", deEsteAnio.Clave);
+        Assert.Equal("registro:2027-11-03:rastreo 03/11", delSiguiente.Clave);
+        Assert.Equal(deEsteAnio.ClaveAnterior, delSiguiente.ClaveAnterior);
     }
 
     [Fact]

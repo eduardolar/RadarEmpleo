@@ -1,5 +1,9 @@
 import { inject, Injectable } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { AvisoDeshacer, DatosAvisoDeshacer } from '../components/aviso-deshacer/aviso-deshacer';
+
+/** Lo que dura a la vista un aviso con «Deshacer»: da tiempo a ver el cambio y arrepentirse */
+export const DURACION_DESHACER_MS = 8000;
 
 /** Botón opcional de un aviso: «Añadir nota», «Ver ficha»... */
 export interface AccionAviso {
@@ -22,6 +26,17 @@ export class AvisosService {
       .open(mensaje, accion.texto, { duration: 6000 })
       .onAction()
       .subscribe(() => accion.alPulsar());
+  }
+
+  /**
+   * Aviso de un cambio con el botón «Deshacer» (y Ctrl+Z mientras se ve) y, si se pasa, otra acción.
+   * Si `deshacer` devuelve false, el aviso sigue abierto y pide esperar
+   */
+  deshacible(mensaje: string, deshacer: () => boolean, otra?: AccionAviso): void {
+    this.snackBar.openFromComponent<AvisoDeshacer, DatosAvisoDeshacer>(AvisoDeshacer, {
+      data: { mensaje, deshacer, otra },
+      duration: DURACION_DESHACER_MS,
+    });
   }
 
   /** Los errores se quedan más tiempo y se pueden cerrar: suelen ser largos */

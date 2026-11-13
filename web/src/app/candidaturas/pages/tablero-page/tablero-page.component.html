@@ -14,9 +14,12 @@
         titulo="Tablero"
         descripcion="Tus candidaturas por estado."
       />
-      <button mat-flat-button type="button" class="shrink-0" (click)="nuevaCandidatura()">
-        Nueva candidatura
-      </button>
+      <!-- Con el tablero vacío la ofrece el estado vacío: un solo relleno lima por pantalla -->
+      @if (!tableroVacio()) {
+        <button mat-flat-button type="button" class="shrink-0" (click)="nuevaCandidatura()">
+          Nueva candidatura
+        </button>
+      }
     </div>
 
     <div
@@ -204,6 +207,7 @@
               @if (plegable(columna)) {
                 <button
                   type="button"
+                  data-plegar
                   aria-expanded="true"
                   [attr.aria-label]="'Plegar la columna ' + etiquetas[columna.estado]"
                   (click)="alternarColumna(columna.estado)"
@@ -225,8 +229,10 @@
           }
 
           <!-- Plegada, la lista de la columna es la propia tira (con el botón dentro) para que se
-               pueda soltar en ella; las tarjetas no se pintan. pb y pr: aire para la sombra dura de
-               la última tarjeta -->
+               pueda soltar en ella; las tarjetas no se pintan. Al arrastrar encima, el hueco es una
+               ranura baja al pie de la tira (columna-tira, styles.css): no se despliega a medio
+               arrastre porque el CDK mide las columnas al empezar y dejaría de acertar dónde se
+               suelta. pb y pr: aire para la sombra dura de la última tarjeta -->
           <ul
             cdkDropList
             cdkDropListSortingDisabled
@@ -234,12 +240,13 @@
             [cdkDropListEnterPredicate]="sePuedeSoltar"
             (cdkDropListDropped)="soltar($event)"
             class="zona-soltar scrollbar-fina flex flex-1 flex-col overflow-y-auto"
-            [class]="enTira ? 'p-1' : 'min-h-32 gap-3 px-2 pt-1 pr-3 pb-5'"
+            [class]="enTira ? 'columna-tira gap-1 p-1' : 'min-h-32 gap-3 px-2 pt-1 pr-3 pb-5'"
           >
             @if (enTira) {
               <li class="flex flex-1">
                 <button
                   type="button"
+                  data-plegar
                   aria-expanded="false"
                   [attr.aria-label]="
                     'Desplegar la columna ' +

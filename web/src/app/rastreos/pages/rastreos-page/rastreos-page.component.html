@@ -261,9 +261,10 @@
           </div>
         }
 
-        @for (oferta of grupos().pendientes; track oferta.id) {
+        @for (oferta of grupos().pendientes; track oferta.id; let primera = $first) {
           <app-tarjeta-oferta
             [oferta]="oferta"
+            [destacada]="primera"
             [ocupada]="ocupadas().has(oferta.id)"
             [parecidas]="parecidasDe(oferta)"
             (detectar)="detectar($event)"

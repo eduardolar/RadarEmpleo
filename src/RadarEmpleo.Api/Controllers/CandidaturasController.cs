@@ -66,6 +66,24 @@ public class CandidaturasController(CandidaturasService candidaturas, Documentos
     public async Task<ActionResult<CandidaturaDetalleDto>> CambiarEstado(int id, CambiarEstadoRequest peticion) =>
         await candidaturas.CambiarEstadoAsync(id, peticion) is { } detalle ? detalle : NotFound();
 
+    /// <summary>
+    /// Deshace el cambio de estado <c>cambioId</c> (el apunte del historial que creó el movimiento) si sigue
+    /// siendo el último y tiene menos de 10 minutos: vuelve al estado anterior (aunque el flujo normal no
+    /// deje retroceder), restaura las fechas y el motivo, y borra el apunte del historial y el seguimiento
+    /// que programó (o reabre el que cerró). Devuelve 400 sin <c>cambioId</c>, 404 si la candidatura no
+    /// existe y 409 si ese cambio ya no es el último, si solo tiene el alta, si ya ha pasado el tiempo o si
+    /// otra petición la ha cambiado entre medias.
+    /// </summary>
+    [HttpPost("{id:int}/estado/deshacer")]
+    [Consumes("application/json")]
+    [ProducesResponseType<CandidaturaDetalleDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
+    public async Task<ActionResult<CandidaturaDetalleDto>> DeshacerCambioEstado(int id, DeshacerCambioEstadoRequest peticion) =>
+        await candidaturas.DeshacerCambioEstadoAsync(id, peticion) is { } detalle ? detalle : NotFound();
+
     /// <summary>Añade una nota con la fecha de ahora.</summary>
     [HttpPost("{id:int}/notas")]
     [ProducesResponseType<NotaDto>(StatusCodes.Status201Created)]

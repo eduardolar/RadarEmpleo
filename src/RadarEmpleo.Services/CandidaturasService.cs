@@ -16,6 +16,12 @@ namespace RadarEmpleo.Services;
 /// </summary>
 public class CandidaturasService
 {
+    /// <summary>
+    /// De uno en uno, como Detectar en los rastreos: el servicio es scoped, así que el cerrojo es estático.
+    /// Deshacer es raro y rápido; no merece uno por candidatura.
+    /// </summary>
+    private static readonly SemaphoreSlim CerrojoDeshacer = new(1, 1);
+
     private readonly IDbContextFactory<AppDbContext> _factory;
     private readonly IClock _reloj;
     private readonly IExportadorRadar _exportador;
@@ -184,6 +190,44 @@ public class CandidaturasService
         await db.SaveChangesAsync();
         await _exportador.ExportarAsync();
         return ADetalle(candidatura);
+    }
+
+    /// <summary>
+    /// Deshace el cambio de estado <see cref="DeshacerCambioEstadoRequest.CambioId"/> si sigue siendo el último
+    /// y tiene menos de <see cref="ReglasEstado.VentanaDeshacer"/> (<see cref="Candidatura.DeshacerUltimoCambio"/>):
+    /// vuelve al estado anterior y borra el apunte del historial y, si lo hubo, el seguimiento que programó.
+    /// Si no se puede, lanza <see cref="ReglaNegocioException"/>; si otra petición la cambia entre medias,
+    /// salta el control de concurrencia. Los deshacer van de uno en uno (<see cref="CerrojoDeshacer"/>).
+    /// Devuelve la ficha actualizada o null si no existe.
+    /// </summary>
+    public async Task<CandidaturaDetalleDto?> DeshacerCambioEstadoAsync(int id, DeshacerCambioEstadoRequest peticion)
+    {
+        // La API ya lo exige con [Required]; esto cubre a quien llame al servicio directamente.
+        if (peticion.CambioId is not { } cambioId)
+            throw new ValidacionException("Falta el cambio que se quiere deshacer.", "cambioId");
+
+        // Dos «Deshacer» a la vez (doble clic, dos pestañas) no deben deshacer dos pasos: el segundo lee ya
+        // el historial sin el apunte y da 409. El token de concurrencia lo cubre igual entre procesos.
+        await CerrojoDeshacer.WaitAsync();
+        try
+        {
+            await using var db = await _factory.CreateDbContextAsync();
+            var candidatura = await CargarCompletaAsync(db, id, seguimiento: true);
+            if (candidatura is null) return null;
+
+            var deshecho = candidatura.DeshacerUltimoCambio(cambioId, _reloj.AhoraUtc);
+            db.CambiosEstado.Remove(deshecho.Cambio);
+            // El recordatorio tiene la clave ajena opcional: sacarlo de la colección solo lo desligaría.
+            if (deshecho.SeguimientoQuitado is { } seguimiento) db.Recordatorios.Remove(seguimiento);
+
+            await db.SaveChangesAsync();
+            await _exportador.ExportarAsync();
+            return ADetalle(candidatura);
+        }
+        finally
+        {
+            CerrojoDeshacer.Release();
+        }
     }
 
     /// <summary>Añade una nota con la fecha actual. Devuelve null si la candidatura no existe.</summary>

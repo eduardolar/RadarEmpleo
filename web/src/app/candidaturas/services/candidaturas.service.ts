@@ -188,18 +188,41 @@ export class CandidaturasService {
             if (anterior) {
               this.reemplazarEnLista(anterior);
             }
-            // Lo que se ve está desfasado: se cambió (409) o se borró (404) desde otro sitio
-            if (error.estado === 409 || error.estado === 404) {
-              this.refrescarLista();
-              if (this._detalle()?.id === id) {
-                this.cargarDetalle(id);
-              }
-            }
+            this.refrescarSiDesfasada(id, error);
           },
         }),
         finalize(() => this.terminarCambio()),
       );
     });
+  }
+
+  /**
+   * Deshace el cambio de estado `cambioId` (el apunte del historial que creó el movimiento): la API solo
+   * lo deja si sigue siendo el último y durante unos minutos. La lista y la
+   * ficha se ponen al día con lo que devuelve; si responde 409 o 404, se vuelven a pedir.
+   */
+  deshacerCambioEstado(id: number, cambioId: number): Observable<CandidaturaDetalle> {
+    return defer(() => {
+      this.empezarCambio();
+      return this.http
+        .post<CandidaturaDetalle>(`${URL_CANDIDATURAS}/${id}/estado/deshacer`, { cambioId })
+        .pipe(
+          tap((detalle) => this.guardarDetalle(detalle)),
+          conErrorApi(),
+          tap({ error: (error: ErrorApi) => this.refrescarSiDesfasada(id, error) }),
+          finalize(() => this.terminarCambio()),
+        );
+    });
+  }
+
+  /** Lo que se ve está desfasado: se cambió (409) o se borró (404) desde otro sitio */
+  private refrescarSiDesfasada(id: number, error: ErrorApi): void {
+    if (error.estado === 409 || error.estado === 404) {
+      this.refrescarLista();
+      if (this._detalle()?.id === id) {
+        this.cargarDetalle(id);
+      }
+    }
   }
 
   anadirNota(candidaturaId: number, texto: string): Observable<Nota> {

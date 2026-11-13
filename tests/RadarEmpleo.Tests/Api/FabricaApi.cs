@@ -60,7 +60,10 @@ public sealed class FabricaApi : WebApplicationFactory<Program>
     public static void CopiarDatosEjemplo(string carpeta)
     {
         Directory.CreateDirectory(carpeta);
-        File.Copy(RutaRegistroEjemplo, Path.Combine(carpeta, RutasCurriculum.ArchivoRegistro));
+        var registro = Path.Combine(carpeta, RutasCurriculum.ArchivoRegistro);
+        File.Copy(RutaRegistroEjemplo, registro);
+        // La copia conserva la fecha del archivo del repositorio, y de ella sale el año de los «DD/MM».
+        File.SetLastWriteTimeUtc(registro, DateTime.UtcNow);
         File.Copy(RutaPerfilEjemplo, Path.Combine(carpeta, RutasCurriculum.ArchivoPerfil));
         CopiarCarpeta(RutasCurriculum.CarpetaCandidaturas, carpeta);
         CopiarCarpeta(RutasCurriculum.CarpetaInformesRastreo, carpeta);

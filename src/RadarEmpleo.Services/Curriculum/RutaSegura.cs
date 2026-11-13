@@ -107,13 +107,19 @@ public static class RutaSegura
         return string.Join('/', partes);
     }
 
-    /// <summary>¿La ruta es segura y el archivo está en su sitio? Nunca lanza.</summary>
+    /// <summary>
+    /// ¿La ruta es segura y el archivo está en su sitio? En Windows, además, sin enlaces duros: es lo que
+    /// rechazará <see cref="ComprobarAbierto"/> al servirlo, así que ni se sugiere ni sale como encontrado.
+    /// Nunca lanza.
+    /// </summary>
     public static bool Existe(string? raiz, string? rutaRelativa)
     {
         if (raiz is null) return false;
         try
         {
-            return File.Exists(Resolver(raiz, rutaRelativa));
+            var ruta = Resolver(raiz, rutaRelativa);
+            if (!File.Exists(ruta)) return false;
+            return !OperatingSystem.IsWindows() || ArchivosWindows.NumeroEnlaces(ruta) <= 1;
         }
         catch (Exception error) when (error is ValidacionException or IOException or UnauthorizedAccessException)
         {

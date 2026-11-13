@@ -111,7 +111,7 @@ Relaciones: Empresa 1-N Candidatura; Candidatura 1-N CambioEstado, Nota, Documen
 **Reglas de estado** (`ReglasEstado`, con tests): avanzar a cualquier estado posterior; Descartada y Cerrada desde cualquiera (Descartada pide motivo); «Reabrir» lleva a Detectada; al pasar a Enviada se rellena FechaEnvio y se crea un seguimiento a +7 días.
 
 **Endpoints** (`/api`; errores con ProblemDetails; `ReglaNegocioException` → 409)
-- Candidaturas: `GET /candidaturas?estado&texto&desde`, `GET /candidaturas/{id}`, `POST`, `PUT /{id}`, `DELETE /{id}`, `POST /candidaturas/{id}/estado`, `POST /candidaturas/{id}/notas`, `DELETE /notas/{id}`
+- Candidaturas: `GET /candidaturas?estado&texto&desde`, `GET /candidaturas/{id}`, `POST`, `PUT /{id}`, `DELETE /{id}`, `POST /candidaturas/{id}/estado`, `POST /candidaturas/{id}/estado/deshacer {cambioId}` (ese cambio, si sigue siendo el último y tiene menos de 10 min), `POST /candidaturas/{id}/notas`, `DELETE /notas/{id}`
 - Empresas: `GET /empresas?texto`
 - Documentos: `GET /documentos/sugeridos?candidaturaId`, `POST /candidaturas/{id}/documentos`, `DELETE /documentos/{id}`, `GET /documentos/{id}/archivo` (solo .pdf/.docx dentro de la carpeta raíz, con comprobación contra «..»)
 - Recordatorios: `GET /recordatorios?desde&hasta&pendientes`, `POST`, `PUT /{id}`, `POST /{id}/hecho`, `DELETE /{id}`, `POST /recordatorios/importar-linkedin/previsualizar` y `/aplicar`

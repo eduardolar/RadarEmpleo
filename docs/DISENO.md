@@ -139,8 +139,9 @@ borde de 3 px y sombra dura de 5 px, en el mismo idioma que las tarjetas.
 
 ### Insignia: un solo patrón para todas las etiquetas
 
-`insignia` (styles.css): bloque plano sin borde, 24 px de alto, 11 px en MAYÚSCULAS y negrita,
-icono + texto. El color codifica el significado:
+`insignia` (styles.css): bloque plano sin borde, 24 px de alto como mínimo, 11 px en MAYÚSCULAS y
+negrita, icono + texto. Nunca más ancha que su sitio: en una tarjeta estrecha (1366 px con todo
+desplegado) el texto del encaje (`insignia-texto`) baja de línea en vez de cortarse. El color codifica el significado:
 
 | Insignia     | Fondo / texto                                              | Icono                      |
 | ------------ | ---------------------------------------------------------- | -------------------------- |
@@ -173,7 +174,9 @@ banderita que la de «No encaja». Nada depende solo del color: todas llevan tex
   Se reparten el ancho (`flex-1` con un mínimo de 12,5 rem) y **Oferta, Descartada, Cerrada y las
   vacías salen plegadas** en una tira de 56 px con el total y el nombre en vertical; al pulsarla se
   despliega, y se despliega sola al mover o soltar una tarjeta en ella. Así cabe sin desplazamiento
-  lateral en 1366, 1440 y 1600 px. Las tiras siguen siendo zonas donde soltar.
+  lateral en 1366, 1440 y 1600 px. Las tiras siguen siendo zonas donde soltar: al arrastrar encima,
+  la tira se marca (borde de 3 px y lima suave) y el hueco es una ranura discontinua de 40 px al pie,
+  sin la tarjeta dentro. No se despliega a medio arrastre: el CDK mide las columnas al empezar.
 - La lista de cada columna deja 20 px abajo y 12 px a la derecha para la sombra de la última
   tarjeta.
 - **Filtros del móvil**: el activo no copia el botón principal. Va en gris más oscuro, con una raya
@@ -229,6 +232,20 @@ pinta ninguna función que no exista.
 | De texto            | Plano, en el color de los enlaces                                                                             |
 | «Marcar enviada»    | El momento cumbre: lima también de día, borde de 3 px, sombra de 5 px y avión de papel                        |
 
+**Un solo relleno lima por pantalla.** De noche todos los principales son lima, así que en cada
+pantalla solo uno va relleno: en la ficha, el cambio de estado («Buscar el CV» y «Añadir nota» van
+con borde); en el tablero vacío, el «Nueva candidatura» del estado vacío (el de la cabecera se
+oculta); en la bandeja de rastreos, el «Pasar al tablero» de la primera oferta pendiente.
+
+### Avisos
+
+Snackbar plano, como una tarjeta: fondo de tarjeta, texto de tinta, borde de 2 px y sombra dura de
+4 px. La acción va en negrita y en el color de los botones de texto: `#4d7c0f` de día y lima de
+noche. Los de error, en el rol `error`. Tras cualquier cambio de estado el aviso ofrece
+**«Deshacer»** durante 8 s (también con Ctrl+Z si el foco no está en un campo de texto o un
+desplegable y no hay un diálogo abierto) y, si no se ha comentado, «Añadir nota». Deshecho el cambio,
+el foco vuelve a la tarjeta en el tablero o al bloque «Cambiar estado» en la ficha.
+
 ### Estados vacíos
 
 | Dónde                      | Ilustración                                                           | Texto principal                                    | Microcopy                                                                                     | Acciones                                                 |
@@ -245,8 +262,8 @@ pinta ninguna función que no exista.
 2. Cae el **sello «ENVIADA»** con la fecha sobre la cabecera de la ficha: doble borde de 4 px del
    color de Enviada, girado −6°, entra grande y rebota en 0,5 s. Al lado: «La pelota está en su
    tejado.».
-3. El aviso de abajo, de tinta con borde y sombra de lima, dice que se ha programado el
-   seguimiento a 7 días.
+3. El aviso de abajo (ver Avisos) dice que se ha programado el seguimiento a 7 días y ofrece
+   «Deshacer» por si se ha pulsado sin querer.
 
 ### Movimiento
 

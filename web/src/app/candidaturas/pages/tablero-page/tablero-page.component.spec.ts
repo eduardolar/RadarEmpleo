@@ -18,9 +18,11 @@ describe('TableroPageComponent', () => {
   let fixture: ComponentFixture<TableroPageComponent>;
   let http: HttpTestingController;
   let abrirDialogo: ReturnType<typeof vi.fn>;
+  let avisos: Record<'exito' | 'error' | 'deshacible', ReturnType<typeof vi.fn>>;
 
   async function crear(escritorio = false): Promise<void> {
     abrirDialogo = vi.fn(() => ({ afterClosed: () => of(undefined) }));
+    avisos = { exito: vi.fn(), error: vi.fn(), deshacible: vi.fn() };
     TestBed.configureTestingModule({
       imports: [TableroPageComponent],
       providers: [
@@ -28,7 +30,7 @@ describe('TableroPageComponent', () => {
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: MatDialog, useValue: { open: abrirDialogo } },
-        { provide: AvisosService, useValue: { exito: vi.fn(), error: vi.fn() } },
+        { provide: AvisosService, useValue: avisos },
         {
           provide: BreakpointObserver,
           useValue: {
@@ -114,6 +116,8 @@ describe('TableroPageComponent', () => {
     expect(vacio?.textContent).toContain('Todavía no hay candidaturas.');
     expect(vacio?.querySelectorAll('button, a')).toHaveLength(1);
     expect(vacio?.querySelector('button')?.textContent).toContain('Nueva candidatura');
+    // Ni en la cabecera: un solo botón relleno en la pantalla
+    expect(elemento().querySelectorAll('[mat-flat-button]')).toHaveLength(1);
   });
 
   it('si falla la carga explica qué hacer y «Reintentar» pide la lista sin perder el foco', async () => {
@@ -169,6 +173,15 @@ describe('TableroPageComponent', () => {
         );
       });
 
+      it('la tira plegada sigue siendo zona donde soltar, con el hueco en forma de ranura', async () => {
+        await cargarTablero([TARJETA]);
+
+        const tira = columna('Oferta').querySelector('ul')!;
+        expect(tira.classList).toContain('zona-soltar');
+        expect(tira.classList).toContain('columna-tira');
+        expect(columna('Preparada').querySelector('ul')!.classList).not.toContain('columna-tira');
+      });
+
       it('al pulsarla se despliega y se puede volver a plegar', async () => {
         await cargarTablero([crearResumen({ id: 2, estado: 'Oferta' })]);
 
@@ -182,6 +195,20 @@ describe('TableroPageComponent', () => {
         await fixture.whenStable();
 
         expect(columna('Oferta').querySelector('[data-candidatura]')).toBeNull();
+      });
+
+      it('el foco pasa al botón contrario de la misma columna (el pulsado desaparece)', async () => {
+        await cargarTablero([crearResumen({ id: 2, estado: 'Oferta' })]);
+
+        botonDe('Oferta')!.click();
+        await fixture.whenStable();
+        expect(document.activeElement).toBe(botonDe('Oferta'));
+        expect(botonDe('Oferta')?.getAttribute('aria-label')).toBe('Plegar la columna Oferta');
+
+        botonDe('Oferta')!.click();
+        await fixture.whenStable();
+        expect(document.activeElement).toBe(botonDe('Oferta'));
+        expect(botonDe('Oferta')?.getAttribute('aria-expanded')).toBe('false');
       });
 
       it('al mover una tarjeta a una columna plegada, esa columna se despliega', async () => {
@@ -226,6 +253,32 @@ describe('TableroPageComponent', () => {
         soltar(TARJETA, 'Preparada', 'Enviada', true);
 
         expect(cambioDeEstado().request.body).toEqual({ estado: 'Enviada' });
+      });
+
+      it('el aviso ofrece «Deshacer», que llama a la API y devuelve la tarjeta a su columna', async () => {
+        await cargarTablero([TARJETA]);
+        soltar(TARJETA, 'Preparada', 'Enviada', true);
+        cambioDeEstado().flush(crearDetalle({ id: 1, estado: 'Enviada' }));
+        lista().flush([{ ...TARJETA, estado: 'Enviada' }]);
+        await fixture.whenStable();
+        expect(columnaDe()).toBe('Enviada');
+
+        const [mensaje, deshacer] = avisos.deshacible.mock.calls[0] as [string, () => boolean];
+        expect(mensaje).toContain('pasa a Enviada');
+        // Pasada la pausa del doble clic, que también frena el deshacer
+        await new Promise((listo) => setTimeout(listo, 510));
+        (document.activeElement as HTMLElement | null)?.blur();
+        deshacer();
+        const peticion = http.expectOne('/api/candidaturas/1/estado/deshacer');
+        expect(peticion.request.body).toEqual({ cambioId: 1 });
+        peticion.flush(crearDetalle({ id: 1, estado: 'Preparada' }));
+        lista().flush([TARJETA]);
+        await fixture.whenStable();
+
+        expect(columnaDe()).toBe('Preparada');
+        expect(avisos.exito).toHaveBeenCalledWith('Cambio deshecho.');
+        // El foco no se queda en <body>: vuelve a la tarjeta, ya en su columna
+        expect(document.activeElement).toBe(enlaceTarjeta());
       });
 
       it('fuera de las columnas no mueve nada, aunque el CDK entregue la última visitada', async () => {

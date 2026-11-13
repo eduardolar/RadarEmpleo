@@ -541,6 +541,23 @@ public sealed class DocumentosServiceTests : ArnesSqliteTests, IDisposable
         Assert.Null(await _documentos.AbrirArchivoAsync(documento!.Id));
     }
 
+    [Fact]
+    public async Task Ficha_DocumentoQueSeConvierteEnEnlaceDuro_SaleComoNoEncontrado()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var ruta = Crear($"{SemanaMarcoTalento}/{CvMarcoTalento}.pdf");
+        var dni = Crear("Documentos personales/DNI.pdf", "dni");
+        var id = await CandidaturaAsync();
+        await _documentos.VincularAsync(id, new VincularDocumentoRequest($"{SemanaMarcoTalento}/{CvMarcoTalento}.pdf"));
+        Assert.True(Assert.Single((await _candidaturas.ObtenerAsync(id))!.Documentos).Encontrado);
+
+        File.Delete(ruta);
+        RutaSeguraTests.Mklink("/H", ruta, dni);
+
+        // Así la ficha no pinta un visor que acabaría en 404.
+        Assert.False(Assert.Single((await _candidaturas.ObtenerAsync(id))!.Documentos).Encontrado);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

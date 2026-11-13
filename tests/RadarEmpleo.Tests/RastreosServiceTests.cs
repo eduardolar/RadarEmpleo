@@ -31,6 +31,7 @@ public sealed class RastreosServiceTests : ArnesSqliteTests, IDisposable
         Reloj.AhoraUtc = new DateTime(2026, 11, 8, 9, 0, 0, DateTimeKind.Utc);
         FabricaApi.CopiarDatosEjemplo(_carpeta);
         _rutas = new RutasCurriculum(_carpeta);
+        File.SetLastWriteTimeUtc(Registro, Reloj.AhoraUtc);
         _candidaturas = new CandidaturasService(Factory, Reloj, Exportador, _rutas);
         _rastreos = NuevoServicio(Factory);
     }
@@ -70,7 +71,7 @@ public sealed class RastreosServiceTests : ArnesSqliteTests, IDisposable
 
         await using var db = CreateContext();
         var rastreos = await db.Rastreos.Include(r => r.Ofertas).OrderBy(r => r.Id).ToListAsync();
-        Assert.Equal(["registro:rastreo 03/11 (martes, ejemplo inventado)", "rastreos/rastreo_2026-11-09.md"],
+        Assert.Equal(["registro:2026-11-03:rastreo 03/11 (martes, ejemplo inventado)", "rastreos/rastreo_2026-11-09.md"],
             rastreos.Select(r => r.Clave));
         Assert.Equal(new DateOnly(2026, 11, 3), rastreos[0].Fecha);
         Assert.Equal(OrigenRastreo.Registro, rastreos[0].Origen);
@@ -394,5 +395,82 @@ public sealed class RastreosServiceTests : ArnesSqliteTests, IDisposable
     public async Task Ignorar_QueNoExiste_Null()
     {
         Assert.Null(await _rastreos.IgnorarAsync(999));
+    }
+
+    // ---------------------------------------------------------------- clave y año de las secciones del registro
+
+    private const string ClaveSeccion = "registro:2026-11-03:rastreo 03/11 (martes, ejemplo inventado)";
+
+    private async Task<List<Rastreo>> RastreosDelRegistroAsync()
+    {
+        await using var db = CreateContext();
+        return await db.Rastreos.AsNoTracking().Where(r => r.Origen == OrigenRastreo.Registro).OrderBy(r => r.Id).ToListAsync();
+    }
+
+    [Fact]
+    public async Task Escanear_RastreoGuardadoConLaClaveDeAntes_NoSeDuplicaYPasaALaNueva()
+    {
+        await _rastreos.EscanearAsync();
+        await using (var db = CreateContext())
+        {
+            var guardado = await db.Rastreos.SingleAsync(r => r.Clave == ClaveSeccion);
+            guardado.Clave = "registro:rastreo 03/11 (martes, ejemplo inventado)";
+            await db.SaveChangesAsync();
+        }
+
+        var resultado = await _rastreos.EscanearAsync();
+
+        Assert.Equal((0, 0, 0, 0, 3), Cuentas(resultado));
+        Assert.Equal(ClaveSeccion, Assert.Single(await RastreosDelRegistroAsync()).Clave);
+    }
+
+    [Fact]
+    public async Task Escanear_ElAnioSaleDeLaFechaDelRegistroYNoDeHoy()
+    {
+        // Un año después sin tocar el registro: «03/11» sigue siendo de 2026, no de 2027.
+        Reloj.AhoraUtc = new DateTime(2027, 11, 20, 9, 0, 0, DateTimeKind.Utc);
+
+        await _rastreos.EscanearAsync();
+
+        var rastreo = Assert.Single(await RastreosDelRegistroAsync());
+        Assert.Equal(new DateOnly(2026, 11, 3), rastreo.Fecha);
+        Assert.Equal(ClaveSeccion, rastreo.Clave);
+    }
+
+    [Fact]
+    public async Task Escanear_AlAnioSiguienteLaMismaSeccionSinCambios_NoSeDuplica()
+    {
+        await _rastreos.EscanearAsync();
+        // Se edita el registro un año después (otra sección): la de «03/11» ya no cambia de año en la clave,
+        // pero su texto es el mismo.
+        Reloj.AhoraUtc = new DateTime(2027, 11, 20, 9, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(Registro, Reloj.AhoraUtc);
+
+        var resultado = await _rastreos.EscanearAsync();
+
+        Assert.Equal(0, resultado.RastreosNuevos);
+        Assert.Equal(ClaveSeccion, Assert.Single(await RastreosDelRegistroAsync()).Clave);
+    }
+
+    [Fact]
+    public async Task Escanear_SeccionDelAnioSiguienteConElMismoTitulo_EsOtroRastreoYNoTocaElViejo()
+    {
+        await _rastreos.EscanearAsync();
+        var viejo = Assert.Single(await RastreosDelRegistroAsync());
+        File.WriteAllText(Registro, "# Registro\n\n## Rastreo 03/11 (martes, ejemplo inventado)\n" +
+            "- **Alto · Empresa del Año Siguiente — Backend** https://ejemplo.com/ofertas/2701\n");
+        Reloj.AhoraUtc = new DateTime(2027, 11, 8, 9, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(Registro, Reloj.AhoraUtc);
+
+        var resultado = await _rastreos.EscanearAsync();
+
+        Assert.Equal(1, resultado.RastreosNuevos);
+        Assert.Equal(0, resultado.RastreosActualizados);
+        var rastreos = await RastreosDelRegistroAsync();
+        Assert.Equal(2, rastreos.Count);
+        Assert.Equal(viejo.Hash, rastreos[0].Hash);
+        Assert.Equal(new DateOnly(2026, 11, 3), rastreos[0].Fecha);
+        Assert.Equal("registro:2027-11-03:rastreo 03/11 (martes, ejemplo inventado)", rastreos[1].Clave);
+        Assert.Equal(new DateOnly(2027, 11, 3), rastreos[1].Fecha);
     }
 }

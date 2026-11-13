@@ -73,4 +73,12 @@ describe('TarjetaCandidatura', () => {
 
     expect(elemento.textContent).toContain('Encaje: Tiro largo');
   });
+
+  it('el texto del encaje puede bajar de línea: en una columna estrecha no se sale de la tarjeta', async () => {
+    const elemento = await crear(crearResumen({ encaje: 'SinValorar' }));
+
+    const texto = elemento.querySelector('[data-encaje] .insignia-texto');
+    expect(texto?.textContent?.trim()).toBe('Encaje: Sin valorar');
+    expect(texto?.closest('.insignia')).not.toBeNull();
+  });
 });

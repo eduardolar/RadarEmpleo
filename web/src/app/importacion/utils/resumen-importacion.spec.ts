@@ -187,10 +187,10 @@ describe('textoEnviosEnTexto', () => {
 
   it('distingue singular y plural', () => {
     expect(textoEnviosEnTexto(1)).toBe(
-      'Hay 1 envío escrito como texto; ese se podrá traer más adelante.',
+      'Hay 1 envío escrito como texto; ese se podrá importar más adelante.',
     );
     expect(textoEnviosEnTexto(41)).toBe(
-      'Hay unos 41 envíos escritos como texto; esos se podrán traer más adelante.',
+      'Hay unos 41 envíos escritos como texto; esos se podrán importar más adelante.',
     );
   });
 });

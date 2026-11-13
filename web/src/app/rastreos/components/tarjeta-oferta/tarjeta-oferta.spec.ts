@@ -71,6 +71,19 @@ describe('TarjetaOferta', () => {
     expect(detectadas).toEqual([]);
   });
 
+  it('«Pasar al tablero» va con relleno solo si es la destacada; si no, con borde', async () => {
+    const elemento = await crear(crearOferta());
+    expect(boton(elemento, 'Pasar al tablero')!.classList).toContain('mat-mdc-unelevated-button');
+
+    fixture.componentRef.setInput('destacada', false);
+    await fixture.whenStable();
+
+    expect(boton(elemento, 'Pasar al tablero')!.classList).toContain('mat-mdc-outlined-button');
+    expect(boton(elemento, 'Pasar al tablero')!.classList).not.toContain(
+      'mat-mdc-unelevated-button',
+    );
+  });
+
   it('ignorada: solo se puede pasar al tablero', async () => {
     const elemento = await crear(crearOferta({ estado: 'Ignorada' }));
 

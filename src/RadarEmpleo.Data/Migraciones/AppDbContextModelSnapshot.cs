@@ -39,13 +39,29 @@ namespace RadarEmpleo.Data.Migraciones
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("MotivoDescarte")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MotivoDescarteTexto")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Origen")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("SeguimientoCerradoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("SeguimientoCreadoId")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CandidaturaId");
+
+                    b.HasIndex("SeguimientoCerradoId");
+
+                    b.HasIndex("SeguimientoCreadoId");
 
                     b.ToTable("CambiosEstado");
                 });
@@ -412,7 +428,21 @@ namespace RadarEmpleo.Data.Migraciones
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("RadarEmpleo.Domain.Recordatorio", "SeguimientoCerrado")
+                        .WithMany()
+                        .HasForeignKey("SeguimientoCerradoId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("RadarEmpleo.Domain.Recordatorio", "SeguimientoCreado")
+                        .WithMany()
+                        .HasForeignKey("SeguimientoCreadoId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Candidatura");
+
+                    b.Navigation("SeguimientoCerrado");
+
+                    b.Navigation("SeguimientoCreado");
                 });
 
             modelBuilder.Entity("RadarEmpleo.Domain.Candidatura", b =>

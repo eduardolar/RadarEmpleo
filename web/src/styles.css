@@ -83,7 +83,7 @@
   --shadow-dura-sm: 3px 3px 0 0 var(--re-sombra);
   --shadow-dura: 4px 4px 0 0 var(--re-sombra);
   --shadow-dura-lg: 6px 6px 0 0 var(--re-sombra);
-  /* La del lima: la del enlace activo del menú y la de los avisos */
+  /* La del lima: la del enlace activo del menú */
   --shadow-lima: 4px 4px 0 0 var(--re-fosforito);
 
   --font-display: 'Bricolage Grotesque', Roboto, system-ui, sans-serif;
@@ -172,13 +172,17 @@
 /* Insignia: EL patrón de etiqueta de la app (estado, encaje, contadores). Bloque plano sin borde,
    24 px de alto, mayúsculas pequeñas, icono + texto. El color lo pone quien la usa y codifica el
    significado: bg-encaje/text-on-encaje con data-encaje, bg-estado-suave/text-on-estado con
-   data-estado, o bg-surface-container-high/text-on-surface para lo neutro */
+   data-estado, o bg-surface-container-high/text-on-surface para lo neutro. Nunca más ancha que su
+   sitio: si su texto va en un <span class="insignia-texto">, en una tarjeta estrecha baja de línea
+   en vez de salirse (24 px es el alto mínimo) */
 @utility insignia {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
   gap: 0.3125rem;
-  height: 1.5rem;
+  min-height: 1.5rem;
+  max-width: 100%;
+  padding-block: 0.25rem;
   padding-inline: 0.5rem;
   border-radius: 2px;
   font-size: 0.6875rem;
@@ -187,6 +191,12 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+@utility insignia-texto {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
 }
 
 /* Etiqueta de formulario de ventanilla: pequeña, en mayúsculas y con aire entre letras. Para rótulos
@@ -320,6 +330,18 @@
   outline: 3px solid var(--re-trazo);
   background-color: var(--re-fosforito-suave);
 }
+/* Columna plegada (tira de 56 px): la tarjeta no cabe, así que el hueco es una ranura baja al pie
+   de la tira, sin la tarjeta dentro; el nombre y el total de la tira siguen a la vista */
+.zona-soltar.columna-tira > .cdk-drag-placeholder {
+  flex: none;
+  height: 2.5rem;
+  overflow: hidden;
+  outline-width: 3px;
+  outline-offset: -3px;
+}
+.zona-soltar.columna-tira > .cdk-drag-placeholder > * {
+  display: none;
+}
 .cdk-drag-animating {
   transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
 }
@@ -397,20 +419,22 @@
   --mat-snack-bar-button-color: var(--mat-sys-on-error-container);
 }
 
-/* Avisos (snackbar) de tinta con borde y sombra de lima: el «hecho» de cada acción. Los de error
+/* Avisos (snackbar) planos, como una tarjeta: fondo de tarjeta, borde de 2 px y sombra dura. La
+   acción («Deshacer», «Añadir nota»...) va en el color de los botones de texto (material-theme.scss):
+   lima oscuro de día (5,2:1 sobre blanco) y lima de noche (12:1 sobre #0b1120). Los de error
    mantienen su color (.aviso-error, más arriba, gana por estar en el propio aviso) */
 html {
-  --mat-snack-bar-container-color: var(--re-tinta-noche);
-  --mat-snack-bar-supporting-text-color: var(--re-papel);
-  --mat-snack-bar-button-color: var(--re-fosforito);
+  --mat-snack-bar-container-color: var(--mat-sys-surface-container-lowest);
+  --mat-snack-bar-supporting-text-color: var(--mat-sys-on-surface);
+  --mat-snack-bar-button-color: light-dark(#4d7c0f, #a3e635);
 }
 .mat-mdc-snack-bar-container .mdc-snackbar__surface {
   border: 2px solid var(--re-trazo);
   box-shadow: 4px 4px 0 0 var(--re-sombra);
 }
-.mat-mdc-snack-bar-container:not(.aviso-error) .mdc-snackbar__surface {
-  border-color: var(--re-fosforito);
-  box-shadow: 4px 4px 0 0 var(--re-fosforito);
+/* Las acciones, en negrita: se distinguen del mensaje sin depender solo del color */
+.mat-mdc-snack-bar-container .mat-mdc-snack-bar-action {
+  font-weight: 700;
 }
 
 /* Material en brutalista. Las formas y el grosor de los bordes van en material-theme.scss con los

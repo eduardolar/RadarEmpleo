@@ -116,6 +116,13 @@ public sealed record CambiarEstadoRequest(
     [MaxLength(1000, ErrorMessage = "El comentario no puede tener más de 1000 caracteres.")] string? Comentario = null,
     Origen Origen = Origen.Manual);
 
+/// <summary>
+/// Petición de deshacer un cambio de estado. <paramref name="CambioId"/> es el apunte del historial que
+/// creó el movimiento (el front lo saca de la respuesta del cambio): si ya no es el último, no se deshace.
+/// </summary>
+public sealed record DeshacerCambioEstadoRequest(
+    [Required(ErrorMessage = "Falta el cambio que se quiere deshacer.")] int? CambioId);
+
 public sealed record CrearNotaRequest(
     [Required(ErrorMessage = "El texto de la nota es obligatorio."), MaxLength(5000, ErrorMessage = "La nota no puede tener más de 5000 caracteres.")] string Texto,
     Origen Origen = Origen.Manual);

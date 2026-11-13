@@ -677,6 +677,8 @@ public class ImportacionServiceTests : ArnesSqliteTests
 
         public Task<string> LeerRegistroAsync(CancellationToken cancelacion = default) => Task.FromResult(Texto);
 
+        public Task<TextoLeido> LeerRegistroConFechaAsync(CancellationToken cancelacion = default) => throw new NotSupportedException();
+
         public Task<TextoLeido> LeerPerfilAsync(CancellationToken cancelacion = default) => throw new NotSupportedException();
 
         public IReadOnlyList<ArchivoDisponible> LeerDocumentosDisponibles() => throw new NotSupportedException();

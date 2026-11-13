@@ -26,7 +26,7 @@ import { senalEscritorio } from '../../../shared/utils/pantalla';
 import { abrirDialogoCandidatura } from '../../components/dialogo-candidatura/dialogo-candidatura';
 import { TarjetaCandidatura } from '../../components/tarjeta-candidatura/tarjeta-candidatura';
 import { CandidaturaResumen, EstadoCandidatura } from '../../interfaces/candidatura.interface';
-import { CambioEstadoService } from '../../services/cambio-estado.service';
+import { AlDeshacer, CambioEstadoService } from '../../services/cambio-estado.service';
 import { CandidaturasService } from '../../services/candidaturas.service';
 import { FiltroMovil, VistaTableroService } from '../../services/vista-tablero.service';
 import { agruparPorEstado, ColumnaTablero } from '../../utils/agrupar-por-estado';
@@ -117,6 +117,9 @@ export default class TableroPageComponent {
     () => !this.cargando() && !this.error() && this.candidaturas().length === 0,
   );
 
+  /** Sin ninguna candidatura (y sin búsqueda): el estado vacío lleva su propio «Nueva candidatura» */
+  protected readonly tableroVacio = computed(() => this.sinCandidaturas() && !this.textoBuscado());
+
   constructor() {
     this.candidaturasService.cargar({ texto: this.vista.texto() });
 
@@ -161,6 +164,7 @@ export default class TableroPageComponent {
     return this.plegable(columna) && !this.expandidas().has(columna.estado);
   }
 
+  /** El botón pulsado desaparece (la tira se cambia por la cabecera o al revés): el foco va al otro */
   protected alternarColumna(estado: EstadoCandidatura): void {
     this.expandidas.update((actuales) => {
       const nuevas = new Set(actuales);
@@ -169,6 +173,13 @@ export default class TableroPageComponent {
       }
       return nuevas;
     });
+    afterNextRender(
+      () =>
+        this.elemento.nativeElement
+          .querySelector<HTMLElement>(`section[data-estado="${estado}"] [data-plegar]`)
+          ?.focus(),
+      { injector: this.injector },
+    );
   }
 
   /** Al mover una tarjeta a una columna plegada, se despliega para que se vea (y reciba el foco) */
@@ -203,20 +214,41 @@ export default class TableroPageComponent {
     }
     // La tarjeta no se mueve aquí: cambia de columna cuando el servicio actualiza la lista
     this.desplegar(evento.container.data);
-    this.cambioEstado.mover(evento.item.data, evento.container.data);
+    this.cambioEstado.mover(
+      evento.item.data,
+      evento.container.data,
+      undefined,
+      this.alDeshacer(evento.item.data.id),
+    );
   }
 
   protected mover(candidatura: CandidaturaResumen, destino: EstadoCandidatura): void {
     this.enfocarTrasMover.set({ id: candidatura.id, destino });
     this.desplegar(destino);
-    this.cambioEstado.mover(candidatura, destino, (resultado) => {
-      if (resultado !== 'hecho') {
-        this.enfocarTrasMover.set(null);
+    this.cambioEstado.mover(
+      candidatura,
+      destino,
+      (resultado) => {
+        if (resultado !== 'hecho') {
+          this.enfocarTrasMover.set(null);
+        }
+        if (resultado === 'rechazado') {
+          this.recuperarFoco();
+        }
+      },
+      this.alDeshacer(candidatura.id),
+    );
+  }
+
+  /** Deshecho el cambio desde el aviso, la tarjeta vuelve a su columna y se lleva el foco (no a <body>) */
+  private alDeshacer(id: number): AlDeshacer {
+    return (estado) => {
+      if (this.destroyRef.destroyed) {
+        return;
       }
-      if (resultado === 'rechazado') {
-        this.recuperarFoco();
-      }
-    });
+      this.desplegar(estado);
+      this.enfocarTrasMover.set({ id, destino: estado });
+    };
   }
 
   /**

@@ -80,7 +80,11 @@ public sealed class RastreosService
 
         try
         {
-            var registro = AnalizadorRastreo.AnalizarRegistro(await _lector.LeerRegistroAsync(), hoy);
+            var leido = await _lector.LeerRegistroConFechaAsync();
+            // El año de los «DD/MM» se calcula desde la última modificación del registro y no desde hoy:
+            // así la misma sección no cambia de año por escanear otro día. Nunca desde una fecha futura.
+            var modificado = DateOnly.FromDateTime(Fechas.UtcAMadrid(leido.FechaModificacion));
+            var registro = AnalizadorRastreo.AnalizarRegistro(leido.Texto, modificado < hoy ? modificado : hoy);
             leidos.AddRange(registro.Rastreos);
             avisos.AddRange(registro.Avisos);
         }
@@ -170,11 +174,32 @@ public sealed class RastreosService
 
     // ---------------------------------------------------------------- auxiliares
 
+    /// <summary>
+    /// El rastreo ya guardado que corresponde a <paramref name="leido"/>: por su clave; si es una sección del
+    /// registro guardada con la clave de antes (sin la fecha), por esa, y entonces pasa a la nueva; y si no,
+    /// uno del registro con el mismo título y el mismo texto (una sección que no ha cambiado aunque su
+    /// «DD/MM» caiga ahora en otro año). Null si es nuevo.
+    /// </summary>
+    private static Rastreo? YaGuardado(RastreoLeido leido, Dictionary<string, Rastreo> existentes, List<Rastreo> delRegistro)
+    {
+        if (existentes.TryGetValue(leido.Clave, out var rastreo)) return rastreo;
+        if (leido.Origen != OrigenRastreo.Registro) return null;
+
+        if (leido.ClaveAnterior is { } anterior && existentes.Remove(anterior, out var antiguo))
+        {
+            antiguo.Clave = leido.Clave;
+            existentes[leido.Clave] = antiguo;
+            return antiguo;
+        }
+        return delRegistro.FirstOrDefault(r => r.Hash == leido.Hash && r.Titulo == leido.Titulo);
+    }
+
     private async Task<ResultadoEscaneoDto> GuardarAsync(List<RastreoLeido> leidos, List<string> avisos)
     {
         await using var db = await _factory.CreateDbContextAsync();
         var ahora = _reloj.AhoraUtc;
         var existentes = await db.Rastreos.ToDictionaryAsync(r => r.Clave, StringComparer.Ordinal);
+        var delRegistro = existentes.Values.Where(r => r.Origen == OrigenRastreo.Registro).ToList();
         var enlaces = (await db.OfertasRastreo.Select(o => o.Enlace).ToListAsync())
             .Select(Enlaces.ParaComparar).OfType<string>().ToHashSet(StringComparer.Ordinal);
         var enElTablero = await EnlacesDelTableroAsync(db);
@@ -182,7 +207,7 @@ public sealed class RastreosService
         int nuevos = 0, actualizados = 0, ofertasNuevas = 0, yaEnElTablero = 0;
         foreach (var leido in leidos)
         {
-            if (existentes.TryGetValue(leido.Clave, out var rastreo))
+            if (YaGuardado(leido, existentes, delRegistro) is { } rastreo)
             {
                 if (rastreo.Hash == leido.Hash) continue;
                 // La fecha no se toca: la de un «DD/MM» depende del día en que se lee.

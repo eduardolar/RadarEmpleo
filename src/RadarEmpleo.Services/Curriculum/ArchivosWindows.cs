@@ -71,6 +71,18 @@ internal static class ArchivosWindows
             ? informacion.NumeroEnlaces
             : throw new IOException("No se ha podido leer la información del archivo.", Marshal.GetLastPInvokeError());
 
+    /// <summary>
+    /// Enlaces duros de un archivo sin abrir su contenido (solo atributos: no choca con el bloqueo de Word).
+    /// </summary>
+    /// <exception cref="IOException">No se ha podido abrir o leer.</exception>
+    public static uint NumeroEnlaces(string ruta)
+    {
+        using var manejador = CreateFile(ruta, FileReadAttributes, FileShareTodo, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+        if (manejador.IsInvalid)
+            throw new IOException("No se ha podido abrir el archivo.", Marshal.GetLastPInvokeError());
+        return NumeroEnlaces(manejador);
+    }
+
     private static string SinPrefijo(string ruta)
     {
         if (ruta.StartsWith(@"\\?\UNC\", StringComparison.Ordinal)) return @"\\" + ruta[8..];

@@ -28,6 +28,8 @@ public sealed record OfertaLeida(
 /// <param name="Hash">SHA-256 en hexadecimal de <paramref name="Texto"/>.</param>
 /// <param name="LineasSinLeer">Líneas que parecen de una oferta pero no se han podido leer (sin enlace, sin
 /// «Empresa — Puesto» en negrita, «Plan B», «Bajo:»…). Quedan para los agentes de la F7.</param>
+/// <param name="ClaveAnterior">Solo en las secciones del registro: la clave que llevaban antes de incluir la
+/// fecha («registro:título»), para reconocer los rastreos ya guardados con ella.</param>
 public sealed record RastreoLeido(
     string Clave,
     OrigenRastreo Origen,
@@ -37,7 +39,8 @@ public sealed record RastreoLeido(
     string Texto,
     string Hash,
     IReadOnlyList<OfertaLeida> Ofertas,
-    int LineasSinLeer);
+    int LineasSinLeer,
+    string? ClaveAnterior = null);
 
 /// <summary>Lo que sale de analizar un archivo: los rastreos y los avisos de lo que no se ha podido leer.</summary>
 public sealed record AnalisisRastreos(IReadOnlyList<RastreoLeido> Rastreos, IReadOnlyList<string> Avisos);
@@ -135,16 +138,19 @@ public static partial class AnalizadorRastreo
 
     /// <summary>
     /// Las secciones «## Rastreo …» del registro, en el orden del archivo. La fecha sale del título
-    /// (<see cref="FechaDeTitulo"/>); una sección sin fecha legible no se lee y se avisa. Dos secciones con
-    /// el mismo título se distinguen con «#2», «#3»… en la clave.
+    /// (<see cref="FechaDeTitulo"/>); una sección sin fecha legible no se lee y se avisa. La clave lleva la
+    /// fecha y el título (<see cref="ClaveRegistro"/>); dos secciones con los dos iguales se distinguen con
+    /// «#2», «#3»…
     /// </summary>
-    /// <param name="hoy">Día de hoy en Madrid, para el año de las fechas «DD/MM».</param>
-    public static AnalisisRastreos AnalizarRegistro(string texto, DateOnly hoy)
+    /// <param name="referencia">Día (de Madrid) desde el que se calcula el año de las fechas «DD/MM»: el de
+    /// la última modificación del registro, que no cambia por leerlo otro día.</param>
+    public static AnalisisRastreos AnalizarRegistro(string texto, DateOnly referencia)
     {
         var lineas = SaltoDeLinea().Split(texto.TrimStart('﻿'));
         var rastreos = new List<RastreoLeido>();
         var avisos = new List<string>();
         var claves = new HashSet<string>(StringComparer.Ordinal);
+        var clavesAnteriores = new HashSet<string>(StringComparer.Ordinal);
 
         for (var i = 0; i < lineas.Length; i++)
         {
@@ -156,11 +162,14 @@ public static partial class AnalizadorRastreo
             var fin = i + 1;
             while (fin < lineas.Length && !Encabezado().IsMatch(lineas[fin])) fin++;
 
-            if (FechaDeTitulo(titulo, hoy) is { } fecha)
+            if (FechaDeTitulo(titulo, referencia) is { } fecha)
             {
-                var clave = ClaveUnica(PrefijoClaveRegistro + TextoComparable.Normalizar(titulo), claves);
+                // Con la fecha: una sección del año siguiente con el mismo título es otro rastreo.
+                var normalizado = TextoComparable.Normalizar(titulo);
+                var clave = ClaveUnica(ClaveRegistro(fecha, normalizado), claves);
+                var anterior = ClaveUnica(PrefijoClaveRegistro + normalizado, clavesAnteriores);
                 rastreos.Add(Leer(clave, OrigenRastreo.Registro, titulo, fecha, RutasCurriculum.ArchivoRegistro,
-                    lineas, i + 1, fin));
+                    lineas, i + 1, fin) with { ClaveAnterior = anterior });
             }
             else
             {
@@ -196,6 +205,10 @@ public static partial class AnalizadorRastreo
             rutaRelativa, lineas, desde, lineas.Length);
         return new AnalisisRastreos([rastreo], []);
     }
+
+    /// <summary>Clave de una sección del registro: «registro:AAAA-MM-DD:título normalizado».</summary>
+    public static string ClaveRegistro(DateOnly fecha, string tituloNormalizado) =>
+        $"{PrefijoClaveRegistro}{fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}:{tituloNormalizado}";
 
     // ---------------------------------------------------------------- fechas
 

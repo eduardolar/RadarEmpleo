@@ -26,6 +26,14 @@ public sealed class LectorCurriculum : ILectorCurriculum
         return await LeerTextoAsync(_rutas.Registro!, RutasCurriculum.ArchivoRegistro, cancelacion);
     }
 
+    public async Task<TextoLeido> LeerRegistroConFechaAsync(CancellationToken cancelacion = default)
+    {
+        ExigirCarpeta();
+        var ruta = _rutas.Registro!;
+        var texto = await LeerTextoAsync(ruta, RutasCurriculum.ArchivoRegistro, cancelacion);
+        return new TextoLeido(texto, File.GetLastWriteTimeUtc(ruta));
+    }
+
     public async Task<TextoLeido> LeerPerfilAsync(CancellationToken cancelacion = default)
     {
         ExigirCarpeta();

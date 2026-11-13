@@ -25,6 +25,8 @@ export class TarjetaOferta {
   readonly ocupada = input(false);
   /** Candidaturas del tablero de la misma empresa (las del registro no tienen enlace con que comparar) */
   readonly parecidas = input<readonly CandidaturaParecida[]>([]);
+  /** «Pasar al tablero» con relleno; en la bandeja, solo la primera: un solo relleno lima a la vista */
+  readonly destacada = input(true);
 
   readonly detectar = output<OfertaRastreo>();
   readonly ignorar = output<OfertaRastreo>();

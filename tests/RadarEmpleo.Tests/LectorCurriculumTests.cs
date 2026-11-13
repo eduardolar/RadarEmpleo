@@ -317,6 +317,20 @@ public sealed class LectorCurriculumTests : IDisposable
     }
 
     [Fact]
+    public void LeerDocumentosDisponibles_UnEnlaceDuro_NoSeSugiere()
+    {
+        if (!OperatingSystem.IsWindows()) return; // la comprobación de enlaces duros es solo de Windows
+        var dni = Crear("Documentos personales/DNI.pdf", "dni");
+        Crear(Semana + "/CV_NET_MarcoTalento.pdf");
+        RutaSeguraTests.Mklink("/H", Path.Combine(_carpeta, Semana, "CV_falso.pdf"), dni);
+
+        var rutas = _lector.LeerDocumentosDisponibles().Select(a => a.RutaRelativa).ToList();
+
+        Assert.Contains(Semana + "/CV_NET_MarcoTalento.pdf", rutas);
+        Assert.DoesNotContain(Semana + "/CV_falso.pdf", rutas);
+    }
+
+    [Fact]
     public void LeerDocumentosDisponibles_EnLaRaizSoloCvYCartasYNuncaLosBloqueosDeWord()
     {
         Crear("CV_General.pdf");

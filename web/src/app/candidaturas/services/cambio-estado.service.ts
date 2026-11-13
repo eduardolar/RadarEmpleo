@@ -21,14 +21,18 @@ type CandidaturaQueSeMueve = Pick<CandidaturaResumen, 'id' | 'empresa' | 'puesto
 /** Cómo acabó un movimiento: `cancelado` también si se ignoró por haber otro de esa candidatura */
 export type ResultadoMovimiento = 'hecho' | 'cancelado' | 'rechazado';
 
+/** Tras deshacer, a qué estado ha vuelto la candidatura: para devolverle el foco */
+export type AlDeshacer = (estado: EstadoCandidatura) => void;
+
 /** Más que el tiempo entre los dos clics de un doble clic (el sistema suele admitir hasta 500 ms) */
 const PAUSA_TRAS_CAMBIO_MS = 500;
 
 /**
  * Mover una candidatura de estado desde el tablero (arrastrando o con «Mover a…») o desde la ficha,
  * igual en los dos sitios:
- * - Avanzar o reabrir va en un toque. El aviso ofrece «Añadir nota» por si se quiere dejar un
- *   comentario (la API no deja comentar un cambio ya hecho; la nota sale a su lado en el historial).
+ * - Avanzar o reabrir va en un toque. El aviso ofrece «Deshacer» (también con Ctrl+Z) por si se ha
+ *   movido sin querer y «Añadir nota» por si se quiere dejar un comentario (la API no deja comentar
+ *   un cambio ya hecho; la nota sale a su lado en el historial).
  * - Descartar y Cerrar sacan la candidatura del proceso: se confirman en un diálogo, que además
  *   pide el motivo del descarte (obligatorio en la API) y deja comentar.
  *
@@ -62,11 +66,15 @@ export class CambioEstadoService {
     inject(DestroyRef).onDestroy(() => this.temporizadores.forEach((t) => clearTimeout(t)));
   }
 
-  /** `alTerminar` deja a quien mueve reaccionar a cómo acabó (p. ej. colocar el foco) */
+  /**
+   * `alTerminar` deja a quien mueve reaccionar a cómo acabó (p. ej. colocar el foco), y `alDeshacer`, a que
+   * se deshaga desde el aviso
+   */
   mover(
     candidatura: CandidaturaQueSeMueve,
     destino: EstadoCandidatura,
     alTerminar?: (resultado: ResultadoMovimiento) => void,
+    alDeshacer?: AlDeshacer,
   ): void {
     const { id } = candidatura;
     if (this.idsEnCurso.has(id) || this._idsEnPausa().has(id)) {
@@ -76,7 +84,7 @@ export class CambioEstadoService {
     this.idsEnCurso.add(id);
 
     if (!esEstadoFinal(destino)) {
-      this.enviar(candidatura, { estado: destino }, alTerminar);
+      this.enviar(candidatura, { estado: destino }, alTerminar, alDeshacer);
       return;
     }
 
@@ -97,7 +105,7 @@ export class CambioEstadoService {
       .afterClosed()
       .subscribe((peticion) => {
         if (peticion) {
-          this.enviar(candidatura, peticion, alTerminar);
+          this.enviar(candidatura, peticion, alTerminar, alDeshacer);
         } else {
           this.idsEnCurso.delete(id);
           alTerminar?.('cancelado');
@@ -114,22 +122,30 @@ export class CambioEstadoService {
     candidatura: CandidaturaQueSeMueve,
     peticion: CambiarEstado,
     alTerminar?: (resultado: ResultadoMovimiento) => void,
+    alDeshacer?: AlDeshacer,
   ): void {
     this._enCurso.update((n) => n + 1);
     this.candidaturasService.cambiarEstado(candidatura.id, peticion).subscribe({
-      next: () => {
+      next: (detalle) => {
         this.terminar(candidatura.id);
         const seguimiento =
           peticion.estado === 'Enviada' ? ' Seguimiento programado dentro de 7 días.' : '';
         const mensaje = `«${candidatura.puesto}» pasa a ${ETIQUETAS_ESTADO[peticion.estado]}.${seguimiento}`;
         // Si ya se comentó en el diálogo, no hace falta ofrecer la nota
-        if (peticion.comentario) {
-          this.avisos.exito(mensaje);
+        const nota = peticion.comentario
+          ? undefined
+          : { texto: 'Añadir nota', alPulsar: () => this.pedirNota(candidatura.id) };
+        // El apunte que ha creado este movimiento (el historial va del más antiguo al más reciente): se
+        // deshace ese y no «el último que haya», que puede ser de otra pestaña
+        const cambioId = detalle.historial.at(-1)?.id;
+        if (cambioId === undefined) {
+          this.avisos.exito(mensaje, nota);
         } else {
-          this.avisos.exito(mensaje, {
-            texto: 'Añadir nota',
-            alPulsar: () => this.pedirNota(candidatura.id),
-          });
+          this.avisos.deshacible(
+            mensaje,
+            () => this.deshacer(candidatura.id, cambioId, alDeshacer),
+            nota,
+          );
         }
         alTerminar?.('hecho');
       },
@@ -139,6 +155,31 @@ export class CambioEstadoService {
         alTerminar?.('rechazado');
       },
     });
+  }
+
+  /**
+   * «Deshacer» del aviso (o Ctrl+Z): la API vuelve al estado anterior. Cuenta como un movimiento más de
+   * esa candidatura, así que no se junta con otro que esté en marcha ni con la pausa del doble clic:
+   * entonces devuelve false y el aviso pide esperar
+   */
+  private deshacer(id: number, cambioId: number, alDeshacer?: AlDeshacer): boolean {
+    if (this.idsEnCurso.has(id) || this._idsEnPausa().has(id)) {
+      return false;
+    }
+    this.idsEnCurso.add(id);
+    this._enCurso.update((n) => n + 1);
+    this.candidaturasService.deshacerCambioEstado(id, cambioId).subscribe({
+      next: (detalle) => {
+        this.terminar(id);
+        this.avisos.exito('Cambio deshecho.');
+        alDeshacer?.(detalle.estado);
+      },
+      error: (error: ErrorApi) => {
+        this.terminar(id);
+        this.avisos.error(error.mensaje);
+      },
+    });
+    return true;
   }
 
   /** Vale igual si el cambio falla: la pausa acaba sola y los botones vuelven a funcionar */

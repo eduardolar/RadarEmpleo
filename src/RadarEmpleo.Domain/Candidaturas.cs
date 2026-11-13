@@ -180,6 +180,12 @@ public class Candidatura
             Comentario = comentario,
             Origen = origen
         };
+        if (nuevo == EstadoCandidatura.Descartada)
+        {
+            // Queda en el historial para poder devolverlo si se deshace el cambio que la saque de Descartada.
+            cambio.MotivoDescarte = motivo;
+            cambio.MotivoDescarteTexto = motivoTexto;
+        }
         Historial.Add(cambio);
 
         if (nuevo == EstadoCandidatura.Descartada)
@@ -200,13 +206,15 @@ public class Candidatura
                 FechaEnvio = ahoraUtc;
                 if (programarSeguimiento && !SeguimientosPendientes().Any())
                 {
-                    Recordatorios.Add(new Recordatorio
+                    var seguimiento = new Recordatorio
                     {
                         Tipo = TipoRecordatorio.Seguimiento,
                         Titulo = TituloSeguimiento(),
                         FechaHora = ReglasEstado.FechaSeguimiento(ahoraUtc),
                         Hecho = false
-                    });
+                    };
+                    Recordatorios.Add(seguimiento);
+                    cambio.SeguimientoCreado = seguimiento;
                 }
                 break;
 
@@ -215,8 +223,12 @@ public class Candidatura
                 break;
 
             case EstadoCandidatura.Descartada or EstadoCandidatura.Cerrada or EstadoCandidatura.Detectada:
+                // Solo hay uno pendiente a la vez (al enviar no se crea otro si ya lo hay): es el que se apunta.
                 foreach (var seguimiento in SeguimientosPendientes().ToList())
+                {
                     seguimiento.Hecho = true;
+                    cambio.SeguimientoCerrado ??= seguimiento;
+                }
                 break;
         }
 
@@ -224,6 +236,89 @@ public class Candidatura
         FechaEstado = ahoraUtc;
         FechaUltimoCambio = ahoraUtc;
         return cambio;
+    }
+
+    /// <summary>
+    /// Deshace el último cambio de estado del <see cref="Historial"/> (el más reciente por fecha y, a
+    /// igualdad, por id) como si no se hubiera hecho. Es una vuelta atrás en el historial, no un cambio
+    /// nuevo: no pasa por <see cref="ReglasEstado"/> y puede volver, por ejemplo, de Enviada a Preparada.
+    /// <list type="bullet">
+    /// <item>El estado vuelve al de origen del cambio y el apunte sale del historial (el servicio lo borra).</item>
+    /// <item><see cref="FechaEstado"/> pasa a ser la del cambio anterior, o la de detección si solo queda el alta.</item>
+    /// <item>Si el cambio pudo fijar <see cref="FechaEnvio"/> (a Enviada, Entrevista u Oferta), se vuelve a
+    /// calcular con lo que queda del historial: null si no queda ningún envío.</item>
+    /// <item>Deshacer un descarte borra el motivo; volver a Descartada recupera el que se guardó con el descarte.</item>
+    /// <item>El seguimiento que programó el cambio (<see cref="CambioEstado.SeguimientoCreado"/>) se quita, y
+    /// el que dio por hecho (<see cref="CambioEstado.SeguimientoCerrado"/>) vuelve a estar pendiente.</item>
+    /// <item><see cref="FechaUltimoCambio"/> pasa a ser ahora (es el token de concurrencia).</item>
+    /// </list>
+    /// Necesita <see cref="Historial"/> y <see cref="Recordatorios"/> cargados.
+    /// </summary>
+    /// <param name="cambioId">El apunte que se quiere deshacer (el del aviso): si ya no es el último, porque
+    /// otra pestaña ha movido la candidatura o ya se ha deshecho, no se toca nada.</param>
+    /// <exception cref="ReglaNegocioException">Solo queda el alta, <paramref name="cambioId"/> ya no es el
+    /// último, el cambio tiene ya <see cref="ReglasEstado.VentanaDeshacer"/> o más, o se volvería a Descartada
+    /// sin motivo conocido.</exception>
+    public CambioDeshecho DeshacerUltimoCambio(int cambioId, DateTime ahoraUtc)
+    {
+        var ordenado = Historial.OrderBy(h => h.Fecha).ThenBy(h => h.Id).ToList();
+        var ultimo = ordenado.LastOrDefault();
+        if (ultimo is null || (ultimo.De is null && ultimo.Id == cambioId))
+            throw new ReglaNegocioException("No hay ningún cambio de estado que deshacer.");
+        if (ultimo.Id != cambioId)
+            throw new ReglaNegocioException("Ese cambio ya no es el último.");
+        var anterior = ultimo.De!.Value;
+        if (ahoraUtc - ultimo.Fecha >= ReglasEstado.VentanaDeshacer)
+            throw new ReglaNegocioException("Ya no se puede deshacer este cambio.");
+
+        var restantes = ordenado.GetRange(0, ordenado.Count - 1);
+        MotivoDescarte? motivo = null;
+        string? motivoTexto = null;
+        if (anterior == EstadoCandidatura.Descartada)
+        {
+            var descarte = restantes.LastOrDefault(h => h.A == EstadoCandidatura.Descartada);
+            motivo = descarte?.MotivoDescarte ?? throw new ReglaNegocioException(
+                "No se puede deshacer este cambio: no consta el motivo del descarte anterior.");
+            motivoTexto = descarte.MotivoDescarteTexto;
+        }
+
+        Historial.Remove(ultimo);
+
+        var seguimientoQuitado = Seguimiento(ultimo.SeguimientoCreado, ultimo.SeguimientoCreadoId);
+        if (seguimientoQuitado is not null) Recordatorios.Remove(seguimientoQuitado);
+        if (Seguimiento(ultimo.SeguimientoCerrado, ultimo.SeguimientoCerradoId) is { } cerrado)
+            cerrado.Hecho = false;
+
+        if (ultimo.A is EstadoCandidatura.Enviada or EstadoCandidatura.Entrevista or EstadoCandidatura.Oferta)
+            FechaEnvio = FechaEnvioSegun(restantes);
+
+        var previo = restantes.LastOrDefault();
+        Estado = anterior;
+        MotivoDescarte = motivo;
+        MotivoDescarteTexto = motivoTexto;
+        FechaEstado = previo is { De: not null } ? previo.Fecha : FechaDeteccion;
+        FechaUltimoCambio = ahoraUtc;
+        return new CambioDeshecho(ultimo, seguimientoQuitado);
+    }
+
+    /// <summary>El recordatorio de la candidatura que apunta el historial, por la navegación o por su id.</summary>
+    private Recordatorio? Seguimiento(Recordatorio? navegacion, int? id) =>
+        navegacion is not null && Recordatorios.Contains(navegacion)
+            ? navegacion
+            : id is { } buscado ? Recordatorios.FirstOrDefault(r => r.Id == buscado) : null;
+
+    /// <summary>Repite lo que hace <see cref="CambiarEstado"/> con la fecha de envío a lo largo del historial.</summary>
+    private static DateTime? FechaEnvioSegun(IEnumerable<CambioEstado> historial)
+    {
+        DateTime? envio = null;
+        foreach (var cambio in historial)
+        {
+            if (cambio.A == EstadoCandidatura.Enviada)
+                envio = cambio.Fecha;
+            else if (cambio.A is EstadoCandidatura.Entrevista or EstadoCandidatura.Oferta && envio is null)
+                envio = cambio.Fecha;
+        }
+        return envio;
     }
 
     private IEnumerable<Recordatorio> SeguimientosPendientes() =>
@@ -250,7 +345,22 @@ public class CambioEstado
     public DateTime Fecha { get; set; }
     public string? Comentario { get; set; }
     public Origen Origen { get; set; } = Origen.Manual;
+    /// <summary>Motivo del descarte, solo en los pasos a Descartada (los anteriores a guardarlo aquí pueden no tenerlo).</summary>
+    public MotivoDescarte? MotivoDescarte { get; set; }
+    public string? MotivoDescarteTexto { get; set; }
+    /// <summary>Seguimiento que programó este cambio (al pasar a Enviada), para quitarlo si se deshace.</summary>
+    public int? SeguimientoCreadoId { get; set; }
+    public Recordatorio? SeguimientoCreado { get; set; }
+    /// <summary>Seguimiento que este cambio dio por hecho (al descartar, cerrar o reabrir), para reabrirlo si se deshace.</summary>
+    public int? SeguimientoCerradoId { get; set; }
+    public Recordatorio? SeguimientoCerrado { get; set; }
 }
+
+/// <summary>
+/// Lo que ha deshecho <see cref="Candidatura.DeshacerUltimoCambio"/>: el apunte que sale del historial y,
+/// si el cambio era a Enviada, el seguimiento que programó. Los dos hay que borrarlos de la BD.
+/// </summary>
+public sealed record CambioDeshecho(CambioEstado Cambio, Recordatorio? SeguimientoQuitado);
 
 /// <summary>Nota con fecha sobre una candidatura.</summary>
 public class Nota

@@ -240,12 +240,12 @@
       </div>
     }
     @default {
-      <!-- La acción de la tarjeta, destacada; «No me interesa», secundaria al lado o debajo -->
+      <!-- La acción de la tarjeta, destacada si es la primera; «No me interesa», secundaria al lado o debajo -->
       <div class="mt-1 flex flex-col gap-2 @sm:flex-row @sm:flex-wrap">
         <button
-          mat-flat-button
+          [matButton]="destacada() ? 'filled' : 'outlined'"
           type="button"
-          class="w-full [--mat-button-filled-container-height:48px] @sm:w-auto"
+          class="w-full [--mat-button-filled-container-height:48px] [--mat-button-outlined-container-height:48px] @sm:w-auto"
           disabledInteractive
           [disabled]="ocupada()"
           [attr.aria-label]="'Pasar al tablero: ' + oferta().puesto"
