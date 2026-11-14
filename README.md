@@ -92,9 +92,21 @@ dotnet test RadarEmpleo.slnx
 cd web && npx ng test --watch=false
 ```
 
+## Preparar y enviar (en desarrollo)
+
+La siguiente parte del proyecto se encarga del trabajo repetitivo de cada candidatura (adaptar el CV y la carta a la oferta y rellenar el formulario). La idea no es mandar currículums en masa, sino ahorrarme tiempo en las ofertas que elijo yo:
+
+- **Una a una**: decido yo a qué oferta me presento. La app no se presenta a nada por su cuenta.
+- **CV y carta para esa oferta**: un agente los adapta y otro los revisa (que no haya nada inventado, que no queden restos de otra empresa y que quepan en una página). Antes de usarlos los leo yo.
+- **El último clic es mío**: la app rellena el formulario y se para justo antes de enviar. Me enseña un resumen de lo que va a mandar y lo confirmo yo.
+- **LinkedIn e InfoJobs, siempre a mano**: el modo automático es opcional y está desactivado por defecto. Solo existe para el correo y para webs de empresa sin cuenta, con un máximo de 3 envíos al día y nunca a la misma empresa dos veces en un mes. En LinkedIn e InfoJobs no existe.
+- **Con límites**: tope de gasto al día, una tarea a la vez, y la app nunca modifica mis propios archivos del registro.
+
+El diseño completo y sus salvaguardas están en [docs/PLAN-AMPLIACION.md](docs/PLAN-AMPLIACION.md).
+
 ## Estado
 
-En desarrollo, por fases. Hechas: tablero y fichas, importación del registro, documentos, rastreos, perfil, la pantalla Inicio con recordatorios, estadísticas y ajustes. Lo siguiente es que la app prepare el CV adaptado a cada oferta y gestione el envío, con modo manual por defecto. El plan completo está en [docs/PLAN.md](docs/PLAN.md) y [docs/PLAN-AMPLIACION.md](docs/PLAN-AMPLIACION.md).
+En desarrollo, por fases. Hechas: tablero y fichas, importación del registro, documentos, rastreos, perfil, la pantalla Inicio con recordatorios, estadísticas y ajustes. Lo siguiente es que la app prepare el CV adaptado a cada oferta y ayude a enviarla (ver [Preparar y enviar](#preparar-y-enviar-en-desarrollo)). El plan completo está en [docs/PLAN.md](docs/PLAN.md) y [docs/PLAN-AMPLIACION.md](docs/PLAN-AMPLIACION.md).
 
 ## Autor
 
