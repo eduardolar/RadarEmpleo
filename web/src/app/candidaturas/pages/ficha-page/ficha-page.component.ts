@@ -208,6 +208,20 @@ export default class FichaPageComponent {
       campo.scrollIntoView?.({ block: 'center' });
       this.cambioEstado.notaAtendida();
     });
+
+    // «Apuntar la entrevista» en el aviso de pasar a Entrevista: el diálogo de recordatorio, ya con ese
+    // tipo, en cuanto la ficha de esa candidatura está cargada
+    effect(() => {
+      const pedida = this.cambioEstado.entrevistaPedida();
+      const c = this.candidatura();
+      if (pedida === null || c?.id !== pedida) {
+        return;
+      }
+      untracked(() => {
+        this.cambioEstado.entrevistaAtendida();
+        this.accionesRecordatorio.nuevo('Entrevista', c).subscribe();
+      });
+    });
   }
 
   protected reintentar(): void {

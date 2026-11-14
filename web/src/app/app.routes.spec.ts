@@ -158,6 +158,49 @@ describe('Navegación', () => {
     activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/mas'));
   });
 
+  it('desde Más se llega a las estadísticas, que resaltan Más y las piden', async () => {
+    const harness = await RouterTestingHarness.create('/mas');
+    const pagina = harness.routeNativeElement!;
+
+    pagina.querySelector<HTMLAnchorElement>('main a[href="/estadisticas"]')!.click();
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/estadisticas');
+    expect(TestBed.inject(Title).getTitle()).toBe('Estadísticas · RadarEmpleo');
+    http.expectOne('/api/estadisticas').flush({
+      total: 0,
+      porEstado: [],
+      enviadasPorSemana: [],
+      respuesta: { enviadas: 0, conRespuesta: 0, porcentaje: null, diasMedios: null, casosDias: 0 },
+      motivosDescarte: [],
+    });
+    await harness.fixture.whenStable();
+
+    expect(pagina.querySelector('h1')?.textContent).toContain('Estadísticas');
+    const activos = pagina.querySelectorAll('a[aria-current="page"]');
+    expect(activos).toHaveLength(2);
+    activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/mas'));
+  });
+
+  it('desde Más se llega a los ajustes, que resaltan Más', async () => {
+    const harness = await RouterTestingHarness.create('/mas');
+    const pagina = harness.routeNativeElement!;
+
+    pagina.querySelector<HTMLAnchorElement>('main a[href="/ajustes"]')!.click();
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/ajustes');
+    expect(TestBed.inject(Title).getTitle()).toBe('Ajustes · RadarEmpleo');
+    http.expectOne('/api/sistema/info').flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
+    await harness.fixture.whenStable();
+
+    expect(pagina.querySelector('h1')?.textContent).toContain('Ajustes');
+    expect(pagina.textContent).toContain('Apagados');
+    const activos = pagina.querySelectorAll('a[aria-current="page"]');
+    expect(activos).toHaveLength(2);
+    activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/mas'));
+  });
+
   describe('salir de Apuntar', () => {
     async function apuntarConAlgoEscrito(): Promise<void> {
       const harness = await RouterTestingHarness.create('/apuntar');

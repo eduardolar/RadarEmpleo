@@ -12,6 +12,7 @@ import {
   EstadoCandidatura,
   Nota,
 } from '../../interfaces/candidatura.interface';
+import { CambioEstadoService } from '../../services/cambio-estado.service';
 import { CandidaturasService } from '../../services/candidaturas.service';
 import { crearDetalle } from '../../utils/candidatura-de-prueba';
 import { estadosPosibles } from '../../utils/transiciones-permitidas';
@@ -618,6 +619,33 @@ describe('FichaPageComponent', () => {
       botonAnadir()!.click();
 
       expect(abrirDialogo.mock.calls[0][1].data.tipoInicial).toBe('Entrevista');
+    });
+
+    it('«Apuntar la entrevista» del aviso abre el diálogo como entrevista, una sola vez', async () => {
+      await crear({ estado: 'Enviada' });
+      vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      TestBed.inject(CambioEstadoService).mover(
+        { id: 1, empresa: 'Acme', puesto: 'Desarrollador Angular', estado: 'Enviada' },
+        'Entrevista',
+      );
+      http.expectOne('/api/candidaturas/1/estado').flush(
+        crearDetalle({ id: 1, estado: 'Entrevista', estadosPosibles: estadosPosibles('Entrevista') }),
+      );
+      await fixture.whenStable();
+      expect(abrirDialogo).not.toHaveBeenCalled();
+
+      const accion = avisos.deshacible.mock.calls[0][2] as AccionAviso;
+      expect(accion.texto).toBe('Apuntar la entrevista');
+      accion.alPulsar();
+      await fixture.whenStable();
+
+      expect(abrirDialogo).toHaveBeenCalledTimes(1);
+      const [componente, opciones] = abrirDialogo.mock.calls[0];
+      expect(componente).toBe(DialogoRecordatorio);
+      expect(opciones.data.tipoInicial).toBe('Entrevista');
+      expect(opciones.data.candidatura).toEqual(expect.objectContaining({ id: 1 }));
+      expect(TestBed.inject(CambioEstadoService).entrevistaPedida()).toBeNull();
     });
 
     it('con una oferta en la mano, empieza como plazo', async () => {

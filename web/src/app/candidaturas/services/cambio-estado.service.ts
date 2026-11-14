@@ -32,7 +32,8 @@ const PAUSA_TRAS_CAMBIO_MS = 500;
  * igual en los dos sitios:
  * - Avanzar o reabrir va en un toque. El aviso ofrece «Deshacer» (también con Ctrl+Z) por si se ha
  *   movido sin querer y «Añadir nota» por si se quiere dejar un comentario (la API no deja comentar
- *   un cambio ya hecho; la nota sale a su lado en el historial).
+ *   un cambio ya hecho; la nota sale a su lado en el historial). Al pasar a Entrevista, en lugar de la
+ *   nota ofrece «Apuntar la entrevista», que abre en la ficha el diálogo de recordatorio.
  * - Descartar y Cerrar sacan la candidatura del proceso: se confirman en un diálogo, que además
  *   pide el motivo del descarte (obligatorio en la API) y deja comentar.
  *
@@ -61,6 +62,10 @@ export class CambioEstadoService {
   private readonly _notaPedida = signal<number | null>(null);
   /** Candidatura en la que se ha pulsado «Añadir nota» del aviso: la ficha lleva el foco a la nota */
   readonly notaPedida = this._notaPedida.asReadonly();
+
+  private readonly _entrevistaPedida = signal<number | null>(null);
+  /** Candidatura en la que se ha pulsado «Apuntar la entrevista» del aviso: la ficha abre el diálogo */
+  readonly entrevistaPedida = this._entrevistaPedida.asReadonly();
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.temporizadores.forEach((t) => clearTimeout(t)));
@@ -131,10 +136,14 @@ export class CambioEstadoService {
         const seguimiento =
           peticion.estado === 'Enviada' ? ' Seguimiento programado dentro de 7 días.' : '';
         const mensaje = `«${candidatura.puesto}» pasa a ${ETIQUETAS_ESTADO[peticion.estado]}.${seguimiento}`;
-        // Si ya se comentó en el diálogo, no hace falta ofrecer la nota
-        const nota = peticion.comentario
-          ? undefined
-          : { texto: 'Añadir nota', alPulsar: () => this.pedirNota(candidatura.id) };
+        // Al pasar a Entrevista, lo útil es apuntar cuándo es; si ya se comentó en el diálogo, no hace
+        // falta ofrecer la nota
+        const nota =
+          peticion.estado === 'Entrevista'
+            ? { texto: 'Apuntar la entrevista', alPulsar: () => this.pedirEntrevista(candidatura.id) }
+            : peticion.comentario
+              ? undefined
+              : { texto: 'Añadir nota', alPulsar: () => this.pedirNota(candidatura.id) };
         // El apunte que ha creado este movimiento (el historial va del más antiguo al más reciente): se
         // deshace ese y no «el último que haya», que puede ser de otra pestaña
         const cambioId = detalle.historial.at(-1)?.id;
@@ -195,9 +204,20 @@ export class CambioEstadoService {
     this.temporizadores.add(temporizador);
   }
 
+  /** La ficha avisa de que ya ha abierto el diálogo de la entrevista */
+  entrevistaAtendida(): void {
+    this._entrevistaPedida.set(null);
+  }
+
   /** Lleva a la ficha (si ya se está en ella, navegar a la misma URL no hace nada) y pide el foco en la nota */
   private pedirNota(id: number): void {
     this._notaPedida.set(id);
+    void this.router.navigate(['/candidaturas', id]);
+  }
+
+  /** Lleva a la ficha y le pide que abra el diálogo de recordatorio con el tipo Entrevista */
+  private pedirEntrevista(id: number): void {
+    this._entrevistaPedida.set(id);
     void this.router.navigate(['/candidaturas', id]);
   }
 }

@@ -1,0 +1,32 @@
+<!-- Etiqueta, barra y cifra en tres columnas: la etiqueta con ancho fijo para que las barras empiecen
+     todas en el mismo sitio, y la cifra en monoespaciada para que las unidades queden alineadas -->
+<ul
+  [attr.aria-label]="etiqueta()"
+  [attr.data-estado]="color() === 'enviada' ? 'Enviada' : null"
+  class="flex flex-col gap-2.5"
+>
+  @for (fila of conAncho(); track fila.etiqueta) {
+    <li
+      [attr.data-estado]="color() === 'estado' ? fila.estado : null"
+      class="grid grid-cols-[minmax(0,7.5rem)_1fr_auto] items-center gap-3 sm:grid-cols-[minmax(0,10rem)_1fr_auto]"
+    >
+      <span class="truncate text-sm text-on-surface">{{ fila.etiqueta }}</span>
+      <span aria-hidden="true" class="flex h-4 items-center">
+        @if (fila.ancho > 0) {
+          <span
+            class="h-full rounded-xs"
+            [class]="
+              color() === 'neutro'
+                ? 'border-2 border-trazo bg-surface-container-high'
+                : 'border-2 border-trazo bg-estado'
+            "
+            [style.width.%]="fila.ancho"
+          ></span>
+        }
+      </span>
+      <span class="min-w-8 text-right font-mono text-sm font-semibold tabular-nums text-on-surface"
+        ><span class="sr-only">, </span>{{ fila.valor }}</span
+      >
+    </li>
+  }
+</ul>

@@ -84,13 +84,36 @@ describe('CambioEstadoService', () => {
     });
 
     it('avisa del cambio con «Deshacer» y ofrece «Añadir nota» para comentar después', () => {
+      service.mover(CANDIDATURA, 'Enviada');
+
+      expect(avisos.deshacible).toHaveBeenCalledWith(
+        expect.stringContaining('«Desarrollador Angular» pasa a Enviada.'),
+        expect.any(Function),
+        expect.objectContaining({ texto: 'Añadir nota' }),
+      );
+    });
+
+    it('al pasar a Entrevista ofrece «Apuntar la entrevista» en lugar de la nota', () => {
       service.mover(CANDIDATURA, 'Entrevista');
 
       expect(avisos.deshacible).toHaveBeenCalledWith(
         '«Desarrollador Angular» pasa a Entrevista.',
         expect.any(Function),
-        expect.objectContaining({ texto: 'Añadir nota' }),
+        expect.objectContaining({ texto: 'Apuntar la entrevista' }),
       );
+    });
+
+    it('«Apuntar la entrevista» lleva a la ficha y pide el diálogo hasta que la ficha lo atiende', () => {
+      service.mover(CANDIDATURA, 'Entrevista');
+
+      accionDelAviso().alPulsar();
+
+      expect(navegar).toHaveBeenCalledWith(['/candidaturas', 7]);
+      expect(service.entrevistaPedida()).toBe(7);
+      expect(service.notaPedida()).toBeNull();
+
+      service.entrevistaAtendida();
+      expect(service.entrevistaPedida()).toBeNull();
     });
 
     it('al marcar enviada avisa del seguimiento que programa la API', () => {
@@ -102,7 +125,7 @@ describe('CambioEstadoService', () => {
     });
 
     it('«Añadir nota» lleva a la ficha y pide el foco en la nota hasta que la ficha lo atiende', () => {
-      service.mover(CANDIDATURA, 'Entrevista');
+      service.mover(CANDIDATURA, 'Oferta');
 
       accionDelAviso().alPulsar();
 

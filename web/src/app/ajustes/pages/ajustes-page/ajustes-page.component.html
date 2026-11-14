@@ -1,0 +1,48 @@
+<!-- Página de lectura, como Perfil y Estadísticas: una columna de max-w-3xl -->
+<section aria-label="Ajustes" class="flex w-full max-w-3xl flex-col gap-5">
+  <app-enlace-volver ruta="/mas" texto="Volver a Más" class="-mb-3 self-start" />
+
+  <app-cabecera-pagina titulo="Ajustes" descripcion="Cómo está funcionando la app." />
+
+  <section
+    aria-labelledby="titulo-esta-app"
+    class="rounded-2xl border border-borde-fino bg-surface-container-lowest p-4 sm:p-5"
+  >
+    <h2 id="titulo-esta-app" class="mb-3 text-xl font-extrabold">Esta app</h2>
+
+    @switch (sistemaService.estado()) {
+      @case ('conectada') {
+        @if (sistemaService.info(); as info) {
+          <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
+            <dt class="text-sm text-on-surface-variant">Modo</dt>
+            <dd class="font-semibold text-on-surface">
+              {{ info.modo }}
+              <span class="font-normal text-on-surface-variant">
+                · {{ info.modo === 'Demo' ? 'datos inventados' : 'tus datos, en este PC' }}
+              </span>
+            </dd>
+            <dt class="text-sm text-on-surface-variant">Versión</dt>
+            <dd class="font-mono text-on-surface">{{ info.version }}</dd>
+            <dt class="text-sm text-on-surface-variant">Agentes</dt>
+            <dd class="font-semibold text-on-surface">
+              {{ info.agentesHabilitados ? 'Encendidos' : 'Apagados' }}
+            </dd>
+          </dl>
+        }
+      }
+      @case ('sin-conexion') {
+        <p role="alert" class="text-sm text-on-surface-variant">
+          No se puede conectar con RadarEmpleo. Comprueba que la API está arrancada.
+        </p>
+      }
+      @default {
+        <p role="status" class="text-sm text-on-surface-variant">Comprobando la conexión...</p>
+      }
+    }
+  </section>
+
+  <!-- Lo que vendrá, sin botones -->
+  <p class="font-mono text-sm text-on-surface-variant">
+    Aquí llegarán el envío manual o automático y el tope de gasto diario.
+  </p>
+</section>

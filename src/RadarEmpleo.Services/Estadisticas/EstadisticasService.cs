@@ -66,5 +66,43 @@ public class EstadisticasService
             siguiente is { } fecha ? ReglasRecordatorio.DiaMadrid(fecha) : null);
     }
 
+    /// <summary>
+    /// Las estadísticas de la búsqueda: total y por estado, enviadas en las 8 últimas semanas, respuestas
+    /// con los días medios y motivos de descarte. Las definiciones están en <see cref="EstadisticasDto"/>.
+    /// </summary>
+    public async Task<EstadisticasDto> EstadisticasAsync()
+    {
+        var hoy = ReglasRecordatorio.DiaMadrid(_reloj.AhoraUtc);
+
+        await using var db = await _factory.CreateDbContextAsync();
+
+        var candidaturas = await db.Candidaturas.AsNoTracking()
+            .Select(c => new { c.Estado, c.FechaEnvio, c.MotivoDescarte })
+            .ToListAsync();
+        var pasos = await db.CambiosEstado.AsNoTracking()
+            .Select(h => new { h.Id, h.CandidaturaId, h.A, h.Fecha })
+            .ToListAsync();
+
+        var dias = pasos
+            .GroupBy(p => p.CandidaturaId)
+            .Select(g => CalculadoraEstadisticas.DiasHastaRespuesta(
+                g.OrderBy(p => p.Fecha).ThenBy(p => p.Id).Select(p => (p.A, p.Fecha))))
+            .OfType<int>()
+            .ToList();
+
+        return new EstadisticasDto(
+            candidaturas.Count,
+            CalculadoraEstadisticas.PorEstado(candidaturas.Select(c => c.Estado)),
+            CalculadoraEstadisticas.EnviadasPorSemana(hoy,
+                pasos.Where(p => p.A == EstadoCandidatura.Enviada).Select(p => p.Fecha)),
+            CalculadoraEstadisticas.Respuesta(
+                candidaturas.Count(c => c.FechaEnvio is not null),
+                pasos.Where(p => CalculadoraEstadisticas.EsRespuesta(p.A)).Select(p => p.CandidaturaId).Distinct().Count(),
+                dias),
+            CalculadoraEstadisticas.MotivosDescarte(candidaturas
+                .Where(c => c.Estado == EstadoCandidatura.Descartada && c.MotivoDescarte is not null)
+                .Select(c => c.MotivoDescarte!.Value)));
+    }
+
     private static DateTime Medianoche(DateOnly dia) => Fechas.MedianocheMadridEnUtc(dia.ToDateTime(TimeOnly.MinValue));
 }

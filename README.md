@@ -94,7 +94,7 @@ cd web && npx ng test --watch=false
 
 ## Estado
 
-En desarrollo, por fases. Hechas: tablero y fichas, importación del registro, documentos, rastreos y perfil. Lo siguiente es la pantalla «Hoy» con recordatorios y, después, que la app prepare el CV adaptado a cada oferta y gestione el envío, con modo manual por defecto. El plan completo está en [docs/PLAN.md](docs/PLAN.md) y [docs/PLAN-AMPLIACION.md](docs/PLAN-AMPLIACION.md).
+En desarrollo, por fases. Hechas: tablero y fichas, importación del registro, documentos, rastreos, perfil, la pantalla Inicio con recordatorios, estadísticas y ajustes. Lo siguiente es que la app prepare el CV adaptado a cada oferta y gestione el envío, con modo manual por defecto. El plan completo está en [docs/PLAN.md](docs/PLAN.md) y [docs/PLAN-AMPLIACION.md](docs/PLAN-AMPLIACION.md).
 
 ## Autor
 

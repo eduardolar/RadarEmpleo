@@ -203,7 +203,7 @@ Anotados al corregir la revisión de las fases 0 y 1; se harán en la fase indic
 
 ### Pendientes de la revisión de la F2
 - **Validar el enlace en la API (F3):** el front normaliza y rechaza esquemas raros, pero la importación podría traer enlaces sin `https://`.
-- **Seguimiento al pasar a Entrevista u Oferta (F5):** sigue pendiente aunque ya haya respuesta de la empresa; decidir si se marca como hecho al preparar «Hoy».
+- ~~**Seguimiento al pasar a Entrevista u Oferta (F5)**~~ **Hecho en la F6a:** al pasar a Entrevista u Oferta el seguimiento pendiente se da por hecho, «Deshacer» lo devuelve, y el aviso de Entrevista ofrece «Apuntar la entrevista» (F6b).
 - **Alta solo con el enlace (decisión de Eduardo):** la API exige empresa y puesto. Opciones: un endpoint que lea la oferta o hacerlos opcionales.
 - **Aviso de enlace duplicado al apuntar:** la búsqueda de la API no mira el enlace.
 - **Probar en vivo sin abrir ventanas:** `spawn` sin `detached`, porque `detached` anula `windowsHide` y la API abre su propia ventana.

@@ -236,7 +236,7 @@ título**, salvo dos excepciones que van centradas.
 | ---------------------- | -------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Tablero                | Tablero                    | Izquierda, a todo el ancho                                                 | — (las columnas se reparten el ancho)                  |
 | Lista o rejilla        | Rastreos, Más              | Izquierda                                                                  | `max-w-6xl` (Rastreos), `max-w-4xl` (Más)              |
-| Lectura                | Ficha, Perfil, Importación | Izquierda                                                                  | `max-w-5xl` (Ficha), `max-w-3xl` (Perfil, Importación) |
+| Lectura                | Ficha, Perfil, Importación, Estadísticas, Ajustes | Izquierda                                                           | `max-w-5xl` (Ficha), `max-w-3xl` (las demás)           |
 | Formulario suelto      | Apuntar                    | **Centrado**                                                               | `max-w-2xl`                                            |
 | Estado vacío de página | Inicio (sin datos)         | Título a la izquierda; el estado vacío, **centrado** en el área de trabajo | `max-w-xl`                                             |
 | Lista de tareas        | Inicio (con datos)         | Izquierda; desde `lg`, con un panel pegajoso a su derecha                  | `max-w-3xl` la lista; 320 px el panel (380 desde `xl`) |
@@ -247,11 +247,30 @@ se lee como una sola pieza: un formulario corto o un mensaje.
 ### Más
 
 Rejilla de tarjetas-enlace (2 columnas desde `sm`, 1 en el móvil), una por pantalla que existe hoy:
-«Perfil y filtros» e «Importar del registro». Cada tarjeta es entera el enlace, con icono en bloque
-gris, título con flecha y una línea de descripción; borde de 2 px, sombra dura de 4 px que crece al
-pasar por encima y desaparece al pulsarla (se hunde), foco de 3 px y al menos 96 px de alto.
-Debajo, una línea en monoespaciada dice lo que llegará (agenda y recordatorios), sin botones: no se
-pinta ninguna función que no exista.
+«Perfil y filtros», «Estadísticas», «Importar del registro» y «Ajustes». Cada tarjeta es el
+componente `tarjeta-enlace` (el icono, un svg de 24×24, va por `ng-content`) y es entera el enlace,
+con icono en bloque gris, título con flecha y una línea de descripción; borde de 2 px, sombra dura
+de 4 px que crece al pasar por encima y desaparece al pulsarla (se hunde), foco de 3 px y al menos
+96 px de alto. Debajo, una línea en monoespaciada: «Los recordatorios y lo del día están en Inicio.»
+
+### Estadísticas y Ajustes
+
+Páginas de lectura de `max-w-3xl`, con «Volver a Más» y **sin relleno lima**: no tienen acción
+principal. Cada bloque es una tarjeta de borde fino (`border-borde-fino`, sin sombra dura) con su
+`h2`.
+
+- **Estadísticas:** «Tus candidaturas» (total y barras por estado), «Enviadas por semana» (8
+  semanas), «Respuestas» (en frases: «1 de 4 (25 %) han llegado a entrevista u oferta.» y «De media
+  tardan 9 días en responder (calculado con 3).») y «Por qué se descartan». Las barras son el
+  componente `lista-barras`: una lista en la que cada fila dice su etiqueta y su cifra en
+  monoespaciada, y la barra (borde de 2 px, proporcional a la mayor, `aria-hidden`) solo acompaña.
+  Por estado, cada barra lleva el color de su estado; por semana, el de Enviada; los motivos, gris.
+  Una sección sin datos dice «Todavía no hay datos para esto.»; sin ninguna candidatura, la página
+  enseña un estado vacío con «Ir al tablero» (con borde). Al final, la letra pequeña en
+  monoespaciada dice que solo cuenta lo que está en la app y qué no entra en cada cifra.
+- **Ajustes:** un bloque «Esta app» con el modo, la versión y los agentes (`dl` a dos columnas) y
+  una línea en monoespaciada con lo que llegará (envío manual o automático y tope de gasto). Sin
+  botones.
 
 ### Botones
 
@@ -281,7 +300,9 @@ Snackbar plano, como una tarjeta: fondo de tarjeta, texto de tinta, borde de 2 p
 4 px. La acción va en negrita y en el color de los botones de texto: `#4d7c0f` de día y lima de
 noche. Los de error, en el rol `error`. Tras cualquier cambio de estado el aviso ofrece
 **«Deshacer»** durante 8 s (también con Ctrl+Z si el foco no está en un campo de texto o un
-desplegable y no hay un diálogo abierto) y, si no se ha comentado, «Añadir nota». Deshecho el cambio,
+desplegable y no hay un diálogo abierto) y, si no se ha comentado, «Añadir nota»; al pasar a
+Entrevista, en su lugar, «Apuntar la entrevista», que abre en la ficha el diálogo de recordatorio con
+ese tipo. Deshecho el cambio,
 el foco vuelve a la tarjeta en el tablero o al bloque «Cambiar estado» en la ficha.
 
 ### Estados vacíos

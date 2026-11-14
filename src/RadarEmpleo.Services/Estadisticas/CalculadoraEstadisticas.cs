@@ -45,4 +45,73 @@ public static class CalculadoraEstadisticas
             .Select(dia => new DiaSemanaDto(dia, porDia.GetValueOrDefault(dia)))
             .ToList();
     }
+
+    /// <summary>Cuántas hay en cada uno de los siete estados, en el orden del tablero y con ceros.</summary>
+    public static IReadOnlyList<TotalPorEstadoDto> PorEstado(IEnumerable<EstadoCandidatura> estados)
+    {
+        var porEstado = estados.GroupBy(e => e).ToDictionary(g => g.Key, g => g.Count());
+        return Enum.GetValues<EstadoCandidatura>()
+            .Select(estado => new TotalPorEstadoDto(estado, porEstado.GetValueOrDefault(estado)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Las <paramref name="semanas"/> últimas semanas hasta la de <paramref name="hoy"/> (la última), con
+    /// cuántos de los pasos a Enviada de <paramref name="enviosUtc"/> caen en cada una, en hora de Madrid.
+    /// Los de antes o de después no cuentan.
+    /// </summary>
+    public static IReadOnlyList<EnviadasSemanaDto> EnviadasPorSemana(DateOnly hoy, IEnumerable<DateTime> enviosUtc, int semanas = 8)
+    {
+        var porLunes = enviosUtc
+            .GroupBy(fecha => LunesDe(ReglasRecordatorio.DiaMadrid(fecha)))
+            .ToDictionary(g => g.Key, g => g.Count());
+        var primero = LunesDe(hoy).AddDays(-7 * (semanas - 1));
+        return Enumerable.Range(0, semanas)
+            .Select(i => primero.AddDays(7 * i))
+            .Select(lunes => new EnviadasSemanaDto(lunes, porLunes.GetValueOrDefault(lunes)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Días naturales de Madrid que tardó en responder una candidatura: del último paso a Enviada anterior
+    /// al primer paso a Entrevista u Oferta. Null si no hay respuesta o si no hay ningún paso a Enviada antes
+    /// de ella (las importadas que saltan directamente a Entrevista).
+    /// </summary>
+    /// <param name="historial">Los pasos de una candidatura, ya en orden (por fecha y, a igual fecha, por id).</param>
+    public static int? DiasHastaRespuesta(IEnumerable<(EstadoCandidatura A, DateTime FechaUtc)> historial)
+    {
+        DateTime? ultimoEnvio = null;
+        foreach (var (a, fecha) in historial)
+        {
+            if (EsRespuesta(a))
+            {
+                return ultimoEnvio is { } envio
+                    ? ReglasRecordatorio.DiaMadrid(fecha).DayNumber - ReglasRecordatorio.DiaMadrid(envio).DayNumber
+                    : null;
+            }
+            if (a == EstadoCandidatura.Enviada) ultimoEnvio = fecha;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// La tasa de <see cref="TasaRespuesta"/> más los días medios, con un decimal (null si no hay
+    /// <paramref name="dias"/>).
+    /// </summary>
+    public static RespuestaDto Respuesta(int enviadas, int conRespuesta, IReadOnlyCollection<int> dias)
+    {
+        var tasa = TasaRespuesta(enviadas, conRespuesta);
+        double? media = dias.Count == 0 ? null : Math.Round(dias.Average(), 1, MidpointRounding.AwayFromZero);
+        return new RespuestaDto(tasa.Enviadas, tasa.ConRespuesta, tasa.Porcentaje, media, dias.Count);
+    }
+
+    /// <summary>
+    /// Los motivos con algún caso, de más a menos; a igualdad, en el orden de <see cref="MotivoDescarte"/>.
+    /// </summary>
+    public static IReadOnlyList<TotalPorMotivoDto> MotivosDescarte(IEnumerable<MotivoDescarte> motivos) =>
+        motivos.GroupBy(m => m)
+            .Select(g => new TotalPorMotivoDto(g.Key, g.Count()))
+            .OrderByDescending(m => m.Total)
+            .ThenBy(m => m.Motivo)
+            .ToList();
 }

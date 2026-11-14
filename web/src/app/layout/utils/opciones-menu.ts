@@ -19,9 +19,9 @@ export const OPCIONES_MENU: readonly OpcionMenu[] = [
   },
   {
     etiqueta: 'Más',
-    descripcion: 'Perfil e importación',
+    descripcion: 'Perfil, estadísticas y ajustes',
     ruta: '/mas',
-    subrutas: ['/importacion', '/perfil'],
+    subrutas: ['/importacion', '/perfil', '/estadisticas', '/ajustes'],
     icono: 'mas',
   },
 ];

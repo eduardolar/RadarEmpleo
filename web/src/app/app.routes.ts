@@ -62,6 +62,17 @@ export const routes: Routes = [
         loadComponent: () => import('./perfil/pages/perfil-page/perfil-page.component'),
       },
       {
+        path: 'estadisticas',
+        title: 'Estadísticas · RadarEmpleo',
+        loadComponent: () =>
+          import('./estadisticas/pages/estadisticas-page/estadisticas-page.component'),
+      },
+      {
+        path: 'ajustes',
+        title: 'Ajustes · RadarEmpleo',
+        loadComponent: () => import('./ajustes/pages/ajustes-page/ajustes-page.component'),
+      },
+      {
         path: '**',
         redirectTo: 'inicio',
       },

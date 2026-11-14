@@ -1,0 +1,29 @@
+<!-- Borde de 2 px y sombra dura, que se levanta al pasar por encima y se hunde al pulsarla (sin
+     desplazamiento si se ha pedido menos movimiento) -->
+<a
+  [routerLink]="ruta()"
+  class="group flex min-h-24 flex-1 items-start gap-4 rounded-md border-2 border-trazo bg-surface-container-lowest p-5 shadow-dura transition-[translate,box-shadow] duration-100 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-dura-lg focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none active:translate-x-1 active:translate-y-1 active:shadow-none motion-reduce:transition-none motion-reduce:hover:translate-none motion-reduce:active:translate-none"
+>
+  <span
+    aria-hidden="true"
+    class="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm bg-surface-container-high text-on-surface"
+  >
+    <ng-content />
+  </span>
+  <span class="flex min-w-0 flex-1 flex-col gap-1">
+    <span class="flex items-center gap-2 font-display text-lg leading-tight font-extrabold">
+      {{ titulo() }}
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        class="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+      >
+        <path stroke-linecap="square" d="M4 10h11m-4-4 4 4-4 4" />
+      </svg>
+    </span>
+    <span class="text-sm text-on-surface-variant">{{ descripcion() }}</span>
+  </span>
+</a>

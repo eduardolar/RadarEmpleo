@@ -591,3 +591,14 @@ Lo que se cambió sobre este plan mientras se construía y revisaba la F6a (13-1
 - **Flechas del tablero:** el carril horizontal va sin barra; en el escritorio, flechas laterales de 48 px que avanzan una columna, con un degradado hacia el lienzo en el lado con columnas ocultas.
 - **Seguimiento cerrado solo:** en «Hechos hoy», el que se cerró al pasar a Entrevista u Oferta lleva la línea «Se cerró solo al pasar a Entrevista» (`cerradoAlPasarA` en el panel). Opción por defecto mientras Eduardo no diga otra cosa.
 - **Reglas de servidor añadidas en la revisión:** no se apuntan recordatorios en una candidatura descartada o cerrada (409), y dos «Hecho» a la vez del mismo recordatorio dan 200 los dos.
+
+## Cómo quedó la F6b
+
+Lo que se decidió al construir la F6b (14/11/2026). Manda sobre lo de arriba.
+
+- **Un solo endpoint:** `GET /api/estadisticas` (`EstadisticasController`) devuelve `EstadisticasDto` tal como lo describe el apartado 4.3. Los días medios van con un decimal; la tasa de respuesta reutiliza la de Inicio.
+- **Rama:** `f6b-estadisticas-ajustes`, sobre `f6a-recordatorios`.
+- **«Apuntar la entrevista»** sustituye a «Añadir nota» en el aviso de pasar a Entrevista. La ficha abre el diálogo en cuanto carga la candidatura (`CambioEstadoService.entrevistaPedida`).
+- **Ajustes** tiene una frase de cabecera («Cómo está funcionando la app.») y, junto al modo, una aclaración («tus datos, en este PC» o «datos inventados»).
+- **Más:** la línea final dice «Inicio» y no «Hoy», por el cambio de nombre de la F6a.
+- **Prueba en vivo** con una BD temporal y el registro de ejemplo: Estadísticas, Más y Ajustes en el móvil y en el escritorio, de día y de noche, y «Apuntar la entrevista» desde la ficha. La BD real no se tocó.
