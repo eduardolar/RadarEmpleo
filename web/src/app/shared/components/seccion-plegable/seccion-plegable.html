@@ -1,3 +1,13 @@
+<!-- El encabezado para la lista de encabezados del lector de pantalla va aparte y oculto: un
+     role="heading" dentro del <summary> no lo respetan todos (el summary ya es un botón) -->
+@switch (nivelTitulo()) {
+  @case (2) {
+    <h2 class="sr-only">{{ titulo() }}</h2>
+  }
+  @case (3) {
+    <h3 class="sr-only">{{ titulo() }}</h3>
+  }
+}
 <details
   class="group rounded-2xl"
   [class]="aspecto() === 'tarjeta' ? 'bg-surface-container-lowest' : 'bg-surface-container'"
@@ -5,6 +15,7 @@
 >
   <!-- list-none y sin marcador: la flecha propia sustituye al triángulo del navegador -->
   <summary
+    [attr.id]="idTitulo()"
     class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-2 font-semibold text-on-surface transition-colors group-open:rounded-b-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
     [class]="
       aspecto() === 'tarjeta' ? 'hover:bg-surface-container' : 'hover:bg-surface-container-high'

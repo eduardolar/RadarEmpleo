@@ -7,6 +7,7 @@ using RadarEmpleo.Api.Errores;
 using RadarEmpleo.Data;
 using RadarEmpleo.Services;
 using RadarEmpleo.Services.Curriculum;
+using RadarEmpleo.Services.Estadisticas;
 using RadarEmpleo.Services.Importacion;
 using RadarEmpleo.Services.Rastreos;
 using Scalar.AspNetCore;
@@ -43,6 +44,8 @@ builder.Services.AddScoped<ImportacionService>();
 builder.Services.AddScoped<DocumentosService>();
 builder.Services.AddScoped<PerfilService>();
 builder.Services.AddScoped<RastreosService>();
+builder.Services.AddScoped<EstadisticasService>();
+builder.Services.AddScoped<RecordatoriosService>();
 // Services no referencia a Api: las rutas se construyen aquí a partir de las opciones.
 builder.Services.AddSingleton(sp =>
     new RutasCurriculum(sp.GetRequiredService<IOptions<OpcionesRadar>>().Value.CarpetaCurriculum));

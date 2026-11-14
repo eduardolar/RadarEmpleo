@@ -1,6 +1,10 @@
 <!-- La página ocupa el alto de la ventana para poder centrar el estado vacío en el área de trabajo
      (un poco por encima del centro). Sin cajas: el contenido va directamente sobre el fondo -->
-<section class="flex min-h-[calc(100dvh-11rem)] flex-col gap-6 md:min-h-[calc(100dvh-3rem)]">
+<section
+  #inicio
+  tabindex="-1"
+  class="flex min-h-[calc(100dvh-11rem)] flex-col gap-6 outline-none md:min-h-[calc(100dvh-3rem)]"
+>
   <!-- En el móvil no hay menú lateral: la marca se presenta aquí, en la primera pantalla -->
   <div class="flex items-center gap-3 md:hidden">
     <img
@@ -20,79 +24,453 @@
     </div>
   </div>
 
-  <!-- El estado de la API, discreto, al lado del título -->
+  <!-- El estado de la API, discreto, al lado del título. «Nuevo recordatorio» es la llamada principal
+       y el único botón relleno de la pantalla, también en el estado vacío -->
   <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-    <app-cabecera-pagina titulo="Hoy" descripcion="Recordatorios, seguimientos y avisos del día." />
-    <app-estado-api />
+    <app-cabecera-pagina titulo="Inicio" descripcion="Lo que toca hoy y lo que viene." />
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <app-estado-api />
+      <button mat-flat-button type="button" class="min-h-12" (click)="nuevo()">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+          stroke-linecap="square"
+          class="mr-1.5 inline-block h-4 w-4 align-[-0.2em]"
+        >
+          <path d="M10 4v12M4 10h12" />
+        </svg>
+        Nuevo recordatorio
+      </button>
+    </div>
   </div>
+
+  <!-- Hueco fijo para la barra de carga; el margen negativo evita que sume dos separaciones -->
+  <div class="-my-3 h-1">
+    @if (cargando()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Cargando lo de hoy" />
+    }
+  </div>
+
+  @if (error(); as mensaje) {
+    <div
+      role="alert"
+      class="flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-error bg-error-container p-4 text-on-error-container"
+    >
+      <p class="min-w-0 text-sm font-medium">{{ mensaje }}</p>
+      <button mat-stroked-button type="button" class="min-h-12" (click)="reintentar()">
+        Reintentar
+      </button>
+    </div>
+  }
+
+  <!-- Hueco F8-F11: «Esperan tu OK» va aquí, encima de todo. Ahora no se pinta nada. -->
+
+  <!-- Siempre en la página, para que el lector de pantalla anuncie el cambio: solo cambia el texto.
+       El aviso que se ve (con «Quitar filtro») está más abajo -->
+  <p role="status" data-anuncio-filtro class="sr-only">{{ anuncioFiltro() }}</p>
+
+  @if (panel(); as p) {
+    @if (!vacio()) {
+      @let l = listas()!;
+      <!-- Desde lg, dos columnas: la lista y, a su derecha, un panel pegajoso con el resumen o con el
+           detalle del recordatorio elegido. Por debajo, una sola: el resumen va arriba, plegado, y
+           el título de cada tarjeta lleva a la ficha -->
+      <div
+        class="grid w-full gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,48rem)_23.75rem] lg:items-start"
+      >
+        <div class="flex max-w-3xl min-w-0 flex-col gap-8">
+          @if (!pantallaGrande()) {
+            <app-seccion-plegable titulo="Resumen" [nivelTitulo]="2">
+              <div class="px-4 pt-1 pb-4">
+                <ng-container [ngTemplateOutlet]="resumen" />
+              </div>
+            </app-seccion-plegable>
+          }
+
+          <!-- Filtros: por tipo (un chip cada uno, solo los que tienen algo) y, si se ha pulsado un
+               día del calendario, el aviso de qué día se ve. Sin relleno: el elegido lleva el borde
+               y el texto del color de los enlaces. 36 px de chip con 48 de zona de toque (::after) -->
+          @if (chips().length > 1 || avisoFecha()) {
+            <div class="-my-2 flex flex-col gap-1">
+              @if (chips().length > 1) {
+                <div
+                  role="group"
+                  data-filtros
+                  aria-label="Filtrar las tareas por tipo"
+                  class="flex flex-wrap gap-x-2 gap-y-3 py-2"
+                >
+                  @for (chip of chips(); track chip.tipo) {
+                    <button
+                      type="button"
+                      class="relative inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-sm border-2 border-transparent bg-surface-container px-3 text-sm font-semibold text-on-surface transition-colors after:absolute after:-inset-x-0.5 after:-inset-y-2 after:content-[''] hover:bg-surface-container-high focus-visible:ring-[3px] focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none motion-reduce:transition-none aria-pressed:border-enlace aria-pressed:bg-surface-container-lowest aria-pressed:text-enlace"
+                      [attr.aria-pressed]="chip.tipo === tipoElegido()"
+                      (click)="filtrarPorTipo(chip.tipo)"
+                    >
+                      {{ chip.texto }}
+                      <span aria-hidden="true" class="font-mono text-xs font-medium opacity-80">{{
+                        chip.total
+                      }}</span>
+                      <span class="sr-only">: {{ textoTareas(chip.total) }}</span>
+                    </button>
+                  }
+                </div>
+              }
+              @if (avisoFecha(); as aviso) {
+                <p
+                  data-aviso-dia
+                  class="flex flex-wrap items-center gap-x-2 text-sm text-on-surface"
+                >
+                  <!-- Lo lee el aviso role="status" de arriba, con el día entero -->
+                  <span aria-hidden="true">
+                    Mostrando {{ aviso.prefijo
+                    }}<span class="font-semibold">{{ aviso.corto }}</span>
+                  </span>
+                  <span aria-hidden="true" class="text-on-surface-variant">·</span>
+                  <button
+                    mat-button
+                    type="button"
+                    data-quitar-dia
+                    class="-ml-3 min-h-12"
+                    (click)="quitarDia()"
+                  >
+                    Quitar filtro
+                  </button>
+                </p>
+              }
+            </div>
+          }
+
+          <!-- Con un filtro puesto, las secciones que se quedan sin nada no se pintan -->
+          @if (!hayFiltro() || l.paraHoy.length > 0) {
+            <section aria-labelledby="titulo-paraHoy">
+              <h2
+                id="titulo-paraHoy"
+                tabindex="-1"
+                class="mb-3 text-xl font-extrabold outline-none"
+              >
+                Para hoy
+                <span class="font-mono text-base font-medium text-on-surface-variant"
+                  ><span aria-hidden="true">· </span>{{ l.paraHoy.length }}</span
+                >
+              </h2>
+              @if (l.paraHoy.length > 0) {
+                <ng-container
+                  [ngTemplateOutlet]="lista"
+                  [ngTemplateOutletContext]="{
+                    $implicit: l.paraHoy,
+                    seccion: 'paraHoy',
+                    hoy: p.hoy,
+                  }"
+                />
+              } @else {
+                <!-- Aviso suave, no una tarjeta: fondo de lima casi transparente y una raya a la izquierda.
+                     La fecha y el total son los de «Próximos 7 días»; si está vacía, solo la primera frase -->
+                <p
+                  class="rounded-r-sm border-l-[3px] border-enlace bg-despejado px-4 py-3 text-sm text-on-surface"
+                >
+                  Todo despejado por hoy.
+                  @if (proximoDia(); as proximo) {
+                    {{ proximo.seguimiento ? 'Tu próximo seguimiento es el' : 'Lo próximo es el' }}
+                    <span class="font-semibold">{{ proximo.texto }}</span>
+                    ({{ textoTareas(proximo.total) }}).
+                  }
+                </p>
+              }
+            </section>
+          }
+
+          @if (!hayFiltro() || l.proximos.length > 0) {
+            <section aria-labelledby="titulo-proximos">
+              <h2
+                id="titulo-proximos"
+                tabindex="-1"
+                class="mb-3 text-xl font-extrabold outline-none"
+              >
+                Próximos 7 días
+                <span class="font-mono text-base font-medium text-on-surface-variant"
+                  ><span aria-hidden="true">· </span>{{ l.proximos.length }}</span
+                >
+              </h2>
+              @if (l.proximos.length > 0) {
+                <!-- Un encabezado por día («Miércoles, 18 nov · 5 tareas»); dentro, cada tarjeta dice
+                     solo la hora -->
+                <div class="flex flex-col gap-5">
+                  @for (grupo of gruposProximos(); track grupo.dia) {
+                    <div>
+                      <h3 data-dia class="mb-2 text-sm font-bold text-on-surface">
+                        {{ grupo.titulo }}
+                        <span class="font-mono text-xs font-medium text-on-surface-variant"
+                          >· {{ textoTareas(grupo.recordatorios.length) }}</span
+                        >
+                      </h3>
+                      <ng-container
+                        [ngTemplateOutlet]="lista"
+                        [ngTemplateOutletContext]="{
+                          $implicit: grupo.recordatorios,
+                          seccion: 'proximos',
+                          hoy: p.hoy,
+                          soloHora: true,
+                        }"
+                      />
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="font-mono text-sm text-on-surface-variant">
+                  Nada en los próximos 7 días.
+                </p>
+              }
+            </section>
+          }
+
+          <!-- Lo secundario va plegado y en gris; si está vacío, no se pinta. El total del título
+               cuenta todas, también las de más de un mes: así nunca dice «· 0» con enviadas esperando.
+               No son recordatorios ni de ningún día: con cualquier filtro puesto, no salen -->
+          @if (!hayFiltro() && (p.sinRespuesta.length > 0 || p.sinRespuestaAntiguas > 0)) {
+            <app-seccion-plegable
+              aspecto="suave"
+              [nivelTitulo]="2"
+              [titulo]="
+                'Enviadas sin respuesta · ' + (p.sinRespuesta.length + p.sinRespuestaAntiguas)
+              "
+            >
+              <div class="px-4 pt-1 pb-4">
+                @if (p.sinRespuesta.length > 0) {
+                  <ul class="flex flex-col">
+                    @for (enviada of p.sinRespuesta; track enviada.id) {
+                      <li>
+                        <a
+                          [routerLink]="['/candidaturas', enviada.id]"
+                          class="flex min-h-12 items-center rounded-sm py-1 text-sm text-on-surface transition-colors hover:text-enlace focus-visible:text-enlace focus-visible:ring-[3px] motion-reduce:transition-none focus-visible:ring-primary focus-visible:outline-none"
+                        >
+                          <!-- Una sola frase, con sus espacios: así la lee entera el lector de pantalla -->
+                          <span class="min-w-0">
+                            <span class="font-semibold">{{ enviada.empresa }}</span> ·
+                            {{ enviada.puesto }} ·
+                            <span class="font-mono text-xs text-on-surface-variant"
+                              >enviada hace {{ enviada.diasDesdeEnvio }} días</span
+                            >
+                          </span>
+                        </a>
+                      </li>
+                    }
+                  </ul>
+                }
+                @if (p.sinRespuestaAntiguas > 0) {
+                  <p class="mt-2 font-mono text-sm text-on-surface-variant">
+                    @if (p.sinRespuesta.length > 0) {
+                      Y {{ p.sinRespuestaAntiguas }} más
+                      {{ p.sinRespuestaAntiguas === 1 ? 'lleva' : 'llevan' }} más de un mes sin
+                      respuesta.
+                    } @else if (p.sinRespuestaAntiguas === 1) {
+                      Lleva más de un mes sin respuesta.
+                    } @else {
+                      Las {{ p.sinRespuestaAntiguas }} llevan más de un mes sin respuesta.
+                    }
+                  </p>
+                }
+              </div>
+            </app-seccion-plegable>
+          }
+
+          @if (l.masAdelante.length > 0) {
+            <!-- Se abre sola si el recordatorio elegido («?ver=») está dentro, o con un filtro puesto:
+                 lo que se ha pedido ver no puede quedar escondido -->
+            <app-seccion-plegable
+              aspecto="suave"
+              idTitulo="titulo-masAdelante"
+              [nivelTitulo]="2"
+              [abierta]="abiertas().has('masAdelante') || hayFiltro()"
+              [titulo]="'Más adelante · ' + l.masAdelante.length"
+            >
+              <div class="px-4 pt-1 pb-4">
+                <ng-container
+                  [ngTemplateOutlet]="lista"
+                  [ngTemplateOutletContext]="{
+                    $implicit: l.masAdelante,
+                    seccion: 'masAdelante',
+                    hoy: p.hoy,
+                  }"
+                />
+              </div>
+            </app-seccion-plegable>
+          }
+
+          @if (l.hechosHoy.length > 0) {
+            <app-seccion-plegable
+              aspecto="suave"
+              idTitulo="titulo-hechosHoy"
+              [nivelTitulo]="2"
+              [abierta]="abiertas().has('hechosHoy') || hayFiltro()"
+              [titulo]="'Hechos hoy · ' + l.hechosHoy.length"
+            >
+              <div class="px-4 pt-1 pb-4">
+                <ng-container
+                  [ngTemplateOutlet]="lista"
+                  [ngTemplateOutletContext]="{
+                    $implicit: l.hechosHoy,
+                    seccion: 'hechosHoy',
+                    hoy: p.hoy,
+                  }"
+                />
+              </div>
+            </app-seccion-plegable>
+          }
+
+          @if (nadaFiltrado()) {
+            <!-- Solo pasa mirando un día o la semana: un tipo sin nada pendiente no tiene chip -->
+            <div data-nada-filtrado class="flex flex-col items-start gap-1">
+              <p class="font-mono text-sm text-on-surface-variant">
+                @let cuando = diaElegido() === null ? 'esta semana' : 'para ese día';
+                @if (textoTipoElegido(); as tipo) {
+                  Nada de «{{ tipo }}» {{ cuando }}.
+                } @else {
+                  Nada {{ cuando }}.
+                }
+              </p>
+              <button mat-stroked-button type="button" class="mt-2 min-h-12" (click)="quitarDia()">
+                Quitar filtro
+              </button>
+            </div>
+          }
+        </div>
+
+        @if (pantallaGrande()) {
+          <!-- Una sola superficie, como las tarjetas: fondo de tarjeta y borde fino, sin sombra dura.
+               Si no cabe en la ventana, se desplaza por dentro -->
+          <aside
+            #panelLateral
+            class="sticky top-6 max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-2xl border border-borde-fino bg-surface-container-lowest p-5"
+            [attr.aria-labelledby]="seleccion() ? 'titulo-detalle' : 'titulo-resumen'"
+          >
+            @if (seleccion(); as s) {
+              <app-detalle-recordatorio
+                [recordatorio]="s.recordatorio"
+                (volver)="cerrarDetalle()"
+                (editar)="editarDesdeDetalle(s.recordatorio)"
+                (hecho)="hecho(s.recordatorio, s.seccion)"
+                (anadir)="anadirDesdeDetalle(s.recordatorio)"
+              />
+            } @else {
+              <h2 id="titulo-resumen" class="mb-3 text-xl font-extrabold">Resumen</h2>
+              <ng-container [ngTemplateOutlet]="resumen" />
+            }
+          </aside>
+        }
+      </div>
+
+      <!-- El resumen, igual en el panel de la derecha y en el plegable del móvil: sus cifras y su
+           calendario mueven los filtros de la lista -->
+      <ng-template #resumen>
+        <app-resumen-hoy
+          [resumen]="p.resumen"
+          [hoy]="p.hoy"
+          [diaElegido]="diaElegido()"
+          [entrevistasFiltrables]="hayEntrevistas()"
+          [entrevistasFiltradas]="entrevistasFiltradas()"
+          (elegirDia)="filtrarPorDia($event)"
+          (filtrarEntrevistas)="filtrarEntrevistas()"
+        />
+      </ng-template>
+    }
+  }
+
+  <!-- Una lista de tarjetas, igual en todas las secciones. Lo de hoy y lo de los próximos 7 días se
+       puede posponer desde la tarjeta, y el «Hecho» de lo de hoy lleva el contorno con acento -->
+  <ng-template #lista let-recordatorios let-seccion="seccion" let-hoy="hoy" let-soloHora="soloHora">
+    <ul class="flex flex-col gap-2">
+      @for (recordatorio of recordatorios; track recordatorio.id) {
+        <li>
+          <app-tarjeta-recordatorio
+            [conCandidatura]="true"
+            [recordatorio]="recordatorio"
+            [hoy]="hoy"
+            [soloHora]="soloHora === true"
+            [conPosponer]="seccion === 'paraHoy' || seccion === 'proximos'"
+            [destacada]="seccion === 'paraHoy'"
+            [seleccionable]="pantallaGrande()"
+            [seleccionada]="seleccion()?.recordatorio?.id === recordatorio.id"
+            (seleccionar)="seleccionar(recordatorio)"
+            (hecho)="hecho(recordatorio, seccion)"
+            (pendiente)="pendiente(recordatorio, seccion)"
+            (posponer)="posponer(recordatorio, $event, seccion)"
+            (editar)="editar(recordatorio, seccion)"
+            (borrar)="borrar(recordatorio, seccion)"
+          />
+        </li>
+      }
+    </ul>
+  </ng-template>
 
   <!-- Estado vacío, centrado y sin marco: la taza del café de la mañana (el icono de Hoy) con el
        radar de la marca, en un bloque de lima (sus colores no cambian con el modo), y dos salidas -->
-  <div class="flex flex-1 items-center justify-center pb-[8vh]">
-    <div class="flex w-full max-w-xl flex-col items-center text-center">
-      <svg aria-hidden="true" viewBox="0 0 120 120" class="h-28 w-28">
-        <rect x="8" y="8" width="108" height="108" rx="6" class="fill-on-surface" />
-        <rect
-          x="3"
-          y="3"
-          width="108"
-          height="108"
-          rx="6"
-          class="fill-fosforito stroke-on-fosforito"
-          stroke-width="3"
-        />
-        <path
-          d="M47 22c-4 5 4 9 0 15M59 18c-4 5 4 9 0 15M71 22c-4 5 4 9 0 15"
-          fill="none"
-          class="stroke-on-fosforito"
-          stroke-width="3"
-          stroke-linecap="round"
-        />
-        <rect
-          x="22"
-          y="88"
-          width="72"
-          height="9"
-          rx="2"
-          class="fill-papel stroke-on-fosforito"
-          stroke-width="3"
-        />
-        <path
-          d="M80 54h6a9 9 0 0 1 0 18h-6"
-          fill="none"
-          class="stroke-on-fosforito"
-          stroke-width="4"
-          stroke-linecap="round"
-        />
-        <path
-          d="M32 46h48v20a20 20 0 0 1-20 20h-8a20 20 0 0 1-20-20V46Z"
-          class="fill-papel stroke-on-fosforito"
-          stroke-width="3"
-          stroke-linejoin="round"
-        />
-        <rect x="47" y="56" width="18" height="18" rx="2" class="fill-on-fosforito" />
-        <path
-          d="M56 65v-6M56 65l4.5-4.5"
-          class="stroke-papel"
-          stroke-width="2"
-          stroke-linecap="round"
-        />
-        <rect x="58" y="67" width="4" height="4" class="fill-fosforito" />
-      </svg>
-      <p class="mt-6 font-display text-3xl font-extrabold text-on-surface">
-        Aquí se juntará lo del día.
-      </p>
-      <p class="mt-2 max-w-md text-base text-on-surface-variant">
-        Los seguimientos, las entrevistas y los avisos de tus candidaturas saldrán en esta página.
-      </p>
-      <p class="mt-3 font-mono text-sm font-medium text-on-surface-variant">
-        De momento, café tranquilo.
-      </p>
-      <!-- Una sola acción principal (el relleno) y una secundaria con borde -->
-      <div class="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-        <a mat-flat-button routerLink="/rastreos">Buscar nuevas ofertas</a>
-        <a mat-stroked-button routerLink="/tablero">Ir al tablero</a>
+  @if (vacio()) {
+    <div class="flex flex-1 items-center justify-center pb-[8vh]">
+      <div class="flex w-full max-w-xl flex-col items-center text-center">
+        <svg aria-hidden="true" viewBox="0 0 120 120" class="h-28 w-28">
+          <rect x="8" y="8" width="108" height="108" rx="6" class="fill-on-surface" />
+          <rect
+            x="3"
+            y="3"
+            width="108"
+            height="108"
+            rx="6"
+            class="fill-fosforito stroke-on-fosforito"
+            stroke-width="3"
+          />
+          <path
+            d="M47 22c-4 5 4 9 0 15M59 18c-4 5 4 9 0 15M71 22c-4 5 4 9 0 15"
+            fill="none"
+            class="stroke-on-fosforito"
+            stroke-width="3"
+            stroke-linecap="round"
+          />
+          <rect
+            x="22"
+            y="88"
+            width="72"
+            height="9"
+            rx="2"
+            class="fill-papel stroke-on-fosforito"
+            stroke-width="3"
+          />
+          <path
+            d="M80 54h6a9 9 0 0 1 0 18h-6"
+            fill="none"
+            class="stroke-on-fosforito"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <path
+            d="M32 46h48v20a20 20 0 0 1-20 20h-8a20 20 0 0 1-20-20V46Z"
+            class="fill-papel stroke-on-fosforito"
+            stroke-width="3"
+            stroke-linejoin="round"
+          />
+          <rect x="47" y="56" width="18" height="18" rx="2" class="fill-on-fosforito" />
+          <path
+            d="M56 65v-6M56 65l4.5-4.5"
+            class="stroke-papel"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+          <rect x="58" y="67" width="4" height="4" class="fill-fosforito" />
+        </svg>
+        <p class="mt-6 font-display text-3xl font-extrabold text-on-surface">
+          Nada pendiente para hoy.
+        </p>
+        <p class="mt-3 font-mono text-sm font-medium text-on-surface-variant">
+          De momento, café tranquilo.
+        </p>
+        <!-- Las dos con borde: el relleno de la pantalla es «Nuevo recordatorio», arriba -->
+        <div class="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <a mat-stroked-button routerLink="/rastreos">Buscar nuevas ofertas</a>
+          <a mat-stroked-button routerLink="/tablero">Ir al tablero</a>
+        </div>
       </div>
     </div>
-  </div>
+  }
 </section>

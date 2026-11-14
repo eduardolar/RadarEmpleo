@@ -1,0 +1,225 @@
+@let r = recordatorio();
+@let breve = r.candidatura;
+
+<!-- Margen negativo: el texto se alinea con el resto y el área de toque sigue siendo de 48 px -->
+<button mat-button type="button" class="-mt-2 -ml-3 min-h-12" (click)="volver.emit()">
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="square"
+    class="mr-1 inline-block h-4 w-4 align-[-0.2em]"
+  >
+    <path d="M12.5 15 7.5 10l5-5" />
+  </svg>
+  Volver al resumen
+</button>
+
+<h2
+  #titulo
+  id="titulo-detalle"
+  tabindex="-1"
+  class="mt-2 text-xl leading-snug font-extrabold wrap-break-word text-on-surface outline-none"
+>
+  {{ r.titulo }}
+</h2>
+
+<p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+  <app-insignia-tipo [tipo]="r.tipo" />
+  <time [attr.datetime]="r.fechaHora" class="font-mono text-sm text-on-surface-variant">{{
+    r.fechaHora | fechaMadrid: 'dia-hora'
+  }}</time>
+  @if (r.hecho) {
+    <span class="insignia bg-surface-container-high text-on-surface-variant">Hecho</span>
+  }
+</p>
+
+@if (!r.hecho) {
+  <!-- Con borde, como en las tarjetas: el relleno de Hoy es «Nuevo recordatorio» -->
+  <button
+    mat-stroked-button
+    type="button"
+    data-hecho
+    class="mt-3 min-h-12 [--mat-button-outlined-horizontal-padding:16px]"
+    (click)="hecho.emit()"
+  >
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.4"
+      stroke-linecap="square"
+      class="mr-1.5 inline-block h-4 w-4 align-[-0.2em]"
+    >
+      <path d="m4.5 10.5 3.5 3.5 7.5-8" />
+    </svg>
+    Hecho
+  </button>
+}
+
+@if (breve) {
+  <!-- Caja interna gris, sin marco: de qué candidatura es -->
+  <div class="mt-4 rounded-md bg-surface-container px-3 py-3">
+    <p class="etiqueta text-on-surface-variant">{{ breve.empresa }}</p>
+    <p class="mt-0.5 font-semibold wrap-break-word text-on-surface">{{ breve.puesto }}</p>
+    <p class="mt-1.5">
+      <span [attr.data-estado]="breve.estado" class="insignia bg-estado-suave text-on-estado">
+        <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-estado"></span>
+        {{ etiquetasEstado[breve.estado] }}
+      </span>
+    </p>
+  </div>
+}
+
+<section class="mt-4" aria-labelledby="titulo-notas-recordatorio">
+  <h3 id="titulo-notas-recordatorio" class="etiqueta mb-1 text-on-surface-variant">
+    Notas del recordatorio
+  </h3>
+  @if (r.notas) {
+    <p class="text-sm wrap-break-word whitespace-pre-line text-on-surface">{{ r.notas }}</p>
+  } @else {
+    <p class="font-mono text-sm text-on-surface-variant">Sin notas.</p>
+  }
+</section>
+
+@if (breve) {
+  <!-- Cambiar el día, la hora o las notas sin buscar el «⋮» de la tarjeta. Aquí «Editar» a secas
+       podría ser la candidatura: se dice qué se edita -->
+  <button mat-button type="button" class="mt-1 -ml-3 min-h-12" (click)="editar.emit()">
+    Editar recordatorio
+  </button>
+
+  <!-- Hueco fijo para la barra de carga, para que lo de debajo no salte -->
+  <div class="mt-4 h-1">
+    @if (cargando()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Cargando la candidatura" />
+    }
+  </div>
+
+  @if (error(); as mensaje) {
+    <div
+      role="alert"
+      class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md bg-error-container p-3 text-on-error-container"
+    >
+      <p class="min-w-0 text-sm font-medium">{{ mensaje }}</p>
+      <button mat-stroked-button type="button" class="min-h-12" (click)="reintentar()">
+        Reintentar
+      </button>
+    </div>
+  }
+
+  @if (ficha(); as c) {
+    @if (c.enlace) {
+      <a
+        mat-button
+        class="mt-1 -ml-3 min-h-12"
+        [href]="c.enlace"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Abrir la oferta <span class="sr-only">(se abre en otra pestaña)</span>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          class="ml-1 inline h-4 w-4 align-[-0.15em]"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M11 4h5v5M16 4l-7 7M14 12v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3"
+          />
+        </svg>
+      </a>
+    }
+
+    <section class="mt-3" aria-labelledby="titulo-notas-candidatura">
+      <h3 id="titulo-notas-candidatura" class="etiqueta mb-1 text-on-surface-variant">
+        Notas de la candidatura
+      </h3>
+      @if (c.notas.length > 0) {
+        <ul class="flex flex-col gap-2">
+          @for (nota of c.notas; track nota.id) {
+            <li class="text-sm">
+              <p class="font-mono text-xs text-on-surface-variant">
+                <time [attr.datetime]="nota.fecha">{{ nota.fecha | fechaMadrid: 'dia-hora' }}</time>
+              </p>
+              <p
+                class="mt-1 rounded-md bg-surface-container px-3 py-2 wrap-break-word whitespace-pre-line text-on-surface"
+              >
+                {{ nota.texto }}
+              </p>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="font-mono text-sm text-on-surface-variant">Sin notas.</p>
+      }
+    </section>
+
+    <section class="mt-4" aria-labelledby="titulo-historial-detalle">
+      <h3 id="titulo-historial-detalle" class="etiqueta mb-1 text-on-surface-variant">
+        Historial de estados
+      </h3>
+      <!-- Del más reciente al más antiguo. El punto es decorativo: el texto ya dice a qué estado pasó -->
+      <ol class="flex flex-col gap-2">
+        @for (cambio of historial(); track cambio.id) {
+          <li class="flex gap-2 text-sm">
+            <span
+              aria-hidden="true"
+              [attr.data-estado]="cambio.a"
+              class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-estado"
+            ></span>
+            <div class="min-w-0">
+              <p class="font-semibold text-on-surface">
+                @if (cambio.de) {
+                  {{ etiquetasEstado[cambio.de] }} → {{ etiquetasEstado[cambio.a] }}
+                } @else {
+                  Alta en {{ etiquetasEstado[cambio.a] }}
+                }
+              </p>
+              <p class="font-mono text-xs text-on-surface-variant">
+                <time [attr.datetime]="cambio.fecha">{{
+                  cambio.fecha | fechaMadrid: 'dia-hora'
+                }}</time>
+              </p>
+              @if (cambio.comentario) {
+                <p class="mt-0.5 wrap-break-word whitespace-pre-line text-on-surface-variant">
+                  {{ cambio.comentario }}
+                </p>
+              }
+            </div>
+          </li>
+        }
+      </ol>
+    </section>
+  }
+
+  <!-- Los dos con borde y siempre a la vista, aunque la candidatura no cargue. En Hoy solo salen
+       recordatorios de candidaturas activas, pero se comprueba: a una descartada no se le apunta nada -->
+  <div class="mt-5 flex flex-col gap-2">
+    @if (activa()) {
+      <button
+        mat-stroked-button
+        type="button"
+        data-anadir
+        class="min-h-12 w-full"
+        (click)="anadir.emit()"
+      >
+        Añadir recordatorio
+      </button>
+    }
+    <a mat-stroked-button class="min-h-12 w-full" [routerLink]="['/candidaturas', breve.id]">
+      Abrir ficha completa
+    </a>
+  </div>
+} @else {
+  <button mat-stroked-button type="button" class="mt-5 min-h-12 w-full" (click)="editar.emit()">
+    Editar
+  </button>
+}

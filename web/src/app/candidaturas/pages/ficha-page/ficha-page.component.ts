@@ -32,18 +32,22 @@ import { Router, RouterLink } from '@angular/router';
 import { filter, switchMap } from 'rxjs';
 import { ErrorApi } from '../../../core/interfaces/error-api.interface';
 import { PanelDocumentos } from '../../../documentos/components/panel-documentos/panel-documentos';
+import { TarjetaRecordatorio } from '../../../recordatorios/components/tarjeta-recordatorio/tarjeta-recordatorio';
+import { AccionesRecordatorioService } from '../../../recordatorios/services/acciones-recordatorio.service';
+import { tipoInicialSegunEstado } from '../../../recordatorios/utils/tipo-inicial';
 import { confirmar } from '../../../shared/components/dialogo-confirmacion/dialogo-confirmacion';
 import { EnlaceVolver } from '../../../shared/components/enlace-volver/enlace-volver';
 import { FechaMadridPipe } from '../../../shared/pipes/fecha-madrid.pipe';
 import { AvisosService } from '../../../shared/services/avisos.service';
 import { FechaActualService } from '../../../shared/services/fecha-actual.service';
+import { diaMadrid } from '../../../shared/utils/fechas-madrid';
 import {
   aplicarErroresServidor,
   mensajeError,
   obligatorio,
 } from '../../../shared/utils/validadores';
 import { abrirDialogoCandidatura } from '../../components/dialogo-candidatura/dialogo-candidatura';
-import { EstadoCandidatura, Nota } from '../../interfaces/candidatura.interface';
+import { EstadoCandidatura, Nota, Recordatorio } from '../../interfaces/candidatura.interface';
 import { CambioEstadoService } from '../../services/cambio-estado.service';
 import { CandidaturasService } from '../../services/candidaturas.service';
 import { CAMPO_NOTA, MAXIMO_NOTA } from '../../utils/campos-candidatura';
@@ -58,6 +62,7 @@ import {
   ETIQUETAS_TIPO_RECORDATORIO,
 } from '../../utils/etiquetas';
 import { lineaDeTiempo } from '../../utils/linea-de-tiempo';
+import { esEstadoFinal } from '../../utils/transiciones-permitidas';
 
 @Component({
   imports: [
@@ -71,6 +76,7 @@ import { lineaDeTiempo } from '../../utils/linea-de-tiempo';
     FechaMadridPipe,
     PanelDocumentos,
     EnlaceVolver,
+    TarjetaRecordatorio,
   ],
   selector: 'app-ficha-page',
   templateUrl: './ficha-page.component.html',
@@ -78,6 +84,7 @@ import { lineaDeTiempo } from '../../utils/linea-de-tiempo';
 export default class FichaPageComponent {
   private readonly candidaturasService = inject(CandidaturasService);
   private readonly cambioEstado = inject(CambioEstadoService);
+  private readonly accionesRecordatorio = inject(AccionesRecordatorioService);
   private readonly dialog = inject(MatDialog);
   private readonly avisos = inject(AvisosService);
   private readonly router = inject(Router);
@@ -90,6 +97,7 @@ export default class FichaPageComponent {
   private readonly bloqueAcciones = viewChild<ElementRef<HTMLElement>>('bloqueAcciones');
   private readonly elementoNota = viewChild<ElementRef<HTMLTextAreaElement>>('entradaNota');
   private readonly tituloHistorial = viewChild<ElementRef<HTMLElement>>('tituloHistorial');
+  private readonly tituloRecordatorios = viewChild<ElementRef<HTMLElement>>('tituloRecordatorios');
 
   /** Viene de la ruta /candidaturas/:id (withComponentInputBinding) */
   readonly id = input.required({ transform: numberAttribute });
@@ -130,6 +138,18 @@ export default class FichaPageComponent {
     const c = this.candidatura();
     return c ? lineaDeTiempo(c.historial, c.notas) : [];
   });
+
+  /** El día de Madrid de hoy: decide qué recordatorios salen como vencidos */
+  protected readonly hoy = computed(() => diaMadrid(this.fechaActual.ahora()));
+
+  /** Descartada o cerrada: no se apuntan recordatorios nuevos y los que tenga no salen en Hoy */
+  protected readonly fueraDelProceso = computed(() => {
+    const c = this.candidatura();
+    return c !== null && esEstadoFinal(c.estado);
+  });
+  protected readonly hayPendientesOcultos = computed(
+    () => this.fueraDelProceso() && (this.candidatura()?.recordatorios ?? []).some((r) => !r.hecho),
+  );
 
   protected readonly formularioNota = new FormGroup({
     texto: new FormControl('', {
@@ -289,12 +309,40 @@ export default class FichaPageComponent {
       });
   }
 
-  /** El diálogo devuelve el foco al botón «Borrar», que desaparece con la nota: caería en <body> */
+  protected anadirRecordatorio(): void {
+    const c = this.candidatura();
+    if (!c) {
+      return;
+    }
+    this.accionesRecordatorio.nuevo(tipoInicialSegunEstado(c.estado), c).subscribe();
+  }
+
+  protected recordatorioHecho(recordatorio: Recordatorio): void {
+    this.accionesRecordatorio.hecho(recordatorio);
+  }
+
+  protected recordatorioPendiente(recordatorio: Recordatorio): void {
+    this.accionesRecordatorio.pendiente(recordatorio);
+  }
+
+  protected editarRecordatorio(recordatorio: Recordatorio): void {
+    this.accionesRecordatorio.editar(recordatorio, this.candidatura()).subscribe();
+  }
+
+  protected borrarRecordatorio(recordatorio: Recordatorio): void {
+    this.accionesRecordatorio.borrar(recordatorio, () => this.enfocar(this.tituloRecordatorios));
+  }
+
   private enfocarHistorial(): void {
+    this.enfocar(this.tituloHistorial);
+  }
+
+  /** El diálogo devuelve el foco al botón «Borrar», que desaparece con lo borrado: caería en <body> */
+  private enfocar(titulo: () => ElementRef<HTMLElement> | undefined): void {
     if (this.destroyRef.destroyed) {
       return;
     }
-    afterNextRender(() => this.tituloHistorial()?.nativeElement.focus({ preventScroll: true }), {
+    afterNextRender(() => titulo()?.nativeElement.focus({ preventScroll: true }), {
       injector: this.injector,
     });
   }

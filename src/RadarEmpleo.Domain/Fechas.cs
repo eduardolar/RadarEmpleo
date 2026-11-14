@@ -29,9 +29,32 @@ public static class Fechas
     public static DateTime UtcAMadrid(DateTime utc) =>
         TimeZoneInfo.ConvertTimeFromUtc(AUtc(utc), Madrid);
 
-    /// <summary>Instante UTC correspondiente a una hora de reloj de Madrid (se ignora el Kind de la entrada).</summary>
+    /// <summary>
+    /// Instante UTC correspondiente a una hora de reloj de Madrid (se ignora el Kind de la entrada).
+    /// Lanza <see cref="ArgumentException"/> con una hora que no existe (<see cref="EsHoraInexistente"/>):
+    /// quien la reciba de fuera tiene que comprobarla antes.
+    /// </summary>
     public static DateTime MadridAUtc(DateTime horaMadrid) =>
         TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(horaMadrid, DateTimeKind.Unspecified), Madrid);
+
+    /// <summary>
+    /// ¿Esa hora de reloj no existe en Madrid? Pasa la noche del último domingo de marzo, cuando el reloj
+    /// salta de las 02:00 a las 03:00 (de 02:00 a 02:59 no hay nada).
+    /// </summary>
+    public static bool EsHoraInexistente(DateTime horaMadrid) =>
+        Madrid.IsInvalidTime(DateTime.SpecifyKind(horaMadrid, DateTimeKind.Unspecified));
+
+    /// <summary>
+    /// La misma hora si existe; si cae en el salto de marzo, el primer minuto que sí existe (las 03:00).
+    /// </summary>
+    public static DateTime PrimeraHoraValida(DateTime horaMadrid)
+    {
+        if (!EsHoraInexistente(horaMadrid)) return horaMadrid;
+        var minuto = new DateTime(horaMadrid.Year, horaMadrid.Month, horaMadrid.Day, horaMadrid.Hour, horaMadrid.Minute, 0);
+        // El salto es de una hora: como mucho 60 vueltas
+        while (EsHoraInexistente(minuto)) minuto = minuto.AddMinutes(1);
+        return minuto;
+    }
 
     /// <summary>Medianoche (00:00 en Madrid) del día indicado, en UTC.</summary>
     public static DateTime MedianocheMadridEnUtc(DateTime dia) => MadridAUtc(dia.Date);

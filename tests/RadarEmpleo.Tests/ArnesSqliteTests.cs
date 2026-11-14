@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using RadarEmpleo.Data;
 using RadarEmpleo.Services;
 using RadarEmpleo.Services.Curriculum;
+using RadarEmpleo.Services.Estadisticas;
 
 namespace RadarEmpleo.Tests;
 
@@ -144,6 +145,13 @@ public abstract class ArnesSqliteTests : IDisposable
     /// <summary>Factory sobre la misma BD que ejecuta <paramref name="accion"/> antes de la primera consulta con ese SQL (ver <see cref="AntesDeConsultar"/>).</summary>
     protected TestDbContextFactory FactoryAntesDeConsultar(string contiene, Func<Task> accion) =>
         new(new DbContextOptionsBuilder<AppDbContext>(Options).AddInterceptors(new AntesDeConsultar(contiene, accion)).Options);
+
+    /// <summary>
+    /// <see cref="RecordatoriosService"/> sobre <paramref name="factory"/> (por defecto, <see cref="Factory"/>),
+    /// con sus estadísticas sobre la BD del arnés, como lo monta la inyección de dependencias.
+    /// </summary>
+    protected RecordatoriosService NuevoRecordatorios(IDbContextFactory<AppDbContext>? factory = null) =>
+        new(factory ?? Factory, Reloj, new EstadisticasService(Factory, Reloj));
 
     /// <summary>Cierra la conexión compartida, lo que descarta la base de datos en memoria.</summary>
     public void Dispose()

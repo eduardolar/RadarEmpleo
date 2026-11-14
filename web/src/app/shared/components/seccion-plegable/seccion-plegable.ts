@@ -16,4 +16,12 @@ export class SeccionPlegable {
   /** Cómo empieza; después la abre o la cierra quien la usa */
   readonly abierta = input(false);
   readonly aspecto = input<'tarjeta' | 'suave'>('tarjeta');
+  /**
+   * Si el título hace de encabezado de la página (2 para un «h2»), para que salga en la lista de
+   * encabezados del lector de pantalla junto a las secciones que no se pliegan (un encabezado oculto
+   * justo antes del bloque). Sin él, es solo texto
+   */
+  readonly nivelTitulo = input<2 | 3 | null>(null);
+  /** Un id para el título (el <summary>), por si la página tiene que llevarle el foco */
+  readonly idTitulo = input<string | null>(null);
 }

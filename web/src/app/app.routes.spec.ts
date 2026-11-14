@@ -8,6 +8,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { routes } from './app.routes';
 import { crearDetalle } from './candidaturas/utils/candidatura-de-prueba';
+import { crearPanel } from './recordatorios/utils/recordatorio-de-prueba';
 
 describe('Navegación', () => {
   let http: HttpTestingController;
@@ -29,11 +30,12 @@ describe('Navegación', () => {
 
   afterEach(() => http.verify());
 
-  // Hoy lleva el indicador de la API, que pregunta al entrar
-  function responderInfo(): void {
+  // Hoy lleva el indicador de la API, que pregunta al entrar, y pide su panel
+  function responderHoy(): void {
     http
       .expectOne('/api/sistema/info')
       .flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
+    http.expectOne('/api/panel/hoy').flush(crearPanel());
   }
 
   // Rastreos busca informes nuevos al entrar y después pide la lista. Pide también las candidaturas,
@@ -51,16 +53,25 @@ describe('Navegación', () => {
     http.expectOne('/api/rastreos').flush([]);
   }
 
-  it('«/» redirige a «/hoy» y su enlace lleva aria-current="page"', async () => {
+  it('«/» redirige a «/inicio» y su enlace lleva aria-current="page"', async () => {
     const harness = await RouterTestingHarness.create('/');
-    responderInfo();
+    responderHoy();
 
-    expect(TestBed.inject(Router).url).toBe('/hoy');
+    expect(TestBed.inject(Router).url).toBe('/inicio');
+    expect(TestBed.inject(Title).getTitle()).toBe('Inicio · RadarEmpleo');
 
     // Uno en el menú lateral y otro en la barra inferior: cada uno se oculta por CSS según el ancho
     const activos = harness.routeNativeElement!.querySelectorAll('a[aria-current="page"]');
     expect(activos).toHaveLength(2);
-    activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/hoy'));
+    activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/inicio'));
+    activos.forEach((enlace) => expect(enlace.textContent).toContain('Inicio'));
+  });
+
+  it('los enlaces viejos a «/hoy» llevan a «/inicio» con sus filtros y su elegido', async () => {
+    await RouterTestingHarness.create('/hoy?tipo=Entrevista&dia=2026-11-18&ver=12');
+    responderHoy();
+
+    expect(TestBed.inject(Router).url).toBe('/inicio?tipo=Entrevista&dia=2026-11-18&ver=12');
   });
 
   it('/candidaturas/1 abre esa ficha y resalta Tablero en el menú y en la barra', async () => {
@@ -189,8 +200,8 @@ describe('Navegación', () => {
   });
 
   it('lleva el foco a <main> al cambiar de página, pero no en la primera carga', async () => {
-    const harness = await RouterTestingHarness.create('/hoy');
-    responderInfo();
+    const harness = await RouterTestingHarness.create('/inicio');
+    responderHoy();
 
     expect(document.activeElement?.id).not.toBe('principal');
 

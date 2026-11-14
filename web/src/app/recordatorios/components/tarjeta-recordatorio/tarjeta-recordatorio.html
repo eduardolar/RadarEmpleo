@@ -1,0 +1,236 @@
+@let r = recordatorio();
+<!-- Una sola superficie: tarjeta limpia con un borde fino, sin sombra dura ni marcos dentro. El borde
+     pasa a lima suave al pasar el ratón o con el foco del teclado dentro. Compacta: a la izquierda,
+     qué es y cuándo; a la derecha, las acciones. Con menos de 32 rem de tarjeta (el móvil y la
+     columna de la ficha) las acciones bajan debajo: por eso se mide la tarjeta (@container) y no la
+     ventana. Botones con menos relleno lateral (12 px en la estrecha) y los iconos pegados al borde
+     derecho para que «Hecho», «Posponer», la oferta y «⋮» quepan en una fila a 360 px -->
+<div class="@container">
+  <!-- Seleccionada (su detalle está en el panel de al lado): borde entero y una barra a la izquierda
+       del color de los enlaces, como la sección activa del menú. El clic en la tarjeta es un atajo
+       para el ratón; con el teclado se elige con el título, que es un botón -->
+  <article
+    class="flex flex-col gap-x-3 gap-y-2 rounded-md border border-borde-fino bg-surface-container-lowest px-3 py-3 transition-colors [--mat-button-outlined-horizontal-padding:12px] @lg:[--mat-button-outlined-horizontal-padding:16px] hover:border-borde-fino-activo has-focus-visible:border-borde-fino-activo motion-reduce:transition-none data-seleccionada:border-enlace! data-seleccionada:shadow-[inset_4px_0_0_0_var(--re-enlace)] @lg:flex-row @lg:items-center @lg:px-4"
+    [class.cursor-pointer]="seleccionable()"
+    [attr.data-seleccionada]="seleccionada() ? '' : null"
+    [attr.aria-label]="etiquetaTipo() + ': ' + tituloCompleto()"
+    (click)="alPulsarTarjeta($event)"
+  >
+    <div class="min-w-0 flex-1">
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <app-insignia-tipo [tipo]="r.tipo" />
+
+        @if (vencido()) {
+          <span class="insignia bg-humo-suave text-humo">Vencido · {{ textoDia() }}</span>
+        }
+
+        <!-- Bajo el encabezado de su día (soloHora) no se repite el día: queda la hora -->
+        <time [attr.datetime]="r.fechaHora" class="font-mono text-sm text-on-surface-variant">
+          @if (!vencido() && !soloHora()) {
+            {{ textoDia() }} ·
+          }
+          {{ hora() }}
+        </time>
+
+        @if (r.hecho) {
+          <span class="insignia bg-surface-container-high text-on-surface-variant">Hecho</span>
+        }
+      </div>
+
+      @let c = candidatura();
+      @if (seleccionable()) {
+        <!-- Donde cabe el panel de detalle, el título es un botón que lo abre (y lo cierra): la ficha
+         se abre desde el panel. Mismo aspecto que el enlace -->
+        <button
+          type="button"
+          data-titulo
+          [class]="clasesTitulo"
+          class="cursor-pointer text-left"
+          [class.text-on-surface]="!r.hecho"
+          [class.text-on-surface-variant]="r.hecho"
+          [class.line-through]="r.hecho"
+          [attr.aria-pressed]="seleccionada()"
+          [attr.aria-label]="'Ver detalle: ' + tituloCompleto()"
+          (click)="seleccionar.emit()"
+        >
+          {{ titulo() }}
+        </button>
+      } @else if (c) {
+        <!-- El título es el enlace a la ficha. Si se ve solo el puesto, su nombre sigue siendo el
+             título entero -->
+        <a
+          [routerLink]="['/candidaturas', c.id]"
+          data-titulo
+          [class]="clasesTitulo"
+          [class.text-on-surface]="!r.hecho"
+          [class.text-on-surface-variant]="r.hecho"
+          [class.line-through]="r.hecho"
+          [attr.aria-label]="titulo() === tituloCompleto() ? null : tituloCompleto()"
+          >{{ titulo() }}</a
+        >
+      } @else {
+        <p
+          class="mt-1.5 text-base leading-snug font-semibold"
+          [class.text-on-surface]="!r.hecho"
+          [class.line-through]="r.hecho"
+          [class.text-on-surface-variant]="r.hecho"
+        >
+          {{ titulo() }}
+        </p>
+      }
+      @if (c) {
+        <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-on-surface-variant">
+          <span class="etiqueta">{{ c.empresa }}</span>
+          <span [attr.data-estado]="c.estado" class="insignia bg-estado-suave text-on-estado">
+            <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-estado"></span>
+            {{ etiquetasEstado[c.estado] }}
+          </span>
+        </p>
+      }
+
+      @if (cerradoAlPasarA(); as estado) {
+        <!-- Opción por defecto mientras Eduardo no diga otra cosa (F6a, punto 17 de la revisión): para
+             quitarla basta con borrar este bloque -->
+        <p data-cerrado-solo class="mt-1 font-mono text-xs text-on-surface-variant">
+          Se cerró solo al pasar a {{ etiquetasEstado[estado] }}
+        </p>
+      }
+
+      @if (r.notas) {
+        <p class="mt-1 text-sm whitespace-pre-line text-on-surface-variant">{{ r.notas }}</p>
+      }
+    </div>
+
+    <!-- Acciones juntas y centradas en vertical: «Hecho», «Posponer» si toca y, al final, los dos
+         iconos (la oferta y «⋮») -->
+    <div class="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-2 @lg:gap-2">
+      @if (r.hecho) {
+        <button
+          mat-stroked-button
+          type="button"
+          data-accion
+          class="min-h-12"
+          [attr.aria-label]="'Pendiente otra vez: ' + tituloCompleto()"
+          (click)="pendiente.emit()"
+        >
+          Pendiente otra vez
+        </button>
+      } @else {
+        <!-- Siempre con borde: en lo que toca hoy (destacada), del color de los enlaces -->
+        <button
+          mat-stroked-button
+          type="button"
+          data-accion
+          class="min-h-12"
+          [class.boton-acento]="destacada()"
+          [attr.aria-label]="'Hecho: ' + tituloCompleto()"
+          (click)="hecho.emit()"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.4"
+            stroke-linecap="square"
+            class="mr-1.5 inline-block h-4 w-4 align-[-0.2em]"
+          >
+            <path d="m4.5 10.5 3.5 3.5 7.5-8" />
+          </svg>
+          Hecho
+        </button>
+
+        @if (conPosponer()) {
+          <button
+            mat-stroked-button
+            type="button"
+            class="min-h-12"
+            [matMenuTriggerFor]="menuPosponer"
+            [attr.aria-label]="'Posponer: ' + tituloCompleto()"
+          >
+            Posponer
+            <!-- inline-block: como bloque (lo normal en un svg con Tailwind) bajaría de línea -->
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              class="ml-1 inline-block h-4 w-4 align-[-0.2em]"
+            >
+              <path stroke-linecap="square" d="m5 7.5 5 5 5-5" />
+            </svg>
+          </button>
+          <mat-menu #menuPosponer="matMenu">
+            @for (opcion of opcionesPosponer(); track opcion.dia) {
+              <button mat-menu-item type="button" (click)="posponer.emit(opcion.dia)">
+                {{ opcion.texto }}
+                <span class="ml-2 font-mono text-xs text-on-surface-variant">{{
+                  opcion.fecha
+                }}</span>
+              </button>
+            }
+            <button mat-menu-item type="button" (click)="editar.emit()">
+              Cambiar fecha u hora…
+            </button>
+          </mat-menu>
+        }
+      }
+
+      <!-- Los dos iconos van pegados y, en la tarjeta estrecha, al final de la fila. En la ancha, las de
+           Hoy sin oferta guardan su hueco: así «Hecho» y «Posponer» quedan en columna en toda la lista -->
+      <!-- -mr-2: el dibujo de «⋮» queda alineado con el borde del contenido, como el texto -->
+      <div class="-mr-2 ml-auto flex items-center @lg:mr-0 @lg:ml-0">
+        @if (c?.enlace; as enlace) {
+          <!-- Discreto: gris hasta que se pasa el ratón o llega el foco. 48 px de zona de toque -->
+          <a
+            mat-icon-button
+            data-oferta
+            class="text-on-surface-variant hover:text-enlace focus-visible:text-enlace"
+            [href]="enlace"
+            target="_blank"
+            rel="noopener noreferrer"
+            [attr.aria-label]="'Abrir la oferta de ' + c?.puesto + ' en otra pestaña'"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              class="h-5 w-5"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M11 4h5v5M16 4l-7 7M14 12v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3"
+              />
+            </svg>
+          </a>
+        } @else if (conCandidatura()) {
+          <span aria-hidden="true" data-hueco-oferta class="hidden h-10 w-10 @lg:block"></span>
+        }
+
+        <button
+          mat-icon-button
+          type="button"
+          class="text-on-surface"
+          [matMenuTriggerFor]="menuMas"
+          [attr.aria-label]="'Más acciones: ' + tituloCompleto()"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+            <rect x="8.25" y="3" width="3.5" height="3.5" />
+            <rect x="8.25" y="8.25" width="3.5" height="3.5" />
+            <rect x="8.25" y="13.5" width="3.5" height="3.5" />
+          </svg>
+        </button>
+      </div>
+      <mat-menu #menuMas="matMenu" xPosition="before">
+        <button mat-menu-item type="button" (click)="editar.emit()">
+          {{ conPosponer() ? 'Editar' : 'Editar o cambiar la fecha…' }}
+        </button>
+        <button mat-menu-item type="button" (click)="borrar.emit()">Borrar</button>
+      </mat-menu>
+    </div>
+  </article>
+</div>

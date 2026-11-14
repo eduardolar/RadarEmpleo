@@ -1,5 +1,5 @@
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
-import { BreakpointObserver } from '@angular/cdk/layout';
+import { BreakpointObserver, MediaMatcher } from '@angular/cdk/layout';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -45,7 +45,23 @@ describe('TableroPageComponent', () => {
     await fixture.whenStable();
   }
 
-  afterEach(() => http.verify());
+  // jsdom no mide ni trae ResizeObserver: los tamaños del tablero se simulan en cada prueba
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    http.verify();
+  });
 
   function elemento(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
@@ -235,6 +251,107 @@ describe('TableroPageComponent', () => {
         expect(botonDe('Enviada')).toBeNull();
         cambioDeEstado().flush(crearDetalle({ id: 1, estado: 'Enviada' }));
         lista().flush([{ ...TARJETA, estado: 'Enviada' }]);
+      });
+    });
+
+    describe('flechas laterales', () => {
+      function carril(): HTMLElement {
+        return elemento().querySelector<HTMLElement>('#columnas-tablero')!;
+      }
+
+      function flecha(sentido: 'anteriores' | 'siguientes'): HTMLButtonElement | null {
+        return elemento().querySelector<HTMLButtonElement>(
+          `button[aria-label="Ver columnas ${sentido}"]`,
+        );
+      }
+
+      /** Caben 800 px de 1200: se puede desplazar hasta 400 */
+      async function desplazarA(scrollLeft: number): Promise<void> {
+        Object.defineProperties(carril(), {
+          scrollWidth: { value: 1200, configurable: true },
+          clientWidth: { value: 800, configurable: true },
+          scrollLeft: { value: scrollLeft, configurable: true, writable: true },
+        });
+        carril().dispatchEvent(new Event('scroll'));
+        await fixture.whenStable();
+      }
+
+      it('si todo cabe, no hay flechas y la barra de desplazamiento sigue oculta', async () => {
+        await cargarTablero([TARJETA]);
+
+        expect(flecha('anteriores')).toBeNull();
+        expect(flecha('siguientes')).toBeNull();
+        expect(carril().classList).toContain('scrollbar-oculta');
+        expect(carril().classList).toContain('overflow-x-auto');
+      });
+
+      it('cada flecha sale solo si hay columnas ocultas hacia su lado', async () => {
+        await cargarTablero([TARJETA]);
+
+        await desplazarA(0);
+        expect(flecha('anteriores')).toBeNull();
+        expect(flecha('siguientes')?.getAttribute('aria-controls')).toBe('columnas-tablero');
+
+        await desplazarA(200);
+        expect(flecha('anteriores')?.getAttribute('aria-controls')).toBe('columnas-tablero');
+        expect(flecha('siguientes')).not.toBeNull();
+
+        await desplazarA(400);
+        expect(flecha('anteriores')).not.toBeNull();
+        expect(flecha('siguientes')).toBeNull();
+      });
+
+      it('al pulsarla avanza con un desplazamiento suave', async () => {
+        await cargarTablero([TARJETA]);
+        await desplazarA(0);
+        const scrollBy = vi.fn();
+        carril().scrollBy = scrollBy;
+
+        flecha('siguientes')!.click();
+
+        // jsdom no sitúa las columnas: la única parada que queda es el final
+        expect(scrollBy).toHaveBeenCalledWith({ left: 400, behavior: 'smooth' });
+      });
+
+      it('sin animación si se prefiere menos movimiento', async () => {
+        vi.spyOn(MediaMatcher.prototype, 'matchMedia').mockImplementation(
+          (consulta: string) =>
+            ({ matches: consulta.includes('reduced-motion') }) as MediaQueryList,
+        );
+        await cargarTablero([TARJETA]);
+        await desplazarA(400);
+        const scrollBy = vi.fn();
+        carril().scrollBy = scrollBy;
+
+        flecha('anteriores')!.click();
+
+        expect(scrollBy).toHaveBeenCalledWith({ left: -400, behavior: 'instant' });
+      });
+
+      it('al llegar al final, el foco pasa a la otra flecha y no se pierde', async () => {
+        await cargarTablero([TARJETA]);
+        await desplazarA(0);
+        carril().scrollBy = vi.fn();
+
+        flecha('siguientes')!.focus();
+        flecha('siguientes')!.click();
+        await desplazarA(400);
+
+        expect(flecha('siguientes')).toBeNull();
+        expect(document.activeElement).toBe(flecha('anteriores'));
+      });
+
+      it('al arrastrar una tarjeta se apagan y dejan pasar el puntero al tablero', async () => {
+        await cargarTablero([TARJETA]);
+        await desplazarA(200);
+
+        fixture.componentInstance['arrastrando'].set(TARJETA);
+        await fixture.whenStable();
+
+        for (const sentido of ['anteriores', 'siguientes'] as const) {
+          expect(flecha(sentido)!.classList).toContain('opacity-0');
+          expect(flecha(sentido)!.classList).not.toContain('pointer-events-auto');
+        }
       });
     });
 

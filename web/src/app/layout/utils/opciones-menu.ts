@@ -2,7 +2,7 @@ import { OpcionMenu } from '../interfaces/opcion-menu.interface';
 
 // Las comparten el menú lateral (escritorio) y la barra de abajo (móvil)
 export const OPCIONES_MENU: readonly OpcionMenu[] = [
-  { etiqueta: 'Hoy', descripcion: 'Pendientes y avisos', ruta: '/hoy', icono: 'hoy' },
+  { etiqueta: 'Inicio', descripcion: 'Pendientes y avisos', ruta: '/inicio', icono: 'hoy' },
   {
     etiqueta: 'Tablero',
     descripcion: 'Candidaturas por estado',

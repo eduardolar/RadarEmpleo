@@ -82,6 +82,10 @@ public class AppDbContext : DbContext
             .HasOne(x => x.Candidatura).WithMany(c => c.Recordatorios)
             .HasForeignKey(x => x.CandidaturaId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
         b.Entity<Recordatorio>().HasIndex(r => r.FechaHora);
+        // --- Concurrencia optimista de los recordatorios, sin columna nueva: de dos peticiones que marcan
+        // o mueven a la vez el mismo recordatorio (Hoy, un cambio de estado, un «Deshacer») solo guarda la primera ---
+        b.Entity<Recordatorio>().Property(r => r.Hecho).IsConcurrencyToken();
+        b.Entity<Recordatorio>().Property(r => r.FechaHora).IsConcurrencyToken();
 
         // --- El historial apunta qué seguimiento creó o cerró cada cambio (para deshacerlo con exactitud).
         // Si el recordatorio desaparece, el apunte se queda sin él ---

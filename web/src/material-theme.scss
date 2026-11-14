@@ -27,8 +27,11 @@ html {
 
   // Paleta de Eduardo (11/11/2026): grises + lima, el claro como espejo del oscuro.
   // - Claro: fondo #f9fafb, tarjetas #ffffff, texto #111827, botón principal #111827.
-  // - Oscuro: fondo #111827, texto #f3f4f6, botón principal lima #a3e635 con texto #111827.
-  // Contrastes: #111827 sobre #f9fafb 17:1; lima sobre #111827 y al revés 11:1.
+  // - Oscuro: lienzo #0b111e y tarjetas #111827 (13/11/2026: la tarjeta, algo más clara que el
+  //   lienzo, para que se distinga sin marco grueso), texto #f3f4f6, botón principal lima #a3e635
+  //   con texto #111827.
+  // Contrastes: #111827 sobre #f9fafb 17:1; lima sobre #111827 y al revés 11:1; texto sobre el
+  // lienzo oscuro 17:1.
   @include mat.theme-overrides(
     (
       primary: light-dark(#111827, #a3e635),
@@ -37,10 +40,10 @@ html {
       on-primary-container: light-dark(#3f6212, #d9f99d),
       secondary-container: light-dark(#f3f4f6, #1f2937),
       on-secondary-container: light-dark(#111827, #f3f4f6),
-      surface: light-dark(#f9fafb, #111827),
+      surface: light-dark(#f9fafb, #0b111e),
       surface-dim: light-dark(#e5e7eb, #0b1120),
       surface-bright: light-dark(#ffffff, #273449),
-      surface-container-lowest: light-dark(#ffffff, #0b1120),
+      surface-container-lowest: light-dark(#ffffff, #111827),
       surface-container-low: light-dark(#ffffff, #172033),
       surface-container: light-dark(#f3f4f6, #1f2937),
       surface-container-high: light-dark(#e5e7eb, #273449),
@@ -61,7 +64,10 @@ html {
   );
 
   // Esquinas casi rectas y bordes de 2 px del color del texto en todo lo de Material. Los botones
-  // son rectángulos de 4 px de radio; los campos, también, con el borde más grueso al enfocar
+  // son rectángulos de 4 px de radio; los campos, también, con el borde más grueso al enfocar.
+  // Los de borde, con el texto y el velo al pasar el ratón de la tinta (on-surface) y no del primario:
+  // de día es el mismo #111827, pero de noche el primario es lima y todos los secundarios parecían
+  // de acento. Así de noche van en tinta clara sobre su borde gris y solo .boton-acento lleva lima
   @include mat.button-overrides(
     (
       filled-container-shape: 4px,
@@ -71,6 +77,9 @@ html {
       protected-container-shape: 4px,
       outlined-outline-width: 2px,
       outlined-outline-color: var(--re-trazo),
+      outlined-label-text-color: var(--mat-sys-on-surface),
+      outlined-state-layer-color: var(--mat-sys-on-surface),
+      outlined-ripple-color: color-mix(in srgb, var(--mat-sys-on-surface) 12%, transparent),
     )
   );
   @include mat.form-field-overrides(

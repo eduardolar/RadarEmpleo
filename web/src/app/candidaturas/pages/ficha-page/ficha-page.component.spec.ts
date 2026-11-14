@@ -4,6 +4,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
+import { DialogoRecordatorio } from '../../../recordatorios/components/dialogo-recordatorio/dialogo-recordatorio';
+import { crearRecordatorio } from '../../../recordatorios/utils/recordatorio-de-prueba';
 import { AccionAviso, AvisosService } from '../../../shared/services/avisos.service';
 import {
   CandidaturaDetalle,
@@ -555,5 +557,174 @@ describe('FichaPageComponent', () => {
 
     expect(avisos.exito).toHaveBeenCalledWith('Candidatura borrada.');
     expect(navegar).not.toHaveBeenCalled();
+  });
+
+  describe('recordatorios', () => {
+    const SEGUIMIENTO = crearRecordatorio({
+      id: 4,
+      candidaturaId: 1,
+      tipo: 'Seguimiento',
+      titulo: 'Seguimiento: Desarrollador Angular en Acme',
+      fechaHora: '2026-11-20T08:00:00Z',
+    });
+
+    function seccion(): HTMLElement {
+      return elemento().querySelector<HTMLElement>('[aria-labelledby="titulo-recordatorios"]')!;
+    }
+
+    function botonRecordatorio(etiqueta: string): HTMLButtonElement {
+      return seccion().querySelector<HTMLButtonElement>(`button[aria-label="${etiqueta}"]`)!;
+    }
+
+    function botonAnadir(): HTMLButtonElement | undefined {
+      return [...seccion().querySelectorAll('button')].find((b) =>
+        b.textContent?.includes('Añadir recordatorio'),
+      );
+    }
+
+    it('los enseña como tarjetas, sin posponer ni relleno', async () => {
+      await crear({ estado: 'Enviada', recordatorios: [SEGUIMIENTO] });
+
+      expect(seccion().querySelectorAll('app-tarjeta-recordatorio')).toHaveLength(1);
+      expect(seccion().textContent).toContain('Seguimiento: Desarrollador Angular en Acme');
+      expect(seccion().querySelector('[mat-flat-button]')).toBeNull();
+      expect(seccion().querySelector('button[aria-label^="Posponer"]')).toBeNull();
+      // Ya se está en la ficha: el título no enlaza a ella
+      expect(seccion().querySelector('a')).toBeNull();
+    });
+
+    it('sin recordatorios mantiene el texto de siempre', async () => {
+      await crear({});
+
+      expect(seccion().textContent).toContain('No hay recordatorios.');
+    });
+
+    it('«Añadir recordatorio» abre el diálogo con la candidatura, como seguimiento', async () => {
+      await crear({ estado: 'Enviada' });
+
+      botonAnadir()!.click();
+
+      const [componente, opciones] = abrirDialogo.mock.calls[0];
+      expect(componente).toBe(DialogoRecordatorio);
+      expect(opciones.data.tipoInicial).toBe('Seguimiento');
+      expect(opciones.data.candidatura).toEqual(
+        expect.objectContaining({ id: 1, empresa: 'Acme', puesto: 'Desarrollador Angular' }),
+      );
+    });
+
+    it('con la candidatura en entrevista, empieza como entrevista', async () => {
+      await crear({ estado: 'Entrevista' });
+
+      botonAnadir()!.click();
+
+      expect(abrirDialogo.mock.calls[0][1].data.tipoInicial).toBe('Entrevista');
+    });
+
+    it('con una oferta en la mano, empieza como plazo', async () => {
+      await crear({ estado: 'Oferta' });
+
+      botonAnadir()!.click();
+
+      expect(abrirDialogo.mock.calls[0][1].data.tipoInicial).toBe('Plazo');
+    });
+
+    it('va con borde: el relleno de la ficha es el del cambio de estado', async () => {
+      await crear({ estado: 'Enviada' });
+
+      expect(botonAnadir()!.hasAttribute('mat-stroked-button')).toBe(true);
+    });
+
+    it.each(['Descartada', 'Cerrada'] as const)(
+      'en una %s no se puede añadir y dice por qué no salen en Hoy',
+      async (estado) => {
+        await crear({ estado, recordatorios: [SEGUIMIENTO] });
+
+        expect(botonAnadir()).toBeUndefined();
+        expect(seccion().textContent).toContain(
+          `No sale en Inicio porque la candidatura está ${estado.toLowerCase()}.`,
+        );
+      },
+    );
+
+    it('en una descartada con todo hecho no hace falta la explicación', async () => {
+      await crear({ estado: 'Descartada', recordatorios: [{ ...SEGUIMIENTO, hecho: true }] });
+
+      expect(seccion().textContent).not.toContain('No sale en Inicio');
+    });
+
+    it('en una candidatura en curso no sale la explicación', async () => {
+      await crear({ estado: 'Enviada', recordatorios: [SEGUIMIENTO] });
+
+      expect(seccion().textContent).not.toContain('No sale en Inicio');
+    });
+
+    it('marcar como hecho pone al día la lista sin recargar la ficha', async () => {
+      await crear({ estado: 'Enviada', recordatorios: [SEGUIMIENTO] });
+
+      botonRecordatorio('Hecho: Seguimiento: Desarrollador Angular en Acme').click();
+      const peticion = http.expectOne('/api/recordatorios/4/hecho');
+      expect(peticion.request.body).toEqual({ hecho: true });
+      peticion.flush({ ...SEGUIMIENTO, hecho: true, fechaHecho: '2026-11-13T09:00:00Z' });
+      await fixture.whenStable();
+
+      expect(
+        botonRecordatorio('Pendiente otra vez: Seguimiento: Desarrollador Angular en Acme'),
+      ).not.toBeNull();
+      expect(avisos.deshacible).toHaveBeenCalledWith(
+        'Hecho: «Seguimiento: Desarrollador Angular en Acme».',
+        expect.any(Function),
+      );
+      // afterEach comprueba que no se ha pedido el panel de Hoy (no se ha pasado por él)
+    });
+
+    it('«Pendiente otra vez» lo reabre', async () => {
+      await crear({ estado: 'Enviada', recordatorios: [{ ...SEGUIMIENTO, hecho: true }] });
+
+      botonRecordatorio('Pendiente otra vez: Seguimiento: Desarrollador Angular en Acme').click();
+      const peticion = http.expectOne('/api/recordatorios/4/hecho');
+      expect(peticion.request.body).toEqual({ hecho: false });
+      peticion.flush(SEGUIMIENTO);
+      await fixture.whenStable();
+
+      expect(botonRecordatorio('Hecho: Seguimiento: Desarrollador Angular en Acme')).not.toBeNull();
+    });
+
+    it('editar abre el diálogo con el recordatorio', async () => {
+      await crear({ estado: 'Enviada', recordatorios: [SEGUIMIENTO] });
+
+      botonRecordatorio('Más acciones: Seguimiento: Desarrollador Angular en Acme').click();
+      await fixture.whenStable();
+      opcionesDelMenu()[0].click();
+
+      expect(abrirDialogo.mock.calls[0][1].data.recordatorio).toEqual(SEGUIMIENTO);
+    });
+
+    it('borrar pide confirmación, lo quita de la lista y lleva el foco al título', async () => {
+      await crear({ estado: 'Enviada', recordatorios: [SEGUIMIENTO] });
+      abrirDialogo.mockReturnValue({ afterClosed: () => of(true) });
+
+      botonRecordatorio('Más acciones: Seguimiento: Desarrollador Angular en Acme').click();
+      await fixture.whenStable();
+      opcionesDelMenu()[1].click();
+
+      expect(abrirDialogo.mock.calls[0][1].data.titulo).toBe('Borrar recordatorio');
+      http.expectOne('/api/recordatorios/4').flush(null, { status: 204, statusText: 'No Content' });
+      await fixture.whenStable();
+
+      expect(seccion().querySelector('app-tarjeta-recordatorio')).toBeNull();
+      expect(avisos.exito).toHaveBeenCalledWith('Recordatorio borrado.');
+      expect(document.activeElement).toBe(seccion().querySelector('h2'));
+    });
+
+    it('si no se confirma, no borra nada', async () => {
+      await crear({ estado: 'Enviada', recordatorios: [SEGUIMIENTO] });
+      abrirDialogo.mockReturnValue({ afterClosed: () => of(false) });
+
+      botonRecordatorio('Más acciones: Seguimiento: Desarrollador Angular en Acme').click();
+      await fixture.whenStable();
+      opcionesDelMenu()[1].click();
+
+      expect(seccion().querySelectorAll('app-tarjeta-recordatorio')).toHaveLength(1);
+    });
   });
 });

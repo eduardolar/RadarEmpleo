@@ -114,6 +114,8 @@ export interface Recordatorio {
   fechaHora: string;
   hecho: boolean;
   notas: string | null;
+  /** Cuándo se marcó como hecho; null si está pendiente o se cerró antes de guardarse este dato */
+  fechaHecho: string | null;
 }
 
 /** Cuerpo de POST /api/candidaturas y PUT /api/candidaturas/{id}. La empresa va por nombre */

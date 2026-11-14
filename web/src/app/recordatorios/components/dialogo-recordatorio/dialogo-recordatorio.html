@@ -1,0 +1,117 @@
+<h2 mat-dialog-title>{{ recordatorio ? 'Editar recordatorio' : 'Nuevo recordatorio' }}</h2>
+
+<form [formGroup]="formulario" (ngSubmit)="guardar()">
+  <mat-dialog-content>
+    @if (candidatura; as c) {
+      <p class="mb-5 rounded-md bg-surface-container p-3 text-sm text-on-surface">
+        <span class="etiqueta mr-1 text-on-surface-variant">Para:</span>
+        <span class="font-medium">{{ c.puesto }}</span> · {{ c.empresa }}
+      </p>
+    }
+
+    <fieldset class="mb-4 min-w-0">
+      <legend id="titulo-tipo-recordatorio" class="etiqueta mb-1 text-on-surface-variant">
+        Tipo
+      </legend>
+      <!-- Todos a la vista para elegir de un toque; filas de 48 px. En dos columnas también en el
+           móvil: en una sola, la hora quedaba por debajo de lo que se ve sin desplazar -->
+      <mat-radio-group
+        formControlName="tipo"
+        required
+        aria-labelledby="titulo-tipo-recordatorio"
+        class="grid grid-cols-2 gap-x-2"
+      >
+        @for (tipo of tipos; track tipo.valor) {
+          <mat-radio-button [value]="tipo.valor" class="flex min-h-12 min-w-0 items-center">
+            {{ tipo.etiqueta }}
+          </mat-radio-button>
+        }
+      </mat-radio-group>
+    </fieldset>
+
+    <mat-form-field floatLabel="always" appearance="outline" class="w-full">
+      <mat-label>Título</mat-label>
+      <input
+        matInput
+        formControlName="titulo"
+        required
+        autocomplete="off"
+        placeholder="Qué hay que hacer"
+      />
+      <mat-error>{{ mensajeError(formulario.controls.titulo.errors, campos.titulo) }}</mat-error>
+    </mat-form-field>
+
+    <!-- Atajos del día: un toque en vez de abrir el calendario. El elegido queda marcado -->
+    <div role="group" aria-label="Poner el día" class="-mt-2 mb-3 flex flex-wrap gap-x-1">
+      @for (rapido of diasRapidos(); track rapido.dia) {
+        <button
+          mat-button
+          type="button"
+          class="min-h-12"
+          [attr.aria-pressed]="diaElegido() === rapido.dia"
+          (click)="ponerDia(rapido.dia)"
+        >
+          {{ rapido.texto }}
+        </button>
+      }
+    </div>
+
+    <!-- subscriptSizing="dynamic": la ayuda del día puede ocupar dos líneas y no debe montarse sobre el
+         campo siguiente. El hueco entre campos lo pone la rejilla -->
+    <div class="grid grid-cols-1 items-start gap-x-4 gap-y-4 sm:grid-cols-2">
+      <mat-form-field
+        floatLabel="always"
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="w-full"
+      >
+        <mat-label>Día</mat-label>
+        <!-- min y max: el campo no deja escribir un año de cinco cifras (la API admite de 2000 a 2100) -->
+        <input
+          matInput
+          type="date"
+          formControlName="dia"
+          required
+          min="2000-01-01"
+          max="2100-12-31"
+        />
+        <!-- Sin día, un espacio: guarda el hueco de la línea para que el diálogo no salte al elegirlo -->
+        <mat-hint>{{ ayudaDia() || ' ' }}</mat-hint>
+        <mat-error>{{ mensajeError(formulario.controls.dia.errors, campos.dia) }}</mat-error>
+      </mat-form-field>
+
+      <mat-form-field
+        floatLabel="always"
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="w-full"
+      >
+        <mat-label>{{ horaObligatoria() ? 'Hora' : 'Hora (opcional)' }}</mat-label>
+        <input matInput type="time" formControlName="hora" [required]="horaObligatoria()" />
+        <mat-hint>{{ ayudaHora() }}</mat-hint>
+        <mat-error>{{ mensajeError(formulario.controls.hora.errors, campos.hora) }}</mat-error>
+      </mat-form-field>
+    </div>
+
+    <!-- mt-5: las ayudas del día y de la hora no se pegan a la etiqueta de las notas -->
+    <mat-form-field floatLabel="always" appearance="outline" class="mt-5 w-full">
+      <mat-label>Notas (opcional)</mat-label>
+      <textarea
+        matInput
+        formControlName="notas"
+        rows="2"
+        placeholder="Por Teams, con quién, qué llevar…"
+      ></textarea>
+      <mat-error>{{ mensajeError(formulario.controls.notas.errors, campos.notas) }}</mat-error>
+    </mat-form-field>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" [disabled]="guardando()" (click)="cerrarSinGuardar()">
+      Cancelar
+    </button>
+    <button mat-flat-button type="submit" disabledInteractive [disabled]="guardando()">
+      {{ guardando() ? 'Guardando...' : 'Guardar recordatorio' }}
+    </button>
+  </mat-dialog-actions>
+</form>

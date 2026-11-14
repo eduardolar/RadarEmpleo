@@ -1,0 +1,143 @@
+@let r = resumen();
+<!-- Cifra grande en monoespaciada y su rótulo debajo. En el HTML el rótulo (dt) va antes que la cifra
+     (dd), que es como se lee en voz alta; «order» los cruza a la vista. Cajas internas sin marco.
+     Las que llevan a algún sitio se pulsan enteras y lo dicen con una flecha -->
+<dl class="grid grid-cols-2 gap-2">
+  <div class="flex min-w-0 flex-col rounded-md bg-surface-container px-3 py-3" [class]="clasesCaja">
+    <dt class="etiqueta order-2 mt-1.5 text-on-surface-variant">Candidaturas activas</dt>
+    <dd class="order-1 font-mono text-3xl leading-none font-bold text-on-surface">
+      <a
+        routerLink="/tablero"
+        [class]="clasesCifra"
+        [attr.aria-label]="'Candidaturas activas: ' + r.candidaturasActivas + '. Ir al tablero'"
+      >
+        {{ r.candidaturasActivas }}
+        <ng-container [ngTemplateOutlet]="flecha" />
+      </a>
+    </dd>
+  </div>
+  <div
+    class="flex min-w-0 flex-col rounded-md bg-surface-container px-3 py-3 data-activa:shadow-[inset_0_0_0_2px_var(--re-enlace)]"
+    [class]="entrevistasFiltrables() ? clasesCaja : ''"
+    [attr.data-activa]="entrevistasFiltradas() ? '' : null"
+  >
+    <!-- Cuenta las que quedan por hacer, y al pulsarla la lista enseña esas mismas -->
+    <dt class="etiqueta order-2 mt-1.5 text-on-surface-variant">Entrevistas esta semana</dt>
+    <dd class="order-1 font-mono text-3xl leading-none font-bold text-on-surface">
+      @if (entrevistasFiltrables()) {
+        <button
+          type="button"
+          [class]="clasesCifra"
+          [attr.aria-pressed]="entrevistasFiltradas()"
+          [attr.aria-label]="
+            'Entrevistas pendientes esta semana: ' +
+            r.entrevistasSemana +
+            '. Ver solo esas entrevistas'
+          "
+          (click)="filtrarEntrevistas.emit()"
+        >
+          {{ r.entrevistasSemana }}
+          <ng-container [ngTemplateOutlet]="flecha" />
+        </button>
+      } @else {
+        {{ r.entrevistasSemana }}
+      }
+    </dd>
+  </div>
+  <div class="col-span-2 flex min-w-0 flex-col rounded-md bg-surface-container px-3 py-3">
+    <dt class="etiqueta order-2 mt-2 text-on-surface-variant">Tasa de respuesta</dt>
+    <dd class="order-1 font-mono text-3xl leading-none font-bold text-on-surface">
+      @if (r.respuesta.porcentaje !== null) {
+        {{ r.respuesta.porcentaje }}&nbsp;%
+        <!-- Decorativa: el porcentaje ya está escrito encima. Del color de los enlaces (lima de noche,
+             #4d7c0f de día) sobre una pista gris -->
+        <span
+          aria-hidden="true"
+          data-barra
+          class="mt-2.5 block h-1.5 w-full overflow-hidden rounded-[1px] bg-outline-variant"
+        >
+          <span class="block h-full bg-enlace" [style.width.%]="r.respuesta.porcentaje"></span>
+        </span>
+      } @else {
+        <!-- Sin enviadas no hay tasa: una raya, no un 0 % inventado -->
+        <span aria-hidden="true">—</span>
+        <span class="sr-only">Sin datos</span>
+      }
+    </dd>
+    <!-- De dónde sale la cifra, a la vista de todos -->
+    <dd class="order-3 mt-1 font-mono text-xs text-on-surface-variant">
+      @if (r.respuesta.porcentaje !== null) {
+        {{ r.respuesta.conRespuesta }} de {{ r.respuesta.enviadas }}
+        {{ r.respuesta.enviadas === 1 ? 'enviada' : 'enviadas' }}
+        {{ r.respuesta.conRespuesta === 1 ? 'ha' : 'han' }} llegado a entrevista u oferta.
+      } @else {
+        Todavía no hay candidaturas enviadas.
+      }
+    </dd>
+  </div>
+</dl>
+
+<!-- La flecha de las cifras que se pulsan: gris, y del color de los enlaces al pasar el ratón -->
+<ng-template #flecha>
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="square"
+    class="h-4 w-4 shrink-0 text-on-surface-variant transition-colors group-hover:text-enlace group-has-focus-visible:text-enlace motion-reduce:transition-none"
+  >
+    <path d="M4 10h11M10.5 5l5 5-5 5" />
+  </svg>
+</ng-template>
+
+<h3 id="titulo-semana" class="etiqueta mt-5 mb-2 text-on-surface-variant">Esta semana</h3>
+<!-- Cada día es un botón que filtra la lista a ese día; otro clic en el mismo lo quita. Hoy lleva el
+     marco de 2 px y la negrita; el elegido, el marco del color de los enlaces; los días con algo
+     pendiente, un punto. El texto completo («miércoles 18 de noviembre: 2 tareas») va en el aria-label.
+     A 360 px siete columnas no llegan a 48 px de ancho (harían falta 336): la zona de toque cubre
+     también el hueco entre días, para que no quede ningún punto muerto -->
+
+<ol class="grid grid-cols-7 gap-1" aria-labelledby="titulo-semana">
+  @for (dia of dias(); track dia.dia) {
+    <li class="min-w-0">
+      <button
+        type="button"
+        [attr.aria-pressed]="dia.dia === diaElegido()"
+        [attr.aria-label]="dia.etiqueta"
+        [attr.data-hoy]="dia.esHoy ? '' : null"
+        class="group relative flex h-16 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-md after:absolute after:-inset-x-0.5 after:inset-y-0 after:content-[''] border-2 border-transparent bg-surface-container transition-colors hover:bg-surface-container-high focus-visible:ring-[3px] focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest focus-visible:outline-none motion-reduce:transition-none aria-pressed:border-enlace! aria-pressed:bg-despejado data-hoy:border-trazo data-hoy:bg-surface-container-lowest"
+        (click)="elegirDia.emit(dia.dia)"
+      >
+        <span class="etiqueta text-on-surface-variant">{{ dia.letra }}</span>
+        <span
+          class="font-mono text-sm leading-none text-on-surface group-aria-pressed:font-bold group-aria-pressed:text-enlace"
+          [class.font-bold]="dia.esHoy"
+          >{{ dia.numero }}</span
+        >
+        <span
+          data-marca
+          class="h-1.5 w-1.5 rounded-full"
+          [class.bg-enlace]="dia.recordatorios > 0"
+        ></span>
+      </button>
+    </li>
+  }
+</ol>
+
+@if (siguiente(); as s) {
+  <!-- Esta semana ya no queda nada: lo próximo cae más allá del domingo. El lector de pantalla lee el
+       día entero; la flecha es un adorno. Margen negativo: el texto se alinea con el calendario -->
+  <button
+    mat-button
+    type="button"
+    data-siguiente
+    class="mt-1 -mb-2 -ml-3 min-h-12"
+    [attr.aria-pressed]="s.dia === diaElegido()"
+    (click)="elegirDia.emit(s.dia)"
+  >
+    Lo siguiente: <span aria-hidden="true">{{ s.corto }} →</span
+    ><span class="sr-only">{{ s.largo }}</span>
+  </button>
+}

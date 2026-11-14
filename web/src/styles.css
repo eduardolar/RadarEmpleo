@@ -73,6 +73,12 @@
   --color-ok-borde: var(--re-ok-borde);
   --color-on-ok: var(--re-on-ok);
   --color-trazo: var(--re-trazo);
+  /* Hoy y recordatorios: borde fino de la tarjeta limpia, el color de los enlaces de texto y el
+     fondo del aviso «Todo despejado» */
+  --color-borde-fino: var(--re-borde-fino);
+  --color-borde-fino-activo: var(--re-borde-fino-activo);
+  --color-enlace: var(--re-enlace);
+  --color-despejado: var(--re-despejado);
 
   /* Chip del encaje: toma el color del [data-encaje] más cercano (ver «Colores por encaje») */
   --color-encaje: var(--encaje-fondo);
@@ -129,17 +135,20 @@
    - #111827 sobre lima 11:1; papel sobre tinta-noche 16:1; tinta-clara (#d1d5db) sobre tinta-noche
      11,7:1; en la sección activa (#1f2937), lima 9,7:1 y papel 13:1
    - humo (la pega, «Tiro largo»): en claro #b4410f, 5,7:1 sobre la tarjeta (#ffffff), 5,2:1 sobre
-     surface-container (#f3f4f6) y 4,9:1 sobre humo-suave; en oscuro #fdba74, 11:1 sobre la tarjeta
-     (#0b1120), 10,4:1 sobre el fondo (#111827), 8,7:1 sobre surface-container (#1f2937) y 8,9:1
+     surface-container (#f3f4f6) y 4,9:1 sobre humo-suave; en oscuro #fdba74, 10,5:1 sobre la tarjeta
+     (#111827), 11,2:1 sobre el lienzo (#0b111e), 8,7:1 sobre surface-container (#1f2937) y 8,9:1
      sobre humo-suave
    - on-ok sobre ok-suave 6,3:1 (claro) y 10,4:1 (oscuro)
-   - trazo (bordes) sobre el fondo: 17:1 en claro y 12:1 en oscuro; la sombra de noche (#6b7280)
-     sobre #111827, 3,6:1, para que se siga viendo */
+   - trazo (bordes) sobre el fondo: 17:1 en claro y 12,8:1 en oscuro; la sombra de noche (#6b7280)
+     sobre el lienzo (#0b111e), 3,9:1, para que se siga viendo */
 :root {
-  /* Modo oscuro con la paleta de Eduardo: fondo #111827, texto #f3f4f6 y acento lima #a3e635
-     (el fosforito de noche). #111827 sobre lima 11:1; lima sobre #111827 11:1. */
+  /* Modo oscuro con la paleta de Eduardo: lienzo #0b111e, tarjetas #111827, texto #f3f4f6 y
+     acento lima #a3e635 (el fosforito de noche). #111827 sobre lima 11:1; lima sobre la tarjeta
+     11,8:1 y sobre el lienzo 12,5:1. */
   --re-tinta: light-dark(#1f2937, #1f2937);
-  --re-tinta-noche: light-dark(#111827, #0b1120);
+  /* El menú es #111827 en los dos modos: de noche es el tono de las tarjetas, para que se distinga
+     del lienzo (#0b111e) */
+  --re-tinta-noche: #111827;
   --re-tinta-clara: #d1d5db;
   --re-papel: #f3f4f6;
   --re-fosforito: #a3e635;
@@ -156,6 +165,13 @@
   --re-on-ok: light-dark(#166534, #b2ecc4);
   --re-trazo: light-dark(#111827, #d1d5db);
   --re-sombra: light-dark(#111827, #6b7280);
+  /* Tarjeta limpia de los recordatorios (Hoy y ficha): un solo borde de 1 px casi transparente, que
+     pasa a lima suave al pasar el ratón o con el foco dentro. El enlace es el color de los botones
+     de texto: #4d7c0f sobre blanco 5:1; lima sobre la tarjeta oscura (#111827) 11,8:1 */
+  --re-borde-fino: light-dark(rgb(17 24 39 / 0.1), rgb(255 255 255 / 0.08));
+  --re-borde-fino-activo: light-dark(rgb(77 124 15 / 0.8), rgb(163 230 53 / 0.55));
+  --re-enlace: light-dark(#4d7c0f, #a3e635);
+  --re-despejado: light-dark(rgb(77 124 15 / 0.06), rgb(163 230 53 / 0.05));
 }
 
 /* Títulos de página y de sección con la fuente de marca, pesados y apretados; los de las tarjetas
@@ -217,7 +233,8 @@
   }
 }
 
-/* Barra fina y discreta para el scroll horizontal del tablero en el PC */
+/* Barra fina y discreta para las listas verticales de cada columna del tablero en el PC (el carril
+   horizontal va sin barra: lleva flechas laterales) */
 @utility scrollbar-fina {
   scrollbar-width: thin;
   scrollbar-color: var(--mat-sys-outline-variant) transparent;
@@ -413,6 +430,15 @@
   --mat-button-outlined-ripple-color: color-mix(in srgb, var(--mat-sys-error) 12%, transparent);
 }
 
+/* «Hecho» de lo que toca hoy: el mismo contorno de 2 px, pero en el color de los enlaces (lima de
+   noche, #4d7c0f de día). Destaca sobre los demás sin ser un segundo relleno */
+.boton-acento {
+  --mat-button-outlined-label-text-color: var(--re-enlace);
+  --mat-button-outlined-outline-color: var(--re-enlace);
+  --mat-button-outlined-state-layer-color: var(--re-enlace);
+  --mat-button-outlined-ripple-color: color-mix(in srgb, var(--re-enlace) 12%, transparent);
+}
+
 .aviso-error {
   --mat-snack-bar-container-color: var(--mat-sys-error-container);
   --mat-snack-bar-supporting-text-color: var(--mat-sys-on-error-container);
@@ -421,7 +447,7 @@
 
 /* Avisos (snackbar) planos, como una tarjeta: fondo de tarjeta, borde de 2 px y sombra dura. La
    acción («Deshacer», «Añadir nota»...) va en el color de los botones de texto (material-theme.scss):
-   lima oscuro de día (5,2:1 sobre blanco) y lima de noche (12:1 sobre #0b1120). Los de error
+   lima oscuro de día (5,2:1 sobre blanco) y lima de noche (11,8:1 sobre #111827). Los de error
    mantienen su color (.aviso-error, más arriba, gana por estar en el propio aviso) */
 html {
   --mat-snack-bar-container-color: var(--mat-sys-surface-container-lowest);

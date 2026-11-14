@@ -30,6 +30,26 @@ describe('SeccionPlegable', () => {
     expect(details.querySelector('p')?.textContent).toBe('Remoto');
   });
 
+  it('sin nivel no añade ningún encabezado', async () => {
+    const elemento = await crear(false);
+
+    expect(elemento.querySelector('h2, h3, [role="heading"]')).toBeNull();
+  });
+
+  it('con nivel, el encabezado va oculto antes del bloque, no dentro del summary', async () => {
+    const fixture = TestBed.createComponent(SeccionPlegable);
+    fixture.componentRef.setInput('titulo', 'Hechos hoy · 2');
+    fixture.componentRef.setInput('nivelTitulo', 2);
+    await fixture.whenStable();
+    const elemento = fixture.nativeElement as HTMLElement;
+
+    const encabezado = elemento.querySelector('h2')!;
+    expect(encabezado.textContent?.trim()).toBe('Hechos hoy · 2');
+    expect(encabezado.classList).toContain('sr-only');
+    expect(encabezado.nextElementSibling?.tagName).toBe('DETAILS');
+    expect(elemento.querySelector('summary [role="heading"]')).toBeNull();
+  });
+
   it('respeta «abierta»: plegada por defecto y abierta si se pide', async () => {
     expect((await crear(false)).querySelector('details')!.open).toBe(false);
     TestBed.resetTestingModule();

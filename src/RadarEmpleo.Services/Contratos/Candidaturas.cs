@@ -80,7 +80,8 @@ public sealed record CambioEstadoDto(int Id, EstadoCandidatura? De, EstadoCandid
 
 public sealed record NotaDto(int Id, int CandidaturaId, string Texto, DateTime Fecha, Origen Origen);
 
-public sealed record RecordatorioDto(int Id, int? CandidaturaId, TipoRecordatorio Tipo, string Titulo, DateTime FechaHora, bool Hecho, string? Notas);
+/// <param name="FechaHecho">Cuándo se marcó como hecho (UTC). Null si está pendiente o si se cerró antes de guardarse este dato.</param>
+public sealed record RecordatorioDto(int Id, int? CandidaturaId, TipoRecordatorio Tipo, string Titulo, DateTime FechaHora, bool Hecho, string? Notas, DateTime? FechaHecho = null);
 
 /// <summary>
 /// Datos de una candidatura para crearla o editarla. La empresa va por NOMBRE: se reutiliza la que

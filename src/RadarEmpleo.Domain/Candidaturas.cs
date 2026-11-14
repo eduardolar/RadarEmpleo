@@ -153,10 +153,11 @@ public class Candidatura
     /// salvo que ya haya uno pendiente o <paramref name="programarSeguimiento"/> sea false (un envío
     /// importado de hace semanas no debe crear un seguimiento ya vencido).</item>
     /// <item>A «Entrevista» u «Oferta» sin fecha de envío (se saltó «Enviada»): se rellena
-    /// <see cref="FechaEnvio"/> con ahora, pero sin seguimiento (ya hay respuesta).</item>
+    /// <see cref="FechaEnvio"/> con ahora. No se programa ningún seguimiento nuevo (ya hay respuesta).</item>
     /// <item>A «Descartada»: guarda el motivo. A cualquier otro estado, el motivo se borra.</item>
-    /// <item>A «Descartada», «Cerrada» o al reabrir («Detectada»): los seguimientos pendientes se dan
-    /// por hechos, porque ya no hay envío vivo al que hacer seguimiento.</item>
+    /// <item>A «Entrevista», «Oferta», «Descartada», «Cerrada» o al reabrir («Detectada»): los seguimientos
+    /// pendientes se dan por hechos, porque ya han respondido o ya no hay envío vivo al que hacer
+    /// seguimiento. El que se cierra queda apuntado en el historial para reabrirlo si se deshace.</item>
     /// </list>
     /// Necesita <see cref="Recordatorios"/> cargados para no duplicar ni dejar seguimientos colgados.
     /// </summary>
@@ -218,17 +219,13 @@ public class Candidatura
                 }
                 break;
 
-            case EstadoCandidatura.Entrevista or EstadoCandidatura.Oferta when FechaEnvio is null:
-                FechaEnvio = ahoraUtc;
+            case EstadoCandidatura.Entrevista or EstadoCandidatura.Oferta:
+                FechaEnvio ??= ahoraUtc;
+                CerrarSeguimientosPendientes(cambio, ahoraUtc);
                 break;
 
             case EstadoCandidatura.Descartada or EstadoCandidatura.Cerrada or EstadoCandidatura.Detectada:
-                // Solo hay uno pendiente a la vez (al enviar no se crea otro si ya lo hay): es el que se apunta.
-                foreach (var seguimiento in SeguimientosPendientes().ToList())
-                {
-                    seguimiento.Hecho = true;
-                    cambio.SeguimientoCerrado ??= seguimiento;
-                }
+                CerrarSeguimientosPendientes(cambio, ahoraUtc);
                 break;
         }
 
@@ -287,7 +284,7 @@ public class Candidatura
         var seguimientoQuitado = Seguimiento(ultimo.SeguimientoCreado, ultimo.SeguimientoCreadoId);
         if (seguimientoQuitado is not null) Recordatorios.Remove(seguimientoQuitado);
         if (Seguimiento(ultimo.SeguimientoCerrado, ultimo.SeguimientoCerradoId) is { } cerrado)
-            cerrado.Hecho = false;
+            cerrado.MarcarPendiente();
 
         if (ultimo.A is EstadoCandidatura.Enviada or EstadoCandidatura.Entrevista or EstadoCandidatura.Oferta)
             FechaEnvio = FechaEnvioSegun(restantes);
@@ -321,6 +318,16 @@ public class Candidatura
         return envio;
     }
 
+    private void CerrarSeguimientosPendientes(CambioEstado cambio, DateTime ahoraUtc)
+    {
+        // Solo hay uno pendiente a la vez (al enviar no se crea otro si ya lo hay): es el que se apunta.
+        foreach (var seguimiento in SeguimientosPendientes().ToList())
+        {
+            seguimiento.MarcarHecho(ahoraUtc);
+            cambio.SeguimientoCerrado ??= seguimiento;
+        }
+    }
+
     private IEnumerable<Recordatorio> SeguimientosPendientes() =>
         Recordatorios.Where(r => r.Tipo == TipoRecordatorio.Seguimiento && !r.Hecho);
 
@@ -351,7 +358,7 @@ public class CambioEstado
     /// <summary>Seguimiento que programó este cambio (al pasar a Enviada), para quitarlo si se deshace.</summary>
     public int? SeguimientoCreadoId { get; set; }
     public Recordatorio? SeguimientoCreado { get; set; }
-    /// <summary>Seguimiento que este cambio dio por hecho (al descartar, cerrar o reabrir), para reabrirlo si se deshace.</summary>
+    /// <summary>Seguimiento que este cambio dio por hecho (al pasar a Entrevista u Oferta, descartar, cerrar o reabrir), para reabrirlo si se deshace.</summary>
     public int? SeguimientoCerradoId { get; set; }
     public Recordatorio? SeguimientoCerrado { get; set; }
 }
@@ -386,5 +393,32 @@ public class Recordatorio
     public string Titulo { get; set; } = "";
     public DateTime FechaHora { get; set; }
     public bool Hecho { get; set; }
+    /// <summary>
+    /// Cuándo se marcó como hecho (UTC). Null en lo pendiente y en lo que se cerró antes de existir este dato.
+    /// </summary>
+    public DateTime? FechaHecho { get; set; }
     public string? Notas { get; set; }
+
+    /// <summary>Lo da por hecho ahora. Si ya lo estaba, no cambia nada (un doble clic no mueve la fecha).</summary>
+    public void MarcarHecho(DateTime ahoraUtc)
+    {
+        if (Hecho) return;
+        Hecho = true;
+        FechaHecho = ahoraUtc;
+    }
+
+    /// <summary>Vuelve a estar pendiente.</summary>
+    public void MarcarPendiente()
+    {
+        Hecho = false;
+        FechaHecho = null;
+    }
+
+    /// <summary>Lo pasa a otro día de Madrid, a la misma hora de reloj (<see cref="ReglasRecordatorio.Pospuesta"/>).</summary>
+    /// <exception cref="ReglaNegocioException">Ya está hecho.</exception>
+    public void PosponerA(DateOnly diaMadrid)
+    {
+        if (Hecho) throw new ReglaNegocioException("Ya está hecho. Márcalo como pendiente para moverlo.");
+        FechaHora = ReglasRecordatorio.Pospuesta(FechaHora, diaMadrid);
+    }
 }

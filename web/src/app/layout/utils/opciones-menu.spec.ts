@@ -2,7 +2,7 @@ import { opcionDeUrl } from './opciones-menu';
 
 describe('opcionDeUrl', () => {
   it('reconoce cada sección por su ruta', () => {
-    expect(opcionDeUrl('/hoy')?.etiqueta).toBe('Hoy');
+    expect(opcionDeUrl('/inicio')?.etiqueta).toBe('Inicio');
     expect(opcionDeUrl('/tablero')?.etiqueta).toBe('Tablero');
     expect(opcionDeUrl('/apuntar')?.etiqueta).toBe('Apuntar');
   });

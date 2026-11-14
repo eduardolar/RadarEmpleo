@@ -394,10 +394,15 @@ namespace RadarEmpleo.Data.Migraciones
                     b.Property<int?>("CandidaturaId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("FechaHecho")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("FechaHora")
+                        .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("Hecho")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Notas")

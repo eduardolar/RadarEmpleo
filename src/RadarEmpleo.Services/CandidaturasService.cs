@@ -165,7 +165,7 @@ public class CandidaturasService
     /// <summary>
     /// Cambia el estado aplicando <see cref="ReglasEstado"/> y los efectos de
     /// <see cref="Candidatura.CambiarEstado"/> (historial, fecha de envío, seguimiento a las 09:00 de
-    /// Madrid a +7 días, cierre de seguimientos al descartar, cerrar o reabrir).
+    /// Madrid a +7 días, cierre de seguimientos al pasar a Entrevista u Oferta, descartar, cerrar o reabrir).
     /// Devuelve la ficha actualizada o null si no existe.
     /// </summary>
     public async Task<CandidaturaDetalleDto?> CambiarEstadoAsync(int id, CambiarEstadoRequest peticion)
@@ -342,7 +342,7 @@ public class CandidaturasService
             .Select(h => new CambioEstadoDto(h.Id, h.De, h.A, h.Fecha, h.Comentario, h.Origen)).ToList(),
         c.Notas.OrderByDescending(n => n.Fecha).ThenByDescending(n => n.Id).Select(ANota).ToList(),
         c.Recordatorios.OrderBy(r => r.FechaHora).ThenBy(r => r.Id)
-            .Select(r => new RecordatorioDto(r.Id, r.CandidaturaId, r.Tipo, r.Titulo, r.FechaHora, r.Hecho, r.Notas)).ToList(),
+            .Select(RecordatoriosService.ADto).ToList(),
         c.Documentos.OrderBy(d => d.Tipo).ThenByDescending(d => d.Vigente).ThenByDescending(d => d.FechaAlta).ThenByDescending(d => d.Id)
             .Select(d => DocumentosService.ADto(d, _rutas)).ToList(),
         _rutas?.HayCarpeta ?? false);

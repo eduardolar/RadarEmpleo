@@ -9,8 +9,18 @@ export const routes: Routes = [
     component: LayoutPageComponent,
     children: [
       {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'inicio',
+      },
+      {
+        // La pantalla se llamaba «Hoy»: los enlaces viejos siguen funcionando, con sus ?tipo=, ?dia= y ?ver=
         path: 'hoy',
-        title: 'Hoy · RadarEmpleo',
+        redirectTo: 'inicio',
+      },
+      {
+        path: 'inicio',
+        title: 'Inicio · RadarEmpleo',
         loadComponent: () => import('./hoy/pages/hoy-page/hoy-page.component'),
       },
       {
@@ -53,7 +63,7 @@ export const routes: Routes = [
       },
       {
         path: '**',
-        redirectTo: 'hoy',
+        redirectTo: 'inicio',
       },
     ],
   },

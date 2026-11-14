@@ -28,6 +28,11 @@ export function mensajeError(errores: ValidationErrors | null, campo: CampoFormu
   if (typeof errores['servidor'] === 'string') {
     return errores['servidor'];
   }
+  // Un validador propio puede traer su mensaje, como el de la API para ese caso
+  const propio = Object.values(errores).find((valor) => typeof valor === 'string');
+  if (typeof propio === 'string') {
+    return propio;
+  }
   if (errores['obligatorio'] || errores['required']) {
     return campo.obligatorio ?? `${campo.nombre} es obligatorio.`;
   }

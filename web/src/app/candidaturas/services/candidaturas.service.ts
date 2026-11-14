@@ -11,6 +11,7 @@ import {
   FiltroCandidaturas,
   GuardarCandidatura,
   Nota,
+  Recordatorio,
 } from '../interfaces/candidatura.interface';
 
 const URL_CANDIDATURAS = `${environment.apiUrl}/api/candidaturas`;
@@ -244,6 +245,32 @@ export class CandidaturasService {
       ),
       conErrorApi(),
     );
+  }
+
+  /** Un recordatorio creado o cambiado fuera de aquí: si es de la ficha abierta, entra en ella por su fecha */
+  ponerRecordatorioEnDetalle(recordatorio: Recordatorio): void {
+    const { candidaturaId } = recordatorio;
+    if (candidaturaId === null) {
+      return;
+    }
+    this.actualizarDetalle(candidaturaId, (d) => ({
+      ...d,
+      recordatorios: [
+        ...d.recordatorios.filter((r) => r.id !== recordatorio.id),
+        recordatorio,
+      ].sort((a, b) => a.fechaHora.localeCompare(b.fechaHora) || a.id - b.id),
+    }));
+  }
+
+  /** Un recordatorio borrado fuera de aquí: si es de la ficha abierta, sale de ella */
+  quitarRecordatorioDeDetalle(id: number, candidaturaId: number | null): void {
+    if (candidaturaId === null) {
+      return;
+    }
+    this.actualizarDetalle(candidaturaId, (d) => ({
+      ...d,
+      recordatorios: d.recordatorios.filter((r) => r.id !== id),
+    }));
   }
 
   /** Tras guardar: la ficha con lo que devuelve la API y la lista al día */

@@ -22,6 +22,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { debounceTime, distinctUntilChanged, map } from 'rxjs';
 import { CabeceraPagina } from '../../../shared/components/cabecera-pagina/cabecera-pagina';
+import { DesplazamientoLateral } from '../../../shared/directives/desplazamiento-lateral';
+import { SentidoLateral } from '../../../shared/utils/desplazamiento-lateral';
 import { senalEscritorio } from '../../../shared/utils/pantalla';
 import { abrirDialogoCandidatura } from '../../components/dialogo-candidatura/dialogo-candidatura';
 import { TarjetaCandidatura } from '../../components/tarjeta-candidatura/tarjeta-candidatura';
@@ -48,6 +50,7 @@ const PLEGADAS_DE_SERIE: ReadonlySet<EstadoCandidatura> = new Set([
     CdkDropList,
     CdkDrag,
     CdkScrollable,
+    DesplazamientoLateral,
     ReactiveFormsModule,
     MatButtonModule,
     MatFormFieldModule,
@@ -67,6 +70,8 @@ export default class TableroPageComponent {
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly inicio = viewChild.required<ElementRef<HTMLElement>>('inicio');
+  private readonly flechaAnteriores = viewChild<ElementRef<HTMLElement>>('flechaAnteriores');
+  private readonly flechaSiguientes = viewChild<ElementRef<HTMLElement>>('flechaSiguientes');
 
   protected readonly candidaturas = this.candidaturasService.candidaturas;
   protected readonly cargando = this.candidaturasService.cargando;
@@ -113,6 +118,13 @@ export default class TableroPageComponent {
     destino: EstadoCandidatura;
   } | null>(null);
 
+  /** Las dos flechas del tablero: superficie de tarjeta con borde, nunca relleno lima */
+  protected readonly claseFlecha =
+    'sticky top-4 bottom-4 flex h-12 w-12 items-center justify-center rounded-md border-2 border-trazo bg-surface-container-lowest text-on-surface shadow-dura-sm transition-[translate,box-shadow,opacity] duration-100 hover:bg-surface-container-high focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none motion-reduce:transition-none motion-reduce:active:translate-none';
+
+  /** Flecha pulsada la última vez; se olvida al llevar el foco a las columnas */
+  protected readonly flechaPulsada = signal<SentidoLateral | null>(null);
+
   protected readonly sinCandidaturas = computed(
     () => !this.cargando() && !this.error() && this.candidaturas().length === 0,
   );
@@ -153,6 +165,24 @@ export default class TableroPageComponent {
         raiz.querySelector<HTMLElement>('[aria-pressed="true"]');
       destino?.focus();
     });
+
+    // Al llegar al final, la flecha pulsada desaparece: el foco pasa a la otra y no cae en <body>
+    afterRenderEffect(() => {
+      const anteriores = this.flechaAnteriores();
+      const siguientes = this.flechaSiguientes();
+      const pulsada = this.flechaPulsada();
+      const desaparecida = pulsada === 'anteriores' ? !anteriores : !siguientes;
+      if (!pulsada || !desaparecida || this.documento.activeElement !== this.documento.body) {
+        return;
+      }
+      this.flechaPulsada.set(null);
+      (pulsada === 'anteriores' ? siguientes : anteriores)?.nativeElement.focus();
+    });
+  }
+
+  protected desplazar(lateral: DesplazamientoLateral, sentido: SentidoLateral): void {
+    this.flechaPulsada.set(sentido);
+    lateral.avanzar(sentido);
   }
 
   /** Las terminales y las vacías salen plegadas, salvo que se hayan desplegado */

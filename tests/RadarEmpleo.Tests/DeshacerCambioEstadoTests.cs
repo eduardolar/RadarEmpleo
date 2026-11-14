@@ -177,7 +177,8 @@ public class DeshacerCambioEstadoTests : ArnesSqliteTests
         var ficha = (await _candidaturas.ObtenerAsync(creada.Id))!;
         Assert.Equal(EstadoCandidatura.Entrevista, ficha.Estado);
         Assert.Equal(3, ficha.Historial.Count);
-        Assert.Single(ficha.Recordatorios, r => !r.Hecho);
+        // El seguimiento sigue como lo dejó el paso a Entrevista: hecho.
+        Assert.Single(ficha.Recordatorios, r => r.Hecho);
         Assert.Equal(llamadas, Exportador.Llamadas);
     }
 

@@ -9,7 +9,7 @@ namespace RadarEmpleo.Api.Controllers;
 [ApiController]
 [Route("api/candidaturas")]
 [Produces("application/json")]
-public class CandidaturasController(CandidaturasService candidaturas, DocumentosService documentos) : ControllerBase
+public class CandidaturasController(CandidaturasService candidaturas, DocumentosService documentos, RecordatoriosService recordatorios) : ControllerBase
 {
     /// <summary>Lista las candidaturas (más recientes primero) con filtros opcionales.</summary>
     /// <param name="estado">Solo las de este estado.</param>
@@ -55,8 +55,8 @@ public class CandidaturasController(CandidaturasService candidaturas, Documentos
     /// <summary>
     /// Cambia el estado. Devuelve 400 si falta el estado o no existe, y 409 si la transición no está
     /// permitida o si se descarta sin motivo. Al pasar a «Enviada» se rellena la fecha de envío y se
-    /// programa un seguimiento a las 09:00 (Madrid) a +7 días; al descartar, cerrar o reabrir, los
-    /// seguimientos pendientes se dan por hechos.
+    /// programa un seguimiento a las 09:00 (Madrid) a +7 días; al pasar a «Entrevista» u «Oferta», descartar,
+    /// cerrar o reabrir, los seguimientos pendientes se dan por hechos (y no se programa ninguno nuevo).
     /// </summary>
     [HttpPost("{id:int}/estado")]
     [ProducesResponseType<CandidaturaDetalleDto>(StatusCodes.Status200OK)]
@@ -94,6 +94,25 @@ public class CandidaturasController(CandidaturasService candidaturas, Documentos
         var nota = await candidaturas.AnadirNotaAsync(id, peticion);
         if (nota is null) return NotFound();
         return CreatedAtRoute("ObtenerCandidatura", new { id }, nota);
+    }
+
+    /// <summary>
+    /// Apunta un recordatorio de esta candidatura (una entrevista, un plazo…). El día y la hora son de Madrid;
+    /// sin hora, las 09:00. Devuelve 400 si faltan datos, 404 si la candidatura no existe, 409 si está
+    /// descartada o cerrada y 415 si el cuerpo no es JSON.
+    /// </summary>
+    [HttpPost("{id:int}/recordatorios")]
+    [Consumes("application/json")]
+    [ProducesResponseType<RecordatorioDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
+    public async Task<ActionResult<RecordatorioDto>> AnadirRecordatorio(int id, GuardarRecordatorioRequest peticion)
+    {
+        var recordatorio = await recordatorios.CrearAsync(peticion, id);
+        if (recordatorio is null) return NotFound();
+        return CreatedAtRoute(RecordatoriosController.RutaObtener, new { id = recordatorio.Id }, recordatorio);
     }
 
     /// <summary>

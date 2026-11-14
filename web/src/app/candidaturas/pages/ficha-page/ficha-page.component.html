@@ -471,64 +471,46 @@
         aria-labelledby="titulo-recordatorios"
         class="min-w-0 self-start rounded-2xl bg-surface-container-lowest p-5 sm:p-6"
       >
-        <h2 id="titulo-recordatorios" class="mb-4 pb-2 text-xl font-extrabold">Recordatorios</h2>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-2">
+          <h2
+            #tituloRecordatorios
+            id="titulo-recordatorios"
+            tabindex="-1"
+            class="text-xl font-extrabold outline-none"
+          >
+            Recordatorios
+          </h2>
+          <!-- Con borde: el relleno de la ficha es el del cambio de estado. En una descartada o
+               cerrada no se apunta nada nuevo -->
+          @if (!fueraDelProceso()) {
+            <button
+              mat-stroked-button
+              type="button"
+              class="min-h-12"
+              (click)="anadirRecordatorio()"
+            >
+              Añadir recordatorio
+            </button>
+          }
+        </div>
+        @if (hayPendientesOcultos()) {
+          <p class="mb-3 font-mono text-sm text-on-surface-variant">
+            No sale en Inicio porque la candidatura está
+            {{ etiquetas.estado[c.estado].toLowerCase() }}.
+          </p>
+        }
         @if (c.recordatorios.length > 0) {
-          <ul class="space-y-2 text-sm">
+          <ul class="flex flex-col gap-2">
             @for (recordatorio of c.recordatorios; track recordatorio.id) {
-              <li class="flex gap-3 rounded-md bg-surface-container p-3">
-                <span
-                  aria-hidden="true"
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border-2 border-trazo"
-                  [class]="
-                    recordatorio.hecho
-                      ? 'bg-surface-container-high text-on-surface-variant'
-                      : 'bg-primary-container text-on-primary-container'
-                  "
-                >
-                  @if (recordatorio.hecho) {
-                    <svg
-                      viewBox="0 0 20 20"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      class="h-4 w-4"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m5 10.5 3 3 7-7" />
-                    </svg>
-                  } @else {
-                    <svg
-                      viewBox="0 0 20 20"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      class="h-4 w-4"
-                    >
-                      <rect x="3.5" y="4.5" width="13" height="12" rx="2" />
-                      <path stroke-linecap="round" d="M3.5 8.5h13M7 3v3M13 3v3" />
-                    </svg>
-                  }
-                </span>
-                <div class="min-w-0">
-                  <p class="font-medium">
-                    <span
-                      [class.line-through]="recordatorio.hecho"
-                      [class.text-on-surface-variant]="recordatorio.hecho"
-                      >{{ recordatorio.titulo }}</span
-                    >
-                    @if (recordatorio.hecho) {
-                      <span class="text-xs font-normal text-on-surface-variant">(hecho)</span>
-                    }
-                  </p>
-                  <p class="mt-0.5 text-xs text-on-surface-variant">
-                    <time [attr.datetime]="recordatorio.fechaHora" class="font-mono font-medium">{{
-                      recordatorio.fechaHora | fechaMadrid: 'dia-hora'
-                    }}</time>
-                    · {{ etiquetas.recordatorio[recordatorio.tipo] }}
-                  </p>
-                  @if (recordatorio.notas) {
-                    <p class="mt-1 whitespace-pre-line">{{ recordatorio.notas }}</p>
-                  }
-                </div>
+              <li>
+                <app-tarjeta-recordatorio
+                  [recordatorio]="recordatorio"
+                  [hoy]="hoy()"
+                  (hecho)="recordatorioHecho(recordatorio)"
+                  (pendiente)="recordatorioPendiente(recordatorio)"
+                  (editar)="editarRecordatorio(recordatorio)"
+                  (borrar)="borrarRecordatorio(recordatorio)"
+                />
               </li>
             }
           </ul>
