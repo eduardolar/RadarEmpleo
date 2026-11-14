@@ -629,15 +629,13 @@ describe('FichaPageComponent', () => {
         { id: 1, empresa: 'Acme', puesto: 'Desarrollador Angular', estado: 'Enviada' },
         'Entrevista',
       );
-      http
-        .expectOne('/api/candidaturas/1/estado')
-        .flush(
-          crearDetalle({
-            id: 1,
-            estado: 'Entrevista',
-            estadosPosibles: estadosPosibles('Entrevista'),
-          }),
-        );
+      http.expectOne('/api/candidaturas/1/estado').flush(
+        crearDetalle({
+          id: 1,
+          estado: 'Entrevista',
+          estadosPosibles: estadosPosibles('Entrevista'),
+        }),
+      );
       await fixture.whenStable();
       expect(abrirDialogo).not.toHaveBeenCalled();
 
