@@ -191,7 +191,9 @@ describe('Navegación', () => {
 
     expect(TestBed.inject(Router).url).toBe('/ajustes');
     expect(TestBed.inject(Title).getTitle()).toBe('Ajustes · RadarEmpleo');
-    http.expectOne('/api/sistema/info').flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
+    http
+      .expectOne('/api/sistema/info')
+      .flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
     await harness.fixture.whenStable();
 
     expect(pagina.querySelector('h1')?.textContent).toContain('Ajustes');

@@ -140,7 +140,10 @@ export class CambioEstadoService {
         // falta ofrecer la nota
         const nota =
           peticion.estado === 'Entrevista'
-            ? { texto: 'Apuntar la entrevista', alPulsar: () => this.pedirEntrevista(candidatura.id) }
+            ? {
+                texto: 'Apuntar la entrevista',
+                alPulsar: () => this.pedirEntrevista(candidatura.id),
+              }
             : peticion.comentario
               ? undefined
               : { texto: 'Añadir nota', alPulsar: () => this.pedirNota(candidatura.id) };
