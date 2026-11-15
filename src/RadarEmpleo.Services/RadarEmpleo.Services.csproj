@@ -10,6 +10,11 @@
     <ProjectReference Include="..\RadarEmpleo.Data\RadarEmpleo.Data.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Plantillas y esquemas de las tareas de los agentes: embebidos, para que no se puedan cambiar en tiempo de ejecución. -->
+    <EmbeddedResource Include="..\..\prompts\*" LogicalName="prompts/%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
