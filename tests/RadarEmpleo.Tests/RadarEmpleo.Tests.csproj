@@ -29,6 +29,8 @@
     <ProjectReference Include="..\..\src\RadarEmpleo.Data\RadarEmpleo.Data.csproj" />
     <ProjectReference Include="..\..\src\RadarEmpleo.Services\RadarEmpleo.Services.csproj" />
     <ProjectReference Include="..\..\src\RadarEmpleo.Api\RadarEmpleo.Api.csproj" />
+    <!-- Hace de claude.exe en los tests del EjecutorClaudeCli: se copia junto a los tests. -->
+    <ProjectReference Include="..\ClaudeSimulado\ClaudeSimulado.csproj" />
   </ItemGroup>
 
 </Project>
