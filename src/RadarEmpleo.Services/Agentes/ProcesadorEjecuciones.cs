@@ -12,10 +12,10 @@ namespace RadarEmpleo.Services.Agentes;
 /// <summary>
 /// Lanza las ejecuciones de una en una y por orden (la más antigua en cola primero). Para cada una: vuelve a mirar el
 /// tope, coge el bloqueo compartido (o espera, como mucho una hora), calcula los hashes del registro y del perfil,
-/// lanza Claude, vuelve a calcular los hashes y deja la ejecución en Ok, Error o Cancelada. Al arrancar, nada de lo
-/// que se quedó a medias se relanza solo (<see cref="RecuperarAsync"/>). Si otra API ya procesa la cola de la misma
-/// base de datos (<see cref="ExclusionBaseDatos"/>), esta no recupera, no mata ni lanza nada: lo avisa en el log y lo
-/// vuelve a intentar en cada sondeo.
+/// lanza Claude (o no, si el manejador la termina sin él), vuelve a calcular los hashes y deja la ejecución en Ok, Error
+/// o Cancelada. Al arrancar, nada de lo que se quedó a medias se relanza solo (<see cref="RecuperarAsync"/>). Si otra
+/// API ya procesa la cola de la misma base de datos (<see cref="ExclusionBaseDatos"/>), esta no recupera, no mata ni
+/// lanza nada: lo avisa en el log y lo vuelve a intentar en cada sondeo.
 /// </summary>
 public sealed class ProcesadorEjecuciones : BackgroundService
 {
@@ -191,14 +191,24 @@ public sealed class ProcesadorEjecuciones : BackgroundService
 
         try
         {
-            PeticionClaude peticion;
+            PreparacionTarea preparacion;
             try
             {
-                peticion = await manejador.ConstruirAsync(ejecucion, contexto, corte.Token);
+                preparacion = await manejador.ConstruirAsync(ejecucion, contexto, corte.Token);
             }
             catch (ReglaNegocioException error)
             {
                 await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, error.Message, null, hashRegistro, hashPerfil));
+                return;
+            }
+            if (preparacion.Peticion is not { } peticion)
+            {
+                // Terminada sin Claude: no ha gastado nada. Los hashes se vuelven a mirar igual que con Claude.
+                var sinClaude = preparacion.SinClaude!;
+                var registroSinClaude = await HashAsync(ArchivoVigilado.Registro);
+                var perfilSinClaude = await HashAsync(ArchivoVigilado.Perfil);
+                await CambiarAsync(id, e => e.Terminar(_reloj.AhoraUtc, 0m, null, null, sinClaude.Resumen, sinClaude.ResultadoJson,
+                    registroSinClaude, perfilSinClaude));
                 return;
             }
             Task? anotar = null;

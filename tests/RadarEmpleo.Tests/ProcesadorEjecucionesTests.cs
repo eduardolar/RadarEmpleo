@@ -33,6 +33,9 @@ public sealed class ManejadorDePrueba : IManejadorTarea
     /// <summary>Lo que hace al montar la petición, con el corte de la ejecución (por defecto, nada).</summary>
     public static Func<CancellationToken, Task>? AlConstruir { get; set; }
 
+    /// <summary>Si no es null, la tarea termina al prepararla con este resultado, sin lanzar Claude.</summary>
+    public static ResultadoTarea? SinClaude { get; set; }
+
     public Task<bool> ValidarAsync(int? candidaturaId, CancellationToken cancelacion)
     {
         if (Definicion.Tarea == TareaAgente.AnalizarEncaje && candidaturaId is null)
@@ -40,11 +43,12 @@ public sealed class ManejadorDePrueba : IManejadorTarea
         return Task.FromResult(candidaturaId is null or > 0);
     }
 
-    public async Task<PeticionClaude> ConstruirAsync(EjecucionAgente ejecucion, ContextoTarea contexto, CancellationToken cancelacion)
+    public async Task<PreparacionTarea> ConstruirAsync(EjecucionAgente ejecucion, ContextoTarea contexto, CancellationToken cancelacion)
     {
         if (AlConstruir is { } alConstruir) await alConstruir(cancelacion);
-        return contexto.Peticion(Definicion,
-            ConstructorArgumentos.Construir(Definicion, """{"type":"object"}""", new ValoresArgumentos(contexto.CarpetaDatos)), "Prompt de prueba");
+        if (SinClaude is { } sinClaude) return PreparacionTarea.Terminada(sinClaude);
+        return PreparacionTarea.ConClaude(contexto.Peticion(Definicion,
+            ConstructorArgumentos.Construir(Definicion, """{"type":"object"}""", new ValoresArgumentos(contexto.CarpetaDatos)), "Prompt de prueba"));
     }
 
     public async Task<ResultadoTarea> AplicarAsync(EjecucionAgente ejecucion, RespuestaClaude respuesta, CancellationToken cancelacion)
@@ -105,6 +109,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
             .BuildServiceProvider();
         ManejadorDePrueba.AlAplicar = null;
         ManejadorDePrueba.AlConstruir = null;
+        ManejadorDePrueba.SinClaude = null;
 
         // Sin ruta de exclusión: esta «API» lleva siempre la cola (los tests de dos APIs crean sus propias guardias).
         _guardia = new GuardiaCola(_opciones);
@@ -131,6 +136,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         await _servicios.DisposeAsync();
         ManejadorDePrueba.AlAplicar = null;
         ManejadorDePrueba.AlConstruir = null;
+        ManejadorDePrueba.SinClaude = null;
         _guardia.Dispose();
         SqliteConnection.ClearAllPools();
         try { Directory.Delete(_raiz, recursive: true); } catch (IOException) { /* temporal */ }
@@ -251,6 +257,42 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         Assert.Equal("Ha llegado al tope de 0,50 USD de esta tarea y la he parado.", final.Error);
         Assert.Equal(0.52m, final.CosteUsd);
         Assert.False(File.Exists(RutaBloqueo));
+    }
+
+    [Fact]
+    public async Task TerminadaSinClaude_QuedaOkConCosteCeroSinLlamarAlEjecutorYConElBloqueoLibre()
+    {
+        var ejecucion = await EncolarAsync();
+        var bloqueoAlPreparar = false;
+        ManejadorDePrueba.AlConstruir = _ =>
+        {
+            bloqueoAlPreparar = File.Exists(RutaBloqueo);
+            return Task.CompletedTask;
+        };
+        ManejadorDePrueba.SinClaude = new ResultadoTarea("No hacía falta Claude.", """{"sinClaude":true}""");
+
+        Assert.True(await _procesador.ProcesarSiguienteAsync(CancellationToken.None));
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Ok, final.Estado);
+        Assert.Equal(0m, final.CosteUsd);
+        Assert.Equal(0m, ReglasGasto.GastoComputable(final));
+        Assert.Null(final.Turnos);
+        Assert.Null(final.SesionClaude);
+        Assert.Equal("No hacía falta Claude.", final.Resumen);
+        Assert.Equal("""{"sinClaude":true}""", final.ResultadoJson);
+        Assert.NotNull(final.HashRegistroDespues);
+        Assert.False(final.RegistroCambiado);
+        Assert.Empty(_falso.Peticiones);
+        Assert.True(bloqueoAlPreparar);
+        Assert.False(File.Exists(RutaBloqueo));
+
+        // El bloqueo está libre de verdad: la siguiente lo coge y llega a Claude.
+        ManejadorDePrueba.SinClaude = null;
+        var siguiente = await EncolarAsync();
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+        Assert.Equal(EstadoEjecucion.Ok, (await LeerAsync(siguiente.Id)).Estado);
+        Assert.Single(_falso.Peticiones);
     }
 
     [Theory]
