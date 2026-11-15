@@ -1,11 +1,14 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using RadarEmpleo.Api.Configuracion;
 using RadarEmpleo.Api.Errores;
+using RadarEmpleo.Api.Seguridad;
 using RadarEmpleo.Data;
 using RadarEmpleo.Services;
+using RadarEmpleo.Services.Agentes;
 using RadarEmpleo.Services.Curriculum;
 using RadarEmpleo.Services.Estadisticas;
 using RadarEmpleo.Services.Importacion;
@@ -32,7 +35,8 @@ builder.Services.AddDbContextFactory<AppDbContext>((sp, o) =>
 {
     var ruta = sp.GetRequiredService<IOptions<OpcionesRadar>>().Value.RutaBaseDatosEfectiva();
     Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
-    o.UseSqlite($"Data Source={ruta}");
+    // Con el constructor de la cadena: una ruta con «;Data Source=…» no puede colar otra BD (además se rechaza al arrancar).
+    o.UseSqlite(new SqliteConnectionStringBuilder { DataSource = ruta }.ToString());
     RegistroErroresBaseDatos.Configurar(o, sp.GetRequiredService<ILoggerFactory>());
 });
 
@@ -51,6 +55,26 @@ builder.Services.AddSingleton(sp =>
     new RutasCurriculum(sp.GetRequiredService<IOptions<OpcionesRadar>>().Value.CarpetaCurriculum));
 builder.Services.AddSingleton<ILectorCurriculum, LectorCurriculum>();
 builder.Services.AddSingleton<IExportadorRadar, ExportadorRadarMd>();
+
+// --- Agentes de Claude: una ejecución a la vez, con la BD como fuente de verdad ---
+// Los manejadores de cada tarea (IManejadorTarea) llegan en la F7b y la F7c; sin manejador, la tarea no se encola.
+builder.Services.AddSingleton(sp => ConfiguracionAgentes.Opciones(
+    sp.GetRequiredService<IOptions<OpcionesAgentes>>().Value, sp.GetRequiredService<IOptions<OpcionesRadar>>().Value));
+builder.Services.AddSingleton(sp => ConfiguracionAgentes.Ejecutor(sp,
+    sp.GetRequiredService<IOptions<OpcionesAgentes>>().Value, sp.GetRequiredService<IOptions<OpcionesRadar>>().Value));
+builder.Services.AddSingleton<BloqueoCompartido>();
+builder.Services.AddSingleton<GuardiaCola>();
+builder.Services.AddSingleton<ColaEjecuciones>();
+builder.Services.AddScoped<AgentesService>();
+builder.Services.AddHostedService<ProcesadorEjecuciones>();
+builder.Services.AddSingleton<IClasificadorCanal, ClasificadorCanalKestrel>();
+builder.Services.AddScoped<DisponibilidadAgentes>();
+
+// --- Canal por el NOMBRE del endpoint: cada conexión de «Local» o «Remoto» lleva su marca ---
+builder.WebHost.ConfigureKestrel((contexto, kestrel) => kestrel
+    .Configure(contexto.Configuration.GetSection("Kestrel"))
+    .Endpoint("Local", e => e.ListenOptions.Use(ClasificadorCanalKestrel.MarcarCanal(CanalPeticion.Local)))
+    .Endpoint("Remoto", e => e.ListenOptions.Use(ClasificadorCanalKestrel.MarcarCanal(CanalPeticion.Remoto))));
 
 // --- API: controladores, enums como texto en JSON, ProblemDetails, 400 en español y 409 para reglas de negocio ---
 // Enums SOLO como texto: con allowIntegerValues: false, {"estado":99} o "modalidad":42 dan 400 en vez
@@ -82,6 +106,12 @@ builder.Services.AddHealthChecks().AddCheck<ComprobacionBaseDatos>("base-datos")
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+// Antes de abrir la BD: una ruta que parezca una cadena de conexión no se admite, y el ejecutor falso nunca con la
+// BD por defecto ni en la demo.
+app.Services.GetRequiredService<IOptions<OpcionesRadar>>().Value.ExigirRutaBaseDatosValida();
+ConfiguracionAgentes.ExigirFalsoPermitido(app.Services.GetRequiredService<IOptions<OpcionesAgentes>>().Value,
+    app.Services.GetRequiredService<IOptions<OpcionesRadar>>().Value);
 
 // Crea la base de datos si no existe y aplica las migraciones pendientes.
 using (var scope = app.Services.CreateScope())

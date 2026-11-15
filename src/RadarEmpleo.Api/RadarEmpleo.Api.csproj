@@ -21,6 +21,13 @@
   <ItemGroup>
     <!-- Plantilla para crear appsettings.Local.json: no se copia a bin ni a publish. -->
     <Content Update="appsettings.Local.example.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
+    <!-- Rutas personales: se lee de la carpeta del proyecto (la raíz de contenido con dotnet run) y nunca va a bin ni a publish. -->
+    <Content Update="appsettings.Local.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Respuestas inventadas del ejecutor falso (Agentes:Ejecutor=Falso), para probar sin gastar. -->
+    <None Include="..\..\datos-ejemplo\agentes\*.json" LinkBase="datos-ejemplo\agentes" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

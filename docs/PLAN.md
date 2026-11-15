@@ -216,6 +216,10 @@ Anotados al corregir la revisión de las fases 0 y 1; se harán en la fase indic
 - **`<details>` repetido en `importacion-page.component.html`:** los tres grupos plegados repiten el mismo marcado; sacarlo a un componente.
 - **Carpeta Curriculum vacía:** probar el caso de `CarpetaCurriculum` vacía con una configuración de test que no use la ruta real (hoy `appsettings.Local.json` apunta a ella).
 
+### Pendientes de la revisión de la F7a (para la F12)
+- **Token del móvil:** exigir `X-Radar-Token` en todo lo que llega por el endpoint «Remoto» (5181).
+- **`/openapi` y `/scalar` por el remoto:** que no se sirvan por el endpoint «Remoto» (hoy solo se ocultarán en modo Demo).
+
 ## 12. Ampliación pedida por Eduardo el 06/11/2026 (replanificar F4-F6 al cerrar la F3)
 
 > **Replanificado y aprobado el 06/11/2026: ver `docs/PLAN-AMPLIACION.md`** (fases F4-F13, que sustituyen a las F4-F8 del apartado 8).

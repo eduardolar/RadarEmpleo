@@ -2,25 +2,29 @@ using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using RadarEmpleo.Api.Configuracion;
+using RadarEmpleo.Api.Seguridad;
 
 namespace RadarEmpleo.Api.Controllers;
 
 /// <summary>Información del sistema para el front (modo, agentes y versión).</summary>
 /// <param name="Modo">Local (PC de Eduardo) o Demo (datos inventados).</param>
-/// <param name="AgentesHabilitados">Si los agentes de Claude están activos (Agentes:Habilitado).</param>
+/// <param name="AgentesHabilitados">Si los agentes de Claude están activos (Agentes:Habilitado). Por el móvil, siempre false.</param>
 /// <param name="Version">Versión de la API.</param>
-public sealed record SistemaInfoDto(ModoEjecucion Modo, bool AgentesHabilitados, string Version);
+/// <param name="AgentesDisponibles">Si se pueden lanzar agentes desde esta petición: por el endpoint «Local», con los
+/// agentes habilitados y en modo Local. Desde el móvil es false, y el front no enseña los botones.</param>
+public sealed record SistemaInfoDto(ModoEjecucion Modo, bool AgentesHabilitados, string Version, bool AgentesDisponibles);
 
 [ApiController]
 [Route("api/sistema")]
 [Produces("application/json")]
-public class SistemaController(IOptions<OpcionesRadar> radar, IOptions<OpcionesAgentes> agentes) : ControllerBase
+public class SistemaController(IOptions<OpcionesRadar> radar, DisponibilidadAgentes disponibilidad) : ControllerBase
 {
     private static readonly string VersionApi = LeerVersion();
 
-    /// <summary>Modo de ejecución, si los agentes están habilitados y versión de la API.</summary>
+    /// <summary>Modo de ejecución, si los agentes están habilitados (y disponibles desde aquí) y versión de la API.</summary>
     [HttpGet("info")]
-    public SistemaInfoDto Info() => new(radar.Value.Modo, agentes.Value.Habilitado, VersionApi);
+    public SistemaInfoDto Info() =>
+        new(radar.Value.Modo, disponibilidad.HabilitadosVisibles(HttpContext), VersionApi, disponibilidad.Motivo(HttpContext) is null);
 
     private static string LeerVersion()
     {

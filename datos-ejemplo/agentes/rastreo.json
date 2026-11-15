@@ -1,0 +1,15 @@
+{
+  "modo": "Ok",
+  "esperaMs": 8000,
+  "costeUsd": 1.2,
+  "turnos": 12,
+  "salida": {
+    "rutaInforme": "rastreos/rastreo_2026-11-16.md",
+    "resumen": "2 ofertas nuevas en el rastreo de ejemplo.",
+    "ofertas": [
+      { "empresa": "Empresa Ejemplo Rastreo", "puesto": "Desarrollador .NET", "enlace": "https://ejemplo.com/ofertas/7001", "encaje": "Alto", "pega": null },
+      { "empresa": "Otra Empresa Inventada", "puesto": "Programador Angular", "enlace": "https://ejemplo.com/ofertas/7002", "encaje": "Medio", "pega": "Presencial dos días." }
+    ],
+    "portalesSinRevisar": ["Portal de ejemplo"]
+  }
+}
