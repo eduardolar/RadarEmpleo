@@ -127,6 +127,16 @@ Endpoints (los que lanzan agentes o envían, solo endpoint local): `POST /candid
 | Web abierta llama a `localhost:5180` | Solo JSON con preflight, sin CORS ajeno, `hashResumen`, solo puerto local |
 | Entra no deja con cuenta personal | F4; plan B Chrome en outlook.live.com |
 
+## 7b. Ideas de AIHawk para fases posteriores (15/11/2026)
+
+Revisión de [AIHawk](https://github.com/feder-cr/jobs_applier_ai_agent_aihawk) (reescritura v1.0.0, MIT; se toman ideas, no código). Aprobadas por Eduardo para sus fases:
+
+- **Rastreo en las webs de empleo de las empresas (F7c o posterior).** Una lista de empresas objetivo con su página de empleo en Greenhouse, Lever o Ashby (listados públicos en JSON); la app trae sus ofertas nuevas a la bandeja de Rastreos con código C#, sin IA, sin Chrome y sin tocar portales con cuenta. Complementa al rastreo de los lunes.
+- **Prueba de cada envío (F10).** Además de `TextoConfirmacion` y `UrlFinal`, una **captura** de la página tras enviar, guardada en `%LOCALAPPDATA%\RadarEmpleo\envios\<id>\` y visible en la ficha; el envío se marca enviado, sin confirmar o no enviado.
+- **Filtro previo por palabras del título (Rastreos).** Palabras que descartan una oferta antes de pasarla a la IA (por ejemplo «Senior» o tecnologías que no interesan), editables por Eduardo, con la oferta marcada «Descartada por filtro» y visible por si acaso.
+
+Lo que AIHawk hace y aquí no se adopta: enviar sin revisión, rellenar con datos que no hay («Please see my attached CV», opciones «cercanas» en preguntas legales), crear cuentas con contraseña generada, leer el correo para sacar códigos, telemetría y pasar los datos por un intermediario de pago.
+
 ## 8. Decisiones de Eduardo (06/11/2026)
 
 Todas aprobadas según la recomendación: (1) ciclo completo antes de móvil y demo; (2) F4 primero y aceptar el plan B que salga; (3) CV en `Candidaturas\Semana…`, los escribe el agente; (4) la app no escribe `ofertas-enviadas.md`, escribe `radar\envios.md` y `/empleo` lo pasa; (5) correo por Graph con su hotmail; (6) agente `enviador-candidaturas`; (7) «Respuestas habituales de formularios» en el perfil; (8) Word + chips + comentario ≤300; (9) en Automático él elige cada oferta; (10) correo y webs sin cuenta sí, LinkedIn/InfoJobs nunca; (11) desbloqueo tras 5 manuales; (12) 3/día, 10 min, 9-21 h; (13) PrevIA sí, casilla de privacidad **pendiente**; (14) 8 USD por preparación y 15 al día; (15) aviso por correo a sí mismo; (16) en el móvil solo ver, no confirmar.

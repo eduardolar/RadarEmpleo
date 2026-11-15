@@ -897,6 +897,15 @@ Notas para quien guarde el plan:
 - Archivos clave para la F7: `src/RadarEmpleo.Api/Program.cs`, `src/RadarEmpleo.Api/Configuracion/OpcionesRadar.cs`, `src/RadarEmpleo.Api/Controllers/SistemaController.cs`, `src/RadarEmpleo.Api/Controllers/ImportacionController.cs`, `src/RadarEmpleo.Services/Importacion/ImportacionService.cs`, `src/RadarEmpleo.Services/Contratos/Importacion.cs`, `src/RadarEmpleo.Services/Curriculum/ILectorCurriculum.cs`, `src/RadarEmpleo.Services/Curriculum/RutasCurriculum.cs`, `src/RadarEmpleo.Services/Rastreos/RastreosService.cs`, `src/RadarEmpleo.Services/Rastreos/AnalizadorRastreo.cs`, `src/RadarEmpleo.Domain/Rastreos.cs`, `tests/RadarEmpleo.Tests/Api/FabricaApi.cs` y `web/src/app/ajustes/pages/ajustes-page/ajustes-page.component.html`, todos bajo `C:\Users\Usuario\Desktop\RadarEmpleo\`.
 - Dos cosas dependen de que existan en .NET 10 y hay que confirmarlas al construir: `IConnectionItemsFeature` en las peticiones de Kestrel y `WebApplicationFactory.UseKestrel`. Las dos tienen plan B en el plan.
 
+## Añadidos a la F7b tras revisar AIHawk (15/11/2026)
+
+Eduardo aprobó el 15/11/2026 dos ideas sacadas de la revisión de [AIHawk](https://github.com/feder-cr/jobs_applier_ai_agent_aihawk) (MIT; se toman ideas, no código). Mandan sobre lo anterior para la F7b.
+
+1. **¿Sigue abierta la oferta?** Antes de lanzar AnalizarEncaje, la app comprueba si la oferta sigue publicada, sin IA ni navegador. Se aprovecha la misma descarga de la oferta (apartado 6) y, cuando el enlace es de un sistema de selección con listado público (Greenhouse, Lever, Ashby, Workable), se consulta ese listado. Si está cerrada, el análisis no se lanza (no gasta) y la ejecución termina en Ok con «La oferta ya no está publicada: no he analizado nada.»; la ficha ofrece descartarla con el motivo «Oferta cerrada». Si no se puede saber, se analiza igual y se dice. Lógica pura y testeable (`ReglasOfertaAbierta`), con el detector de sistema por el enlace junto a `portal-desde-enlace`. Deja la base para la comprobación previa de la F8.
+2. **Medir si AnalizarEncaje acierta.** Un conjunto de unas 20 ofertas **inventadas** (`datos-ejemplo/encaje/`, sin datos personales), cada una con el encaje que daría Eduardo, y un test de evaluación que compara lo que devuelve el agente con lo esperado (aciertos exactos y a un nivel de distancia). No va en `dotnet test` (gastaría): se lanza a mano con su propio OK y tope de gasto, y el resultado se apunta aquí con la fecha y el prompt usado, para saber si un cambio de prompt mejora o empeora.
+
+Al planificar la F7b, el arquitecto la trocea en PR de como mucho 800-1.000 líneas sin contar lo generado.
+
 ## Decisiones aprobadas
 
 El 14/11/2026 Eduardo aprobó todas las decisiones del apartado 10 con la opción recomendada, y el paso 0 con `claude` real (tope de 1 USD en total). Los cambios en `_rastreo_semanal.ps1` y en `SKILL.md` (decisión 5) se le vuelven a preguntar al llegar a la F7c.
