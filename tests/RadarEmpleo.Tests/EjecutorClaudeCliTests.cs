@@ -175,6 +175,8 @@ public sealed class EjecutorClaudeCliTests : IDisposable
     [Fact]
     public async Task UnHijoQueSeQuedaConLaSalida_MuereAlSalirElPrincipalYNoSeEspera()
     {
+        // El Job Object solo existe en Windows, que es donde la app lanza los agentes: en Linux (el CI) no hay nada que probar.
+        if (!OperatingSystem.IsWindows()) return;
         var cronometro = Stopwatch.StartNew();
         var respuesta = await Ejecutar(Ejecutor("--sim:modo=hijoysale", $"--sim:pidhijo={Ruta("hijo.txt")}"), Peticion());
 
