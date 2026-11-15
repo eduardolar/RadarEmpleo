@@ -4,6 +4,8 @@
 
 > ¿La de trabajar te la sabes?
 
+**Página de presentación:** [eduardolar.github.io/RadarEmpleo-web](https://eduardolar.github.io/RadarEmpleo-web/)
+
 Aplicación para llevar mi propia búsqueda de empleo: un tablero con las candidaturas por estado, la ficha de cada una con su historial y el CV que envié, y una bandeja donde caen las ofertas de la búsqueda de cada semana. La uso yo y es, a la vez, mi proyecto de portfolio con el stack que piden las ofertas a las que me presento.
 
 ![Pantalla Inicio de RadarEmpleo: lo que toca hoy, los próximos siete días y el resumen de la semana](docs/img/inicio.png)
