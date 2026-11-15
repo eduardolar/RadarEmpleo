@@ -86,9 +86,10 @@ public sealed record RecordatorioDto(int Id, int? CandidaturaId, TipoRecordatori
 /// <summary>
 /// Datos de una candidatura para crearla o editarla. La empresa va por NOMBRE: se reutiliza la que
 /// tenga el mismo nombre normalizado o se crea una nueva. El estado no se toca aquí (va por
-/// <c>POST /candidaturas/{id}/estado</c>). Si no se envían, <paramref name="Modalidad"/>,
-/// <paramref name="Encaje"/> y <paramref name="Origen"/> toman a propósito el valor «sin dato»
-/// (NoIndicada, SinValorar y Manual): omitirlos es legítimo y no cambia ningún estado.
+/// <c>POST /candidaturas/{id}/estado</c>). Si no se envían, <paramref name="Modalidad"/> y
+/// <paramref name="Encaje"/> toman a propósito el valor «sin dato» (NoIndicada y SinValorar): omitirlos es
+/// legítimo y no cambia ningún estado. El origen no viaja en la petición: lo pone el servidor (un «origen» que
+/// llegue se ignora).
 /// </summary>
 public sealed record GuardarCandidaturaRequest(
     [Required(ErrorMessage = "La empresa es obligatoria."), MaxLength(200, ErrorMessage = "La empresa no puede tener más de 200 caracteres.")] string Empresa,
@@ -102,20 +103,18 @@ public sealed record GuardarCandidaturaRequest(
     [MaxLength(2000, ErrorMessage = "La pega no puede tener más de 2000 caracteres.")] string? Pega = null,
     string? Analisis = null,
     [MaxLength(200, ErrorMessage = "El salario no puede tener más de 200 caracteres.")] string? Salario = null,
-    DateTime? FechaDeteccion = null,
-    Origen Origen = Origen.Manual);
+    DateTime? FechaDeteccion = null);
 
 /// <summary>
 /// Petición de cambio de estado. <paramref name="Estado"/> es obligatorio (es nullable solo para que
 /// un <c>{}</c> dé 400 en vez de tomarse como «Detectada», el primer valor del enum).
-/// <paramref name="MotivoDescarte"/> es obligatorio al descartar.
+/// <paramref name="MotivoDescarte"/> es obligatorio al descartar. El origen lo pone el servidor.
 /// </summary>
 public sealed record CambiarEstadoRequest(
     [Required(ErrorMessage = "El estado es obligatorio.")] EstadoCandidatura? Estado,
     MotivoDescarte? MotivoDescarte = null,
     [MaxLength(1000, ErrorMessage = "El texto del motivo no puede tener más de 1000 caracteres.")] string? MotivoDescarteTexto = null,
-    [MaxLength(1000, ErrorMessage = "El comentario no puede tener más de 1000 caracteres.")] string? Comentario = null,
-    Origen Origen = Origen.Manual);
+    [MaxLength(1000, ErrorMessage = "El comentario no puede tener más de 1000 caracteres.")] string? Comentario = null);
 
 /// <summary>
 /// Petición de deshacer un cambio de estado. <paramref name="CambioId"/> es el apunte del historial que
@@ -124,9 +123,9 @@ public sealed record CambiarEstadoRequest(
 public sealed record DeshacerCambioEstadoRequest(
     [Required(ErrorMessage = "Falta el cambio que se quiere deshacer.")] int? CambioId);
 
+/// <summary>Nota nueva. El origen lo pone el servidor.</summary>
 public sealed record CrearNotaRequest(
-    [Required(ErrorMessage = "El texto de la nota es obligatorio."), MaxLength(5000, ErrorMessage = "La nota no puede tener más de 5000 caracteres.")] string Texto,
-    Origen Origen = Origen.Manual);
+    [Required(ErrorMessage = "El texto de la nota es obligatorio."), MaxLength(5000, ErrorMessage = "La nota no puede tener más de 5000 caracteres.")] string Texto);
 
 /// <summary>Empresa para el autocompletado.</summary>
 public sealed record EmpresaDto(int Id, string Nombre, string? Web, int Candidaturas);
