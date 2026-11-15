@@ -170,7 +170,7 @@ public sealed class ProcesadorEjecuciones : BackgroundService
         }
         if (!await CabeAsync(ejecucion, parada))
         {
-            await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.TopeDiario(_opciones.TopeGastoDiarioUsd)));
+            await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.TopeDiario));
             return;
         }
 
@@ -244,7 +244,7 @@ public sealed class ProcesadorEjecuciones : BackgroundService
             if (!respuesta.Correcta)
             {
                 _log.LogInformation("La ejecución {Id} no ha salido: {Fallo} ({Detalle}).", id, respuesta.Fallo, respuesta.Detalle);
-                var mensaje = MensajesEjecucion.De(respuesta.Fallo ?? FalloClaude.ErrorDeClaude, definicion.TiempoMaximo, definicion.PresupuestoUsd);
+                var mensaje = MensajesEjecucion.De(respuesta.Fallo ?? FalloClaude.ErrorDeClaude, definicion.TiempoMaximo);
                 await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, mensaje, respuesta.CosteUsd, registroDespues, perfilDespues));
                 return;
             }

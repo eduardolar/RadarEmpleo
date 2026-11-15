@@ -254,7 +254,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var final = await LeerAsync(ejecucion.Id);
         Assert.Equal(EstadoEjecucion.Error, final.Estado);
-        Assert.Equal("Ha llegado al tope de 0,50 USD de esta tarea y la he parado.", final.Error);
+        Assert.Equal("Ha llegado al tope de uso de esta tarea y la he parado.", final.Error);
         Assert.Equal(0.52m, final.CosteUsd);
         Assert.False(File.Exists(RutaBloqueo));
     }
@@ -709,7 +709,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         await cola.EncolarAsync(TareaAgente.ExtraerRegistro);
 
         var error = await Assert.ThrowsAsync<ReglaNegocioException>(() => cola.EncolarAsync(TareaAgente.AnalizarEncaje, _candidatura));
-        Assert.Equal("Has llegado al tope de gasto de hoy (0,60 USD). Mañana se puede volver a lanzar.", error.Message);
+        Assert.Equal("Has llegado al tope de uso estimado de hoy. Mañana se puede volver a lanzar.", error.Message);
     }
 
     [Fact]
@@ -726,7 +726,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var final = await LeerAsync(ejecucion.Id);
         Assert.Equal(EstadoEjecucion.Error, final.Estado);
-        Assert.Equal("Has llegado al tope de gasto de hoy (15,00 USD). Mañana se puede volver a lanzar.", final.Error);
+        Assert.Equal("Has llegado al tope de uso estimado de hoy. Mañana se puede volver a lanzar.", final.Error);
         Assert.Empty(_falso.Peticiones);
     }
 

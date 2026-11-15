@@ -81,7 +81,7 @@ public sealed class ColaEjecuciones
             var ahora = _reloj.AhoraUtc;
             var gasto = await LeerGastoAsync(db, ahora, cancelacion);
             if (!ReglasGasto.CabeEnElTope(gasto.Dia.Gastado, gasto.Reservado, definicion.PresupuestoUsd, _opciones.TopeGastoDiarioUsd))
-                throw new ReglaNegocioException(MensajesEjecucion.TopeDiario(_opciones.TopeGastoDiarioUsd));
+                throw new ReglaNegocioException(MensajesEjecucion.TopeDiario);
 
             var parametros = candidaturaId is { } id ? JsonSerializer.Serialize(new { candidaturaId = id }) : "{}";
             var ejecucion = EjecucionAgente.Nueva(tarea, parametros, definicion.PresupuestoUsd,
