@@ -27,8 +27,9 @@ public class Rastreo
     public string TextoInforme { get; set; } = "";
     /// <summary>Última vez que se leyó con cambios (UTC).</summary>
     public DateTime FechaEscaneo { get; set; }
-    /// <summary>Ejecución de agente que lo generó (F7). Sin clave foránea hasta que exista esa tabla.</summary>
+    /// <summary>Ejecución de agente que lo generó (rastreo lanzado desde la app). Queda en null si se borra la ejecución.</summary>
     public int? EjecucionAgenteId { get; set; }
+    public EjecucionAgente? EjecucionAgente { get; set; }
 
     public ICollection<OfertaRastreo> Ofertas { get; set; } = new List<OfertaRastreo>();
 }
