@@ -33,7 +33,7 @@ public sealed class ExclusionBaseDatos : IDisposable
             motivo = null;
             return new ExclusionBaseDatos(new FileStream(ruta, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
         }
-        catch (IOException error) when (error.HResult is CompartidoOtro or BloqueadoOtro)
+        catch (IOException error) when (error.HResult is CompartidoOtro or BloqueadoOtro || EnUsoFueraDeWindows(ruta))
         {
             motivo = MensajesEjecucion.OtraCopiaLlevaLaCola;
         }
@@ -45,6 +45,14 @@ public sealed class ExclusionBaseDatos : IDisposable
         }
         return null;
     }
+
+    /// <summary>
+    /// Fuera de Windows, .NET emula <see cref="FileShare.None"/> con un bloqueo del sistema y el error no trae el código de
+    /// «en uso» de Windows: si el archivo de control existe y es un archivo (no una carpeta), el fallo es que otra copia lo tiene.
+    /// El acceso denegado llega aparte, como <see cref="UnauthorizedAccessException"/>.
+    /// </summary>
+    private static bool EnUsoFueraDeWindows(string ruta) =>
+        !OperatingSystem.IsWindows() && File.Exists(ruta) && !Directory.Exists(ruta);
 
     public void Dispose() => _flujo.Dispose();
 }
