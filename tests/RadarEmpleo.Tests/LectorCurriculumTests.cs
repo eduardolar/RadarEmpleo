@@ -56,6 +56,69 @@ public sealed class LectorCurriculumTests : IDisposable
     }
 
     [Fact]
+    public async Task LeerHashAsync_DeUnArchivoConocido_DaSuSha256EnMinusculas()
+    {
+        await File.WriteAllTextAsync(_registro, "abc", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+        Assert.Equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            await _lector.LeerHashAsync(ArchivoVigilado.Registro));
+    }
+
+    [Fact]
+    public async Task LeerHashAsync_SinElArchivo_DaAusente()
+    {
+        Assert.Equal(ILectorCurriculum.HashAusente, await _lector.LeerHashAsync(ArchivoVigilado.Registro));
+        Assert.Equal(ILectorCurriculum.HashAusente, await _lector.LeerHashAsync(ArchivoVigilado.Perfil));
+    }
+
+    [Fact]
+    public async Task LeerHashAsync_ConLaCarpetaConfiguradaPeroQueNoEsta_DaAusente()
+    {
+        var lector = new LectorCurriculum(new RutasCurriculum(Path.Combine(_carpeta, "no-existe")));
+        Assert.Equal(ILectorCurriculum.HashAusente, await lector.LeerHashAsync(ArchivoVigilado.Registro));
+    }
+
+    [Fact]
+    public async Task LeerHashAsync_SinCarpetaConfigurada_DaNull()
+    {
+        Assert.Null(await new LectorCurriculum(new RutasCurriculum(null)).LeerHashAsync(ArchivoVigilado.Registro));
+    }
+
+    [Fact]
+    public async Task LeerHashAsync_AbiertoEnExclusiva_LanzaYNoDiceAusente()
+    {
+        await File.WriteAllTextAsync(_registro, "contenido");
+        await using var exclusivo = new FileStream(_registro, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        await Assert.ThrowsAsync<ReglaNegocioException>(() => _lector.LeerHashAsync(ArchivoVigilado.Registro));
+    }
+
+    [Fact]
+    public async Task LeerHashAsync_FicheroAbiertoPorOtroQueEscribe_NoLoBloquea()
+    {
+        await File.WriteAllTextAsync(_registro, "contenido");
+        await using var otro = new FileStream(_registro, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+
+        Assert.NotNull(await _lector.LeerHashAsync(ArchivoVigilado.Registro));
+        // El otro puede seguir escribiendo después.
+        otro.Write("más"u8);
+    }
+
+    [Fact]
+    public async Task TextoLeido_Hash_CoincideConLeerHashAsync()
+    {
+        File.Copy(FabricaApi.RutaRegistroEjemplo, _registro);
+        File.Copy(FabricaApi.RutaPerfilEjemplo, Path.Combine(_carpeta, RutasCurriculum.ArchivoPerfil));
+
+        var registro = await _lector.LeerRegistroConFechaAsync();
+        var perfil = await _lector.LeerPerfilAsync();
+
+        Assert.Equal(await _lector.LeerHashAsync(ArchivoVigilado.Registro), registro.Hash);
+        Assert.Equal(await _lector.LeerHashAsync(ArchivoVigilado.Perfil), perfil.Hash);
+        Assert.Equal(await File.ReadAllTextAsync(_registro), registro.Texto);
+    }
+
+    [Fact]
     public async Task LeerRegistroAsync_FicheroAbiertoPorOtroQueEscribe_LoLeeIgual()
     {
         await File.WriteAllTextAsync(_registro, "contenido");

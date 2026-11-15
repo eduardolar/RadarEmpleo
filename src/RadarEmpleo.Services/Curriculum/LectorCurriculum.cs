@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using RadarEmpleo.Domain;
 
@@ -26,20 +27,38 @@ public sealed class LectorCurriculum : ILectorCurriculum
         return await LeerTextoAsync(_rutas.Registro!, RutasCurriculum.ArchivoRegistro, cancelacion);
     }
 
-    public async Task<TextoLeido> LeerRegistroConFechaAsync(CancellationToken cancelacion = default)
+    public Task<TextoLeido> LeerRegistroConFechaAsync(CancellationToken cancelacion = default)
     {
         ExigirCarpeta();
-        var ruta = _rutas.Registro!;
-        var texto = await LeerTextoAsync(ruta, RutasCurriculum.ArchivoRegistro, cancelacion);
-        return new TextoLeido(texto, File.GetLastWriteTimeUtc(ruta));
+        return LeerConFechaAsync(_rutas.Registro!, RutasCurriculum.ArchivoRegistro, cancelacion);
     }
 
-    public async Task<TextoLeido> LeerPerfilAsync(CancellationToken cancelacion = default)
+    public Task<TextoLeido> LeerPerfilAsync(CancellationToken cancelacion = default)
     {
         ExigirCarpeta();
-        var ruta = _rutas.Perfil!;
-        var texto = await LeerTextoAsync(ruta, RutasCurriculum.ArchivoPerfil, cancelacion);
-        return new TextoLeido(texto, File.GetLastWriteTimeUtc(ruta));
+        return LeerConFechaAsync(_rutas.Perfil!, RutasCurriculum.ArchivoPerfil, cancelacion);
+    }
+
+    public async Task<string?> LeerHashAsync(ArchivoVigilado archivo, CancellationToken cancelacion = default)
+    {
+        if (_rutas.Carpeta is null) return null;
+        if (!_rutas.HayCarpeta) return ILectorCurriculum.HashAusente;
+        var (ruta, nombre) = archivo switch
+        {
+            ArchivoVigilado.Registro => (_rutas.Registro!, RutasCurriculum.ArchivoRegistro),
+            ArchivoVigilado.Perfil => (_rutas.Perfil!, RutasCurriculum.ArchivoPerfil),
+            _ => throw new ArgumentOutOfRangeException(nameof(archivo))
+        };
+        if (!File.Exists(ruta)) return ILectorCurriculum.HashAusente;
+        try
+        {
+            return Hash(await LeerBytesAsync(ruta, nombre, cancelacion));
+        }
+        catch (ReglaNegocioException) when (!File.Exists(ruta))
+        {
+            // Lo han borrado entre medias.
+            return ILectorCurriculum.HashAusente;
+        }
     }
 
     public IReadOnlyList<ArchivoDisponible> LeerDocumentosDisponibles()
@@ -150,7 +169,20 @@ public sealed class LectorCurriculum : ILectorCurriculum
         if (!_rutas.HayCarpeta) throw new ReglaNegocioException(RutasCurriculum.MensajeSinCarpeta);
     }
 
-    private static async Task<string> LeerTextoAsync(string ruta, string nombre, CancellationToken cancelacion)
+    private static async Task<TextoLeido> LeerConFechaAsync(string ruta, string nombre, CancellationToken cancelacion)
+    {
+        var bytes = await LeerBytesAsync(ruta, nombre, cancelacion);
+        return new TextoLeido(Decodificar(bytes), File.GetLastWriteTimeUtc(ruta), Hash(bytes));
+    }
+
+    private static async Task<string> LeerTextoAsync(string ruta, string nombre, CancellationToken cancelacion) =>
+        Decodificar(await LeerBytesAsync(ruta, nombre, cancelacion));
+
+    /// <summary>
+    /// El archivo entero de una vez (el registro ronda los 140 KB), para que el texto y su hash salgan de la
+    /// misma lectura.
+    /// </summary>
+    private static async Task<byte[]> LeerBytesAsync(string ruta, string nombre, CancellationToken cancelacion)
     {
         if (!File.Exists(ruta))
             throw new ReglaNegocioException($"No se encuentra {nombre} en la carpeta Curriculum.");
@@ -159,14 +191,24 @@ public sealed class LectorCurriculum : ILectorCurriculum
         {
             await using var fichero = new FileStream(ruta, FileMode.Open, FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete, TamanoBufer, FileOptions.Asynchronous | FileOptions.SequentialScan);
-            using var lector = new StreamReader(fichero, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-            return await lector.ReadToEndAsync(cancelacion);
+            using var memoria = new MemoryStream();
+            await fichero.CopyToAsync(memoria, cancelacion);
+            return memoria.ToArray();
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             throw new ReglaNegocioException($"No se ha podido leer {nombre}. Vuelve a intentarlo en un momento.");
         }
     }
+
+    /// <summary>UTF-8, o lo que diga su BOM (como al leer con <see cref="StreamReader"/> directamente del archivo).</summary>
+    private static string Decodificar(byte[] bytes)
+    {
+        using var lector = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return lector.ReadToEnd();
+    }
+
+    private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
     /// <summary>Subcarpetas directas que no son enlaces ni carpetas que se saltan; vacío si no se puede leer.</summary>
     private static IEnumerable<string> Subcarpetas(string carpeta)

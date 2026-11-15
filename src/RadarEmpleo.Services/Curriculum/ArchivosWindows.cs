@@ -83,6 +83,21 @@ internal static class ArchivosWindows
         return NumeroEnlaces(manejador);
     }
 
+    /// <summary>
+    /// Volumen, índice y número de enlaces de un archivo o carpeta, sin abrir su contenido (solo atributos; con
+    /// <c>FILE_FLAG_BACKUP_SEMANTICS</c> también vale para carpetas).
+    /// </summary>
+    /// <exception cref="IOException">No se ha podido abrir o leer.</exception>
+    public static (uint Volumen, ulong Indice, uint Enlaces) Identidad(string ruta)
+    {
+        using var manejador = CreateFile(ruta, FileReadAttributes, FileShareTodo, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics, IntPtr.Zero);
+        if (manejador.IsInvalid)
+            throw new IOException("No se ha podido abrir el archivo.", Marshal.GetLastPInvokeError());
+        if (!GetFileInformationByHandle(manejador, out var informacion))
+            throw new IOException("No se ha podido leer la información del archivo.", Marshal.GetLastPInvokeError());
+        return (informacion.NumeroSerieVolumen, ((ulong)informacion.IndiceAlto << 32) | informacion.IndiceBajo, informacion.NumeroEnlaces);
+    }
+
     private static string SinPrefijo(string ruta)
     {
         if (ruta.StartsWith(@"\\?\UNC\", StringComparison.Ordinal)) return @"\\" + ruta[8..];
