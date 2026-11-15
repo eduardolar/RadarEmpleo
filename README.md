@@ -1,8 +1,12 @@
 # RadarEmpleo
 
+[![CI](https://github.com/eduardolar/RadarEmpleo/actions/workflows/ci.yml/badge.svg)](https://github.com/eduardolar/RadarEmpleo/actions/workflows/ci.yml)
+
 > ¿La de trabajar te la sabes?
 
 Aplicación para llevar mi propia búsqueda de empleo: un tablero con las candidaturas por estado, la ficha de cada una con su historial y el CV que envié, y una bandeja donde caen las ofertas de la búsqueda de cada semana. La uso yo y es, a la vez, mi proyecto de portfolio con el stack que piden las ofertas a las que me presento.
+
+![Pantalla Inicio de RadarEmpleo: lo que toca hoy, los próximos siete días y el resumen de la semana](docs/img/inicio.png)
 
 ![Tablero de RadarEmpleo en el ordenador](docs/img/tablero.png)
 
@@ -14,6 +18,9 @@ _Las capturas son con datos de ejemplo._
 
 ## Qué hace
 
+- **Inicio**: arriba lo vencido y lo de hoy, con Hecho, Posponer y Deshacer; debajo, los próximos siete días y las candidaturas enviadas que siguen sin respuesta. Los recordatorios tienen tipo (seguimiento, entrevista, publicación de LinkedIn, plazo u otro) y, al pasar una candidatura a Entrevista, el seguimiento pendiente se cierra solo y la app ofrece apuntar la entrevista con la hora obligatoria.
+- **Estadísticas**: candidaturas por estado, enviadas por semana, tasa de respuesta, días de media hasta la respuesta y motivos de descarte. Cada cifra se lee también como texto, sin depender del color.
+- **Fechas en hora de Madrid**: probado con el cambio de hora de marzo, incluida la hora que ese día no existe.
 - **Tablero por estados**: Detectada, Preparada, Enviada, Entrevista, Oferta, Descartada y Cerrada. Las transiciones válidas las decide el dominio, no el front. Se mueve arrastrando o con el menú ⋮, y las columnas sin uso se pliegan para que todo quepa sin desplazamiento lateral.
 - **Deshacer**: cualquier cambio de estado se puede deshacer durante 10 minutos desde el aviso o con Ctrl+Z. Vuelve exactamente a como estaba: fechas, motivo de descarte y seguimientos.
 - **Ficha de candidatura**: historial de estados, notas, motivo de descarte y los documentos enviados (CV y carta), que se abren dentro de la propia ficha.
