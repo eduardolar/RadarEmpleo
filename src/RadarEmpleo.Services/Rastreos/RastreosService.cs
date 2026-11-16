@@ -139,7 +139,7 @@ public sealed class RastreosService
             int? existente = Enlaces.ParaComparar(oferta.Enlace) is { } clave && enElTablero.TryGetValue(clave, out var id)
                 ? id
                 : null;
-            var candidaturaId = existente ?? (await _candidaturas.CrearAsync(DatosCandidatura(oferta))).Id;
+            var candidaturaId = existente ?? (await _candidaturas.CrearAsync(DatosCandidatura(oferta), Origen.Rastreo)).Id;
 
             oferta.Convertir(candidaturaId, _reloj.AhoraUtc);
             await db.SaveChangesAsync();
@@ -291,8 +291,7 @@ public sealed class RastreosService
         Encaje: oferta.Encaje,
         Pega: oferta.Pega,
         Analisis: AnalizadorRastreo.TextoPlano(oferta.TextoOriginal),
-        FechaDeteccion: Fechas.MedianocheMadridEnUtc(oferta.Rastreo.Fecha.ToDateTime(TimeOnly.MinValue)),
-        Origen: Origen.Rastreo);
+        FechaDeteccion: Fechas.MedianocheMadridEnUtc(oferta.Rastreo.Fecha.ToDateTime(TimeOnly.MinValue)));
 
     private static OfertaRastreoDto ADto(OfertaRastreo o) => new(
         o.Id, o.RastreoId, o.Linea, o.Empresa, o.Puesto, o.Enlace, o.Encaje, o.Pega,

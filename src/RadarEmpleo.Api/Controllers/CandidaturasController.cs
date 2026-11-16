@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using RadarEmpleo.Api.Seguridad;
 using RadarEmpleo.Domain;
 using RadarEmpleo.Services;
 using RadarEmpleo.Services.Contratos;
@@ -9,7 +10,8 @@ namespace RadarEmpleo.Api.Controllers;
 [ApiController]
 [Route("api/candidaturas")]
 [Produces("application/json")]
-public class CandidaturasController(CandidaturasService candidaturas, DocumentosService documentos, RecordatoriosService recordatorios) : ControllerBase
+public class CandidaturasController(CandidaturasService candidaturas, DocumentosService documentos, RecordatoriosService recordatorios,
+    IClasificadorCanal canal) : ControllerBase
 {
     /// <summary>Lista las candidaturas (más recientes primero) con filtros opcionales.</summary>
     /// <param name="estado">Solo las de este estado.</param>
@@ -27,13 +29,16 @@ public class CandidaturasController(CandidaturasService candidaturas, Documentos
     public async Task<ActionResult<CandidaturaDetalleDto>> Obtener(int id) =>
         await candidaturas.ObtenerAsync(id) is { } detalle ? detalle : NotFound();
 
-    /// <summary>Da de alta una candidatura en «Detectada» (crea o reutiliza la empresa por nombre).</summary>
+    /// <summary>
+    /// Da de alta una candidatura en «Detectada» (crea o reutiliza la empresa por nombre). El origen lo pone el
+    /// servidor: Manual desde el PC y Movil desde el móvil (un «origen» en el cuerpo se ignora).
+    /// </summary>
     [HttpPost]
     [ProducesResponseType<CandidaturaDetalleDto>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CandidaturaDetalleDto>> Crear(GuardarCandidaturaRequest datos)
     {
-        var detalle = await candidaturas.CrearAsync(datos);
+        var detalle = await candidaturas.CrearAsync(datos, canal.Origen(HttpContext));
         return CreatedAtRoute("ObtenerCandidatura", new { id = detalle.Id }, detalle);
     }
 
@@ -64,7 +69,7 @@ public class CandidaturasController(CandidaturasService candidaturas, Documentos
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CandidaturaDetalleDto>> CambiarEstado(int id, CambiarEstadoRequest peticion) =>
-        await candidaturas.CambiarEstadoAsync(id, peticion) is { } detalle ? detalle : NotFound();
+        await candidaturas.CambiarEstadoAsync(id, peticion, canal.Origen(HttpContext)) is { } detalle ? detalle : NotFound();
 
     /// <summary>
     /// Deshace el cambio de estado <c>cambioId</c> (el apunte del historial que creó el movimiento) si sigue
@@ -84,14 +89,14 @@ public class CandidaturasController(CandidaturasService candidaturas, Documentos
     public async Task<ActionResult<CandidaturaDetalleDto>> DeshacerCambioEstado(int id, DeshacerCambioEstadoRequest peticion) =>
         await candidaturas.DeshacerCambioEstadoAsync(id, peticion) is { } detalle ? detalle : NotFound();
 
-    /// <summary>Añade una nota con la fecha de ahora.</summary>
+    /// <summary>Añade una nota con la fecha de ahora. El origen lo pone el servidor, como en el alta.</summary>
     [HttpPost("{id:int}/notas")]
     [ProducesResponseType<NotaDto>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<NotaDto>> AnadirNota(int id, CrearNotaRequest peticion)
     {
-        var nota = await candidaturas.AnadirNotaAsync(id, peticion);
+        var nota = await candidaturas.AnadirNotaAsync(id, peticion, canal.Origen(HttpContext));
         if (nota is null) return NotFound();
         return CreatedAtRoute("ObtenerCandidatura", new { id }, nota);
     }

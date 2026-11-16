@@ -201,7 +201,6 @@ public sealed class ApiTests : IDisposable
     [Theory]
     [InlineData("""{"estado":"2"}""")]
     [InlineData("""{"estado":"Inventado"}""")]
-    [InlineData("""{"estado":"Enviada","origen":3}""")]
     public async Task CambiarEstado_EnumNoValido_Devuelve400(string json)
     {
         var creada = await CrearAsync();

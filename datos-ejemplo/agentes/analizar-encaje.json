@@ -1,0 +1,12 @@
+{
+  "modo": "Ok",
+  "esperaMs": 8000,
+  "costeUsd": 0.18,
+  "turnos": 4,
+  "salida": {
+    "encaje": "Medio",
+    "pega": "Piden inglés B2 y el perfil de ejemplo no lo tiene certificado (dato inventado).",
+    "analisis": "**Oferta inventada para pruebas.**\n\n- Puesto: encaja con el perfil de ejemplo.\n- Modalidad: remoto, sin problema.\n- Pega: el inglés.",
+    "resumen": "Encaje medio: encaja el puesto, falla el inglés (ejemplo inventado)."
+  }
+}

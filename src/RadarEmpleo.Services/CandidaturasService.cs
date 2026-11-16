@@ -89,15 +89,17 @@ public class CandidaturasService
     /// Alta en «Detectada». La empresa se reutiliza si ya existe una con el mismo nombre
     /// normalizado (minúsculas, sin tildes, sin S.L./S.A.); si no, se crea.
     /// </summary>
-    public async Task<CandidaturaDetalleDto> CrearAsync(GuardarCandidaturaRequest datos)
+    /// <param name="origen">Lo pone quien llama (el controlador según el canal, o un servicio), nunca el cuerpo de la petición.</param>
+    public async Task<CandidaturaDetalleDto> CrearAsync(GuardarCandidaturaRequest datos, Origen origen = Origen.Manual)
     {
         var puesto = Obligatorio(datos.Puesto, "El puesto es obligatorio.", "puesto");
         ValidarEnums(datos);
+        ValidacionException.ExigirDefinido(origen, "origen");
         await using var db = await _factory.CreateDbContextAsync();
 
         var empresa = await EmpresasService.ObtenerOCrearAsync(db, datos.Empresa);
         var ahora = _reloj.AhoraUtc;
-        var candidatura = Candidatura.Nueva(empresa, puesto, ahora, datos.Origen,
+        var candidatura = Candidatura.Nueva(empresa, puesto, ahora, origen,
             datos.FechaDeteccion is { } f ? Fechas.AUtc(f) : null);
         CopiarDatos(datos, candidatura);
 
@@ -168,12 +170,13 @@ public class CandidaturasService
     /// Madrid a +7 días, cierre de seguimientos al pasar a Entrevista u Oferta, descartar, cerrar o reabrir).
     /// Devuelve la ficha actualizada o null si no existe.
     /// </summary>
-    public async Task<CandidaturaDetalleDto?> CambiarEstadoAsync(int id, CambiarEstadoRequest peticion)
+    /// <param name="origen">Lo pone quien llama, nunca el cuerpo de la petición.</param>
+    public async Task<CandidaturaDetalleDto?> CambiarEstadoAsync(int id, CambiarEstadoRequest peticion, Origen origen = Origen.Manual)
     {
         // La API ya lo exige con [Required]; esto cubre a quien llame al servicio directamente.
         if (peticion.Estado is not { } estado)
             throw new ValidacionException("El estado es obligatorio.", "estado");
-        ValidacionException.ExigirDefinido(peticion.Origen, "origen");
+        ValidacionException.ExigirDefinido(origen, "origen");
 
         await using var db = await _factory.CreateDbContextAsync();
         var candidatura = await CargarCompletaAsync(db, id, seguimiento: true);
@@ -182,7 +185,7 @@ public class CandidaturasService
         candidatura.CambiarEstado(
             estado,
             _reloj.AhoraUtc,
-            peticion.Origen,
+            origen,
             peticion.MotivoDescarte,
             TextoOpcional(peticion.MotivoDescarteTexto),
             TextoOpcional(peticion.Comentario));
@@ -231,10 +234,11 @@ public class CandidaturasService
     }
 
     /// <summary>Añade una nota con la fecha actual. Devuelve null si la candidatura no existe.</summary>
-    public async Task<NotaDto?> AnadirNotaAsync(int candidaturaId, CrearNotaRequest peticion)
+    /// <param name="origen">Lo pone quien llama, nunca el cuerpo de la petición.</param>
+    public async Task<NotaDto?> AnadirNotaAsync(int candidaturaId, CrearNotaRequest peticion, Origen origen = Origen.Manual)
     {
         var texto = Obligatorio(peticion.Texto, "El texto de la nota es obligatorio.", "texto");
-        ValidacionException.ExigirDefinido(peticion.Origen, "origen");
+        ValidacionException.ExigirDefinido(origen, "origen");
         await using var db = await _factory.CreateDbContextAsync();
         if (!await db.Candidaturas.AnyAsync(c => c.Id == candidaturaId)) return null;
 
@@ -243,7 +247,7 @@ public class CandidaturasService
             CandidaturaId = candidaturaId,
             Texto = texto,
             Fecha = _reloj.AhoraUtc,
-            Origen = peticion.Origen
+            Origen = origen
         };
         db.Notas.Add(nota);
         await db.SaveChangesAsync();
@@ -302,7 +306,6 @@ public class CandidaturasService
     {
         ValidacionException.ExigirDefinido(d.Modalidad, "modalidad");
         ValidacionException.ExigirDefinido(d.Encaje, "encaje");
-        ValidacionException.ExigirDefinido(d.Origen, "origen");
     }
 
     private static string Obligatorio(string? valor, string mensaje, string campo) =>
