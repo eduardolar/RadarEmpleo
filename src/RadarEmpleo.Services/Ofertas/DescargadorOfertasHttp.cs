@@ -113,8 +113,7 @@ public sealed class DescargadorOfertasHttp : IDescargadorOfertas, IDisposable
     private async Task<DescargaOferta> LeerAsync(HttpContent contenido, int codigo, Uri url, TipoDescarga tipo, CancellationToken cancelacion)
     {
         var tipoContenido = contenido.Headers.ContentType?.MediaType?.ToLowerInvariant();
-        var admitido = tipo == TipoDescarga.ListadoJson ? tipoContenido == "application/json" : tipoContenido is "text/html" or "text/plain";
-        if (!admitido) return DescargaOferta.Fallida(FalloDescarga.TipoNoAdmitido, codigo, url);
+        if (!Admite(tipo, tipoContenido)) return DescargaOferta.Fallida(FalloDescarga.TipoNoAdmitido, codigo, url);
 
         await using var comprimido = await contenido.ReadAsStreamAsync(cancelacion);
         await using var cuerpo = Descomprimir(comprimido, contenido.Headers.ContentEncoding);
@@ -123,10 +122,17 @@ public sealed class DescargadorOfertasHttp : IDescargadorOfertas, IDisposable
         if (recortada && tipo == TipoDescarga.ListadoJson) return DescargaOferta.Fallida(FalloDescarga.DemasiadoGrande, codigo, url);
 
         var texto = Codificacion(contenido.Headers.ContentType?.CharSet).GetString(bytes).TrimStart('﻿');
-        if (tipo == TipoDescarga.Pagina)
-            texto = tipoContenido == "text/html" ? HtmlATexto.Convertir(texto) : HtmlATexto.NormalizarEspacios(texto);
-        return new DescargaOferta(null, codigo, url, texto, recortada);
+        return new DescargaOferta(null, codigo, url, ATexto(tipo, tipoContenido, texto), recortada);
     }
+
+    /// <summary>Si se admite ese tipo de contenido: JSON solo para los listados (decisión 4 de la F7b).</summary>
+    internal static bool Admite(TipoDescarga tipo, string? tipoContenido) =>
+        tipo == TipoDescarga.ListadoJson ? tipoContenido == "application/json" : tipoContenido is "text/html" or "text/plain";
+
+    /// <summary>Una página, a texto plano; un listado, tal cual.</summary>
+    internal static string ATexto(TipoDescarga tipo, string? tipoContenido, string cuerpo) =>
+        tipo == TipoDescarga.ListadoJson ? cuerpo
+        : tipoContenido == "text/html" ? HtmlATexto.Convertir(cuerpo) : HtmlATexto.NormalizarEspacios(cuerpo);
 
     /// <summary>Quita la compresión que diga el servidor; null si es una que no se admite (o más de una).</summary>
     private static Stream? Descomprimir(Stream cuerpo, ICollection<string> codificaciones)
