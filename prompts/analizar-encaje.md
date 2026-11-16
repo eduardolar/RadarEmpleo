@@ -11,7 +11,7 @@ Haz lo que haría el analista de encaje, en este orden:
 3. Clasifica cada requisito:
    - **Lo cumple**: está en el perfil.
    - **Puente**: no lo tiene, pero tiene un fundamento cercano. Es una pega menor si es una herramienta del cliente y seria si es el núcleo del puesto.
-   - **Filtro estructural**: no se puede compensar (titulación exigida, inglés alto certificado o proceso en inglés, más años de los que pide el perfil, presencial fuera de zona). Dilo siempre.
+   - **Filtro estructural**: no se puede compensar (titulación exigida, inglés alto certificado o proceso en inglés, la oferta pide más años de experiencia de los que tiene la persona según su perfil, presencial fuera de zona). Dilo siempre.
 4. Valora además lo que se sepa: consultora o ETT, salario frente al mínimo, contrato, antigüedad y saturación de la oferta.
 5. Decide el encaje:
    - **Alto**: cumple lo esencial y no hay filtros estructurales.
