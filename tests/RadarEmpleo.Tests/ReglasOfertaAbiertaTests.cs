@@ -9,6 +9,7 @@ public class ReglasOfertaAbiertaTests
     private static readonly OfertaEnSistema Greenhouse = new(SistemaSeleccion.Greenhouse, "empresa-ficticia", "4000001");
     private static readonly OfertaEnSistema Workable = new(SistemaSeleccion.Workable, "empresa-ficticia", "AB12CD34EF");
     private static readonly OfertaEnSistema Lever = new(SistemaSeleccion.Lever, "empresa-ficticia", "00000000-0000-4000-8000-000000000001");
+    private static readonly OfertaEnSistema Ashby = new(SistemaSeleccion.Ashby, "empresa-ficticia", "00000000-0000-4000-8000-000000000001");
 
     private static DescargaOferta Pagina(string texto, string url = "https://empleo.ejemplo.es/ofertas/1") => new(null, 200, new Uri(url), texto);
 
@@ -42,12 +43,26 @@ public class ReglasOfertaAbiertaTests
 
     [Theory]
     [InlineData("""{"jobs":[{"id":4000002},{"id":4000001,"title":"Analista"}]}""", EstadoOferta.Abierta, "Sigue en el listado público de Greenhouse.")]
-    [InlineData("""{"jobs":[{"id":4000002}]}""", EstadoOferta.NoSeSabe, "No sale en el listado público de Greenhouse, pero la página se lee.")]
-    [InlineData("""{"jobs":[]}""", EstadoOferta.NoSeSabe, "No sale en el listado público de Greenhouse, pero la página se lee.")]
-    [InlineData("""{"jobs":[{"id":"40000010"}]}""", EstadoOferta.NoSeSabe, "No sale en el listado público de Greenhouse, pero la página se lee.")]
-    public void Decidir_ConElListado_EstarDaAbiertaYNoEstarConLaPaginaLegibleNoSeSabe(string json, EstadoOferta estado, string motivo)
+    [InlineData("""{"jobs":[{"id":4000002}]}""", EstadoOferta.Cerrada, "Ya no está en el listado público de Greenhouse.")]
+    [InlineData("""{"jobs":[]}""", EstadoOferta.Cerrada, "Ya no está en el listado público de Greenhouse.")]
+    [InlineData("""{"jobs":[{"id":"40000010"}]}""", EstadoOferta.Cerrada, "Ya no está en el listado público de Greenhouse.")]
+    public void Decidir_ConElListadoDeGreenhouse_EstarDaAbiertaYNoEstarCerradaAunqueLaPaginaSeLea(string json, EstadoOferta estado, string motivo)
     {
         Assert.Equal(new ComprobacionOferta(estado, motivo), Decidir(Greenhouse, PaginaNormal, Listado(json)));
+    }
+
+    [Fact]
+    public void Decidir_LeverOAshbySinLaOfertaEnElListadoYConLaPaginaLegible_NoSeSabePorquePuedeSerOculta()
+    {
+        const string Otra = """[{"id":"00000000-0000-4000-8000-000000000002"}]""";
+        const string OtraAshby = """{"jobs":[{"id":"00000000-0000-4000-8000-000000000002"}]}""";
+
+        Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, "No sale en el listado público de Lever, pero la página se lee."),
+            Decidir(Lever, PaginaNormal, Listado(Otra)));
+        Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, "No sale en el listado público de Ashby, pero la página se lee."),
+            Decidir(Ashby, PaginaNormal, Listado(OtraAshby)));
+        Assert.Equal(new ComprobacionOferta(EstadoOferta.Cerrada, "Ya no está en el listado público de Lever."),
+            Decidir(Lever, Pagina("Oferta cerrada"), Listado(Otra)));
     }
 
     [Fact]
@@ -100,7 +115,7 @@ public class ReglasOfertaAbiertaTests
 
     [Theory]
     [InlineData("""{"jobs":[{"shortcode":"ab12cd34ef","id":"x"}]}""", EstadoOferta.Abierta)]
-    [InlineData("""{"jobs":[{"id":"AB12CD34EF"}]}""", EstadoOferta.NoSeSabe)]
+    [InlineData("""{"jobs":[{"id":"AB12CD34EF"}]}""", EstadoOferta.Cerrada)]
     public void Decidir_ElListadoDeWorkable_VaPorElShortcode(string json, EstadoOferta estado)
     {
         Assert.Equal(estado, Decidir(Workable, PaginaNormal, Listado(json)).Estado);

@@ -537,6 +537,26 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CanceladaEnLaBdMientrasSePreparaUnaSinClaude_QuedaCanceladaAunqueElCorteNoHayaSaltado()
+    {
+        var ejecucion = await EncolarAsync();
+        // Como «Cancelar» desde otra copia de la API: solo marca la BD y la vigilancia aún no ha cortado.
+        ManejadorDePrueba.AlConstruir = async _ =>
+        {
+            await using var db = _factory.CreateDbContext();
+            await db.EjecucionesAgente.Where(e => e.Id == ejecucion.Id).ExecuteUpdateAsync(s => s.SetProperty(e => e.CancelacionPedida, true));
+        };
+        ManejadorDePrueba.SinClaude = new ResultadoTarea("No hacía falta Claude.", null);
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Cancelada, final.Estado);
+        Assert.Equal(0m, final.CosteUsd);
+        Assert.Empty(_falso.Peticiones);
+    }
+
+    [Fact]
     public async Task UnaReglaDeNegocioAlPreparar_FallaSinContarGasto()
     {
         var ejecucion = await EncolarAsync();

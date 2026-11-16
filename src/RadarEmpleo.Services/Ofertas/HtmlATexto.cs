@@ -113,7 +113,8 @@ public static class HtmlATexto
 
     /// <summary>
     /// La etiqueta que empieza en <paramref name="inicio"/> (un «&lt;»): su nombre en minúsculas, si es de cierre y dónde
-    /// acaba (tras el «&gt;», o al final si no lo tiene). Las comillas tras un «=» van hasta su pareja. Null si no es etiqueta.
+    /// acaba (tras el «&gt;», o al final si no lo tiene). Las comillas tras un «=» van hasta su pareja (sin pareja, hasta el
+    /// siguiente «&gt;»). Null si no es etiqueta.
     /// </summary>
     private static (string Nombre, bool Cierre, int Fin)? LeerEtiqueta(string html, int inicio)
     {
@@ -143,7 +144,12 @@ public static class HtmlATexto
             if (c is '"' or '\'' && anterior == '=')
             {
                 var pareja = html.IndexOf(c, k + 1);
-                if (pareja < 0) break;
+                if (pareja < 0)
+                {
+                    // Una comilla sin cerrar no se come el resto de la página: la etiqueta acaba en el siguiente «>».
+                    var mayor = html.IndexOf('>', k + 1);
+                    return (nombre, cierre, mayor < 0 ? html.Length : mayor + 1);
+                }
                 k = pareja;
                 anterior = c;
                 continue;

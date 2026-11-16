@@ -208,11 +208,12 @@ public sealed class ProcesadorEjecuciones : BackgroundService
                 var sinClaude = preparacion.SinClaude!;
                 var registroSinClaude = await HashAsync(ArchivoVigilado.Registro);
                 var perfilSinClaude = await HashAsync(ArchivoVigilado.Perfil);
-                // Si la han cancelado mientras se preparaba, queda Cancelada (también con coste 0), no Ok.
-                var cortada = corte.IsCancellationRequested && !parada.IsCancellationRequested;
+                // Si la han cancelado mientras se preparaba, queda Cancelada (también con coste 0), no Ok: basta con que
+                // esté pedida en la BD (desde otra copia de la API, la vigilancia aún no habría cortado).
+                var sinParada = !parada.IsCancellationRequested;
                 await CambiarAsync(id, e =>
                 {
-                    if (cortada && e.CancelacionPedida) e.ConfirmarCancelacion(_reloj.AhoraUtc, 0m, registroSinClaude, perfilSinClaude);
+                    if (sinParada && e.CancelacionPedida) e.ConfirmarCancelacion(_reloj.AhoraUtc, 0m, registroSinClaude, perfilSinClaude);
                     else e.Terminar(_reloj.AhoraUtc, 0m, null, null, sinClaude.Resumen, sinClaude.ResultadoJson, registroSinClaude, perfilSinClaude);
                 });
                 return;

@@ -59,14 +59,15 @@ public class ComprobadorOfertaAbiertaTests
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("mailto:rrhh@ejemplo.es")]
-    public async Task Comprobar_SinEnlace_NoDescargaNada(string? enlace)
+    [InlineData(null, "La candidatura no tiene un enlace a la oferta.")]
+    [InlineData("  ", "La candidatura no tiene un enlace a la oferta.")]
+    [InlineData("mailto:rrhh@ejemplo.es", "El enlace de la oferta no es una dirección válida.")]
+    [InlineData("esto no es un enlace", "El enlace de la oferta no es una dirección válida.")]
+    public async Task Comprobar_SinEnlaceOConUnoQueNoEsUnaDireccion_NoDescargaNadaYLoDice(string? enlace, string motivo)
     {
         var comprobada = await new ComprobadorOfertaAbierta(_descargador).ComprobarAsync(enlace, CancellationToken.None);
 
-        Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, "La candidatura no tiene un enlace a la oferta."), comprobada.Comprobacion);
+        Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, motivo), comprobada.Comprobacion);
         Assert.Empty(_descargador.Peticiones);
     }
 

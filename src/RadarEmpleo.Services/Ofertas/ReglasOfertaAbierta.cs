@@ -10,7 +10,7 @@ public sealed record ComprobacionOferta(EstadoOferta Estado, string Motivo);
 /// ¿Sigue abierta la oferta? (añadido de la F7b tras revisar AIHawk). Pura: decide con la página ya descargada y, si el
 /// enlace es de un sistema de selección, con su listado público. Por orden: la página no existe (404/410) o Greenhouse ha
 /// llevado al listado con <c>error=true</c>; el listado, si se ha podido leer, manda (si está el id, abierta; si no, cerrada,
-/// salvo que la página se lea bien: entonces no se sabe); una página
+/// salvo en Lever y Ashby si la página se lee bien: pueden ser ofertas ocultas y entonces no se sabe); una página
 /// que pide iniciar sesión no dice nada; una página que dice que ya no se admiten candidaturas; y una página que se lee
 /// sin decir nada de eso, abierta, salvo que haya acabado en otra web o en una portada.
 /// </summary>
@@ -51,8 +51,9 @@ public static class ReglasOfertaAbierta
         if (sistema is not null && listado is { Ok: true, Texto: { } json } && EstaEnElListado(sistema, json) is { } esta)
         {
             if (esta) return new(EstadoOferta.Abierta, $"Sigue en el listado público de {sistema.Sistema}.");
-            // Lever y Ashby tienen ofertas que no salen en el listado («unlisted») y se pueden abrir con el enlace.
-            if (pagina.Ok && !pideSesion && !diceCerrada && !OtraPagina(enlace, pagina.UrlFinal))
+            // Lever y Ashby tienen ofertas que no salen en el listado («unlisted») y se pueden abrir con el enlace. En
+            // Greenhouse y Workable, no estar en un listado legible es estar cerrada.
+            if (sistema.Sistema is SistemaSeleccion.Lever or SistemaSeleccion.Ashby && pagina.Ok && !pideSesion && !diceCerrada && !OtraPagina(enlace, pagina.UrlFinal))
                 return new(EstadoOferta.NoSeSabe, $"No sale en el listado público de {sistema.Sistema}, pero la página se lee.");
             return new(EstadoOferta.Cerrada, $"Ya no está en el listado público de {sistema.Sistema}.");
         }

@@ -135,6 +135,8 @@ public class HtmlATextoTests
     [InlineData("<p title=\"x > y\">Texto</p><p>Más</p>", "Texto\n\nMás")]
     [InlineData("<p class=a'b>Texto</p>", "Texto")]
     [InlineData("<p>Si a < b y c > d</p>", "Si a < b y c > d")]
+    [InlineData("<p title=\"sin cerrar>Texto</p><p>Más</p>", "Texto\n\nMás")]
+    [InlineData("<p>Antes</p><a href='/x>enlace</a><p>Después</p>", "Antes\nenlace\nDespués")]
     public void Convertir_LasComillasDeLosAtributosNoAbrenEtiquetas(string html, string esperado)
     {
         Assert.Equal(esperado, HtmlATexto.Convertir(html));
