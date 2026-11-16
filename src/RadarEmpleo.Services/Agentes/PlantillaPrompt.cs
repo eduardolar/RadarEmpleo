@@ -59,7 +59,7 @@ public static partial class PlantillaPrompt
         if (dato.UnaLinea) texto = SaltosDeLinea().Replace(texto, " ");
         // Fuera los controles, los de formato (ancho cero, dirección del texto, guion blando, BOM), los de uso privado
         // y los «tag»: servirían para esconder texto que Claude lee y Eduardo no ve, o un «<<<» partido en dos.
-        texto = Invisibles().Replace(texto, "");
+        texto = QuitarInvisibles(texto);
         // NFKC convierte los homoglifos de ancho completo («＞＞＞») en los normales, que se neutralizan abajo.
         texto = texto.Normalize(NormalizationForm.FormKC).Trim();
         // Sin delimitadores: ni «<<<», ni «>>>», ni marcadores que parezcan de la plantilla.
@@ -69,6 +69,12 @@ public static partial class PlantillaPrompt
         if (texto.Length > dato.LargoMaximo) texto = texto[..dato.LargoMaximo];
         return texto.Length == 0 ? "(sin dato)" : texto;
     }
+
+    /// <summary>
+    /// Quita los controles (salvo tabulador y saltos), los de formato, los de uso privado y los «tag»: lo que serviría para
+    /// esconder texto que Claude lee y Eduardo no ve. También lo usa <see cref="Ofertas.HtmlATexto"/>.
+    /// </summary>
+    internal static string QuitarInvisibles(string texto) => Invisibles().Replace(texto, "");
 
     // Controles (salvo tabulador y saltos), formato, uso privado, rellenos de Hangul, CGJ, selectores de variante y los
     // \u00ABtag\u00BB U+E0000-E007F (en UTF-16, U+DB40 seguido de U+DC00-DC7F).

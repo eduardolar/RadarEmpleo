@@ -1,70 +1,167 @@
 using System.Net;
 using System.Text;
-using System.Text.RegularExpressions;
+using RadarEmpleo.Services.Agentes;
 
 namespace RadarEmpleo.Services.Ofertas;
 
 /// <summary>
 /// Pasa la página de una oferta a texto plano para el prompt: sin scripts, estilos, plantillas, SVG ni comentarios;
-/// con un salto por cada bloque (párrafo, título, fila, elemento de lista…), las entidades decodificadas y los espacios
-/// normalizados. Puro. Las expresiones van sin vuelta atrás (<see cref="RegexOptions.NonBacktracking"/>): una página
-/// de 2 MB hecha a mala idea no puede dejarlas pensando.
+/// con un salto por cada bloque (párrafo, título, fila, elemento de lista…), las entidades decodificadas, sin caracteres
+/// invisibles ni de control y los espacios normalizados. Puro y de una sola pasada, sin expresiones regulares: una página
+/// de 2 MB hecha a mala idea no puede dejarlo pensando. Las comillas de los atributos se respetan (un
+/// <c>&lt;a title='&lt;script&gt;'&gt;</c> no abre nada). No interpreta CSS: un elemento oculto sigue pasando, pero el
+/// texto va al prompt como DATOS.
 /// </summary>
 public static class HtmlATexto
 {
-    private const RegexOptions Opciones = RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant
-        | RegexOptions.NonBacktracking;
+    // Lo que no es texto: se quita con su contenido. Sin cierre, hasta el final (un script sin cerrar no cuela su código).
+    private static readonly HashSet<string> SinContenido = ["script", "style", "noscript", "template", "svg", "iframe", "object"];
 
-    private static readonly Regex Comentarios = new("<!--.*?-->", Opciones);
-    private static readonly Regex Titulo = new(@"<title\b[^>]*>(.*?)</title\s*>", Opciones);
-    private static readonly Regex AperturaSinContenido = new(@"<(script|style|noscript|template|svg|head|iframe|object)\b[^>]*>", Opciones);
-    private static readonly Regex Elementos = new(@"<li\b[^>]*>", Opciones);
-    private static readonly Regex Bloques = new(
-        @"</?(p|div|br|hr|h[1-6]|ul|ol|tr|table|section|article|header|footer|main|nav|aside|blockquote|pre|dl|dt|dd|form|fieldset)\b[^>]*>", Opciones);
-    private static readonly Regex Celdas = new(@"</t[dh]\s*>", Opciones);
-    private static readonly Regex Etiquetas = new(@"</?[a-z!][^>]*>", Opciones);
-    private static readonly Regex Espacios = new(@"[\s-[\n]]+", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
-    private static readonly Regex VariosSaltos = new(@"\n{3,}", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
+    private static readonly HashSet<string> Bloques =
+    [
+        "p", "div", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "tr", "table", "section", "article", "header",
+        "footer", "main", "nav", "aside", "blockquote", "pre", "dl", "dt", "dd", "form", "fieldset"
+    ];
 
     /// <summary>El texto de la página, con el título (si lo tiene) en la primera línea.</summary>
     public static string Convertir(string html)
     {
-        var texto = Comentarios.Replace(html, " ");
-        var titulo = Titulo.Match(texto) is { Success: true } encontrado ? NormalizarEspacios(Decodificar(encontrado.Groups[1].Value)) : "";
-        texto = QuitarSinContenido(texto);
-        texto = Elementos.Replace(texto, "\n- ");
-        texto = Bloques.Replace(texto, "\n");
-        texto = Celdas.Replace(texto, " · ");
-        texto = Etiquetas.Replace(texto, " ");
-        texto = NormalizarEspacios(Decodificar(texto));
+        var salida = new StringBuilder(html.Length);
+        var cierres = new Dictionary<string, int>();
+        var titulo = "";
+        var i = 0;
+        while (i < html.Length)
+        {
+            var menor = html.IndexOf('<', i);
+            if (menor < 0)
+            {
+                salida.Append(html, i, html.Length - i);
+                break;
+            }
+            salida.Append(html, i, menor - i);
+            if (string.CompareOrdinal(html, menor, "<!--", 0, 4) == 0)
+            {
+                var finComentario = html.IndexOf("-->", menor + 4, StringComparison.Ordinal);
+                i = finComentario < 0 ? html.Length : finComentario + 3;
+                salida.Append(' ');
+                continue;
+            }
+            if (LeerEtiqueta(html, menor) is not { } etiqueta)
+            {
+                // Un «<» que no abre etiqueta («a < b») es texto.
+                salida.Append('<');
+                i = menor + 1;
+                continue;
+            }
+            var (nombre, cierre, fin) = etiqueta;
+            i = fin;
+            if (!cierre && (SinContenido.Contains(nombre) || nombre == "title"))
+            {
+                var inicioCierre = BuscarCierre(html, nombre, i, cierres);
+                // Un <title> sin cerrar no se come la página: su texto se queda como texto.
+                if (nombre == "title" && inicioCierre < 0) continue;
+                if (nombre == "title" && titulo.Length == 0) titulo = html[i..inicioCierre];
+                var finCierre = inicioCierre < 0 ? -1 : html.IndexOf('>', inicioCierre);
+                i = finCierre < 0 ? html.Length : finCierre + 1;
+                salida.Append(' ');
+                continue;
+            }
+            salida.Append(!cierre && nombre == "li" ? "\n- " : Bloques.Contains(nombre) ? "\n" : cierre && nombre is "td" or "th" ? " · " : " ");
+        }
+
+        var texto = NormalizarEspacios(WebUtility.HtmlDecode(salida.ToString()));
+        titulo = NormalizarEspacios(WebUtility.HtmlDecode(titulo));
         if (titulo.Length == 0 || texto.StartsWith(titulo, StringComparison.Ordinal)) return texto;
         return texto.Length == 0 ? titulo : $"{titulo}\n\n{texto}";
     }
 
-    /// <summary>Espacios seguidos en uno, cada línea sin espacios a los lados y como mucho una línea en blanco seguida.</summary>
+    /// <summary>
+    /// Sin invisibles ni controles (los de <see cref="PlantillaPrompt"/>), espacios seguidos en uno, cada línea sin espacios
+    /// a los lados y como mucho una línea en blanco seguida. De una pasada.
+    /// </summary>
     public static string NormalizarEspacios(string texto)
     {
-        var lineas = texto.ReplaceLineEndings("\n").Split('\n').Select(l => Espacios.Replace(l, " ").Trim());
-        return VariosSaltos.Replace(string.Join('\n', lineas), "\n\n").Trim();
-    }
-
-    // Lo que no es texto (script, style…) se quita con su contenido. La referencia al nombre de la etiqueta no se puede
-    // usar sin vuelta atrás, así que el cierre se busca a mano, de una pasada. Sin cierre, se quita hasta el final: un
-    // script sin cerrar no puede colar su código como texto.
-    private static string QuitarSinContenido(string html)
-    {
-        var resultado = new StringBuilder(html.Length);
-        var posicion = 0;
-        for (var m = AperturaSinContenido.Match(html, posicion); m.Success; m = AperturaSinContenido.Match(html, posicion))
+        var limpio = PlantillaPrompt.QuitarInvisibles(texto.ReplaceLineEndings("\n"));
+        var salida = new StringBuilder(limpio.Length);
+        var espacio = false;
+        var saltos = 0;
+        foreach (var c in limpio)
         {
-            resultado.Append(html, posicion, m.Index - posicion).Append(' ');
-            var cierre = html.IndexOf("</" + m.Groups[1].Value, m.Index + m.Length, StringComparison.OrdinalIgnoreCase);
-            if (cierre < 0) return resultado.ToString();
-            var fin = html.IndexOf('>', cierre);
-            posicion = fin < 0 ? html.Length : fin + 1;
+            if (c == '\n')
+            {
+                saltos++;
+                espacio = false;
+            }
+            else if (char.IsWhiteSpace(c))
+            {
+                espacio = true;
+            }
+            else
+            {
+                if (salida.Length > 0)
+                {
+                    if (saltos > 0) salida.Append('\n', Math.Min(saltos, 2));
+                    else if (espacio) salida.Append(' ');
+                }
+                saltos = 0;
+                espacio = false;
+                salida.Append(c);
+            }
         }
-        return resultado.Append(html, posicion, html.Length - posicion).ToString();
+        return salida.ToString();
     }
 
-    private static string Decodificar(string texto) => WebUtility.HtmlDecode(texto);
+    /// <summary>
+    /// La etiqueta que empieza en <paramref name="inicio"/> (un «&lt;»): su nombre en minúsculas, si es de cierre y dónde
+    /// acaba (tras el «&gt;», o al final si no lo tiene). Las comillas tras un «=» van hasta su pareja. Null si no es etiqueta.
+    /// </summary>
+    private static (string Nombre, bool Cierre, int Fin)? LeerEtiqueta(string html, int inicio)
+    {
+        var j = inicio + 1;
+        var cierre = j < html.Length && html[j] == '/';
+        if (cierre) j++;
+        if (j >= html.Length) return null;
+        string nombre;
+        if (html[j] is '!' or '?')
+        {
+            nombre = "!";
+        }
+        else
+        {
+            if (!char.IsAsciiLetter(html[j])) return null;
+            var finNombre = j;
+            while (finNombre < html.Length && (char.IsAsciiLetterOrDigit(html[finNombre]) || html[finNombre] == '-')) finNombre++;
+            nombre = html[j..finNombre].ToLowerInvariant();
+            j = finNombre;
+        }
+
+        var anterior = ' ';
+        for (var k = j; k < html.Length; k++)
+        {
+            var c = html[k];
+            if (c == '>') return (nombre, cierre, k + 1);
+            if (c is '"' or '\'' && anterior == '=')
+            {
+                var pareja = html.IndexOf(c, k + 1);
+                if (pareja < 0) break;
+                k = pareja;
+                anterior = c;
+                continue;
+            }
+            if (!char.IsWhiteSpace(c)) anterior = c;
+        }
+        return (nombre, cierre, html.Length);
+    }
+
+    /// <summary>
+    /// Dónde empieza el siguiente <c>&lt;/nombre</c> desde <paramref name="desde"/>, o -1. Recuerda lo ya buscado: mil
+    /// aperturas sin cierre no hacen mil búsquedas hasta el final.
+    /// </summary>
+    private static int BuscarCierre(string html, string nombre, int desde, Dictionary<string, int> cierres)
+    {
+        if (cierres.TryGetValue(nombre, out var previo) && (previo < 0 || previo >= desde)) return previo;
+        var encontrado = html.IndexOf("</" + nombre, desde, StringComparison.OrdinalIgnoreCase);
+        cierres[nombre] = encontrado;
+        return encontrado;
+    }
 }

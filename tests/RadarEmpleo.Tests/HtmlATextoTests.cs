@@ -93,6 +93,61 @@ public class HtmlATextoTests
         Assert.True(reloj.Elapsed < TimeSpan.FromSeconds(10), $"Ha tardado {reloj.Elapsed}.");
     }
 
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    [InlineData(" \t\n")]
+    public void Convertir_DosMegasDeEspaciosOSaltos_EnMenosDeUnSegundo(string relleno)
+    {
+        var html = "<p>a</p>" + string.Concat(Enumerable.Repeat(relleno, 2 * 1024 * 1024 / relleno.Length)) + "<p>b</p>";
+        HtmlATexto.Convertir("<p>calentar</p>");
+
+        var reloj = Stopwatch.StartNew();
+        var texto = HtmlATexto.Convertir(html);
+
+        Assert.True(reloj.Elapsed < TimeSpan.FromSeconds(1), $"Ha tardado {reloj.Elapsed}.");
+        Assert.Equal("a\n\nb", texto);
+    }
+
+    [Fact]
+    public void Convertir_MuchosTitulosSinCerrar_NoSeAtasca()
+    {
+        var html = string.Concat(Enumerable.Repeat("<title>x<script>y", 100_000));
+
+        var reloj = Stopwatch.StartNew();
+        HtmlATexto.Convertir(html);
+
+        Assert.True(reloj.Elapsed < TimeSpan.FromSeconds(1), $"Ha tardado {reloj.Elapsed}.");
+    }
+
+    [Fact]
+    public void Convertir_QuitaLosInvisiblesYLosDeControl()
+    {
+        // Ancho cero, guion blando, dirección del texto, BOM, campana, «tag» (U+E0041, en surrogates) y uno por entidad.
+        var html = "<p>Ofer\u200Bta\u00AD de\u202E pru\uFEFFeba\u0007 \U000E0041\U000E0042&#8203;</p>";
+
+        Assert.Equal("Oferta de prueba", HtmlATexto.Convertir(html));
+    }
+
+    [Theory]
+    [InlineData("<p>Antes</p><a title='<script>'>enlace</a><p>Después</p>", "Antes\nenlace\nDespués")]
+    [InlineData("<p title=\"x > y\">Texto</p><p>Más</p>", "Texto\n\nMás")]
+    [InlineData("<p class=a'b>Texto</p>", "Texto")]
+    [InlineData("<p>Si a < b y c > d</p>", "Si a < b y c > d")]
+    public void Convertir_LasComillasDeLosAtributosNoAbrenEtiquetas(string html, string esperado)
+    {
+        Assert.Equal(esperado, HtmlATexto.Convertir(html));
+    }
+
+    [Theory]
+    [InlineData("<html><head><title>Analista</title><meta charset=utf-8><p>Requisitos: SQL</p>", "Analista\n\nRequisitos: SQL")]
+    [InlineData("<title>Analista <p>Requisitos: SQL</p>", "Analista\nRequisitos: SQL")]
+    public void Convertir_UnHeadOUnTitleSinCerrar_NoSeComenLaPagina(string html, string esperado)
+    {
+        Assert.Equal(esperado, HtmlATexto.Convertir(html));
+    }
+
     [Fact]
     public void NormalizarEspacios_DejaComoMuchoUnaLineaEnBlanco()
     {
