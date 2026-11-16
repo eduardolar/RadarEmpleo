@@ -22,6 +22,7 @@ public class AppDbContext : DbContext
     public DbSet<Documento> Documentos => Set<Documento>();
     public DbSet<Rastreo> Rastreos => Set<Rastreo>();
     public DbSet<OfertaRastreo> OfertasRastreo => Set<OfertaRastreo>();
+    public DbSet<EjecucionAgente> EjecucionesAgente => Set<EjecucionAgente>();
 
     /// <summary>Índice único parcial de un documento vigente por tipo y candidatura.</summary>
     public const string IndiceVigentePorTipo = "IX_Documentos_CandidaturaId_Tipo_Vigente";
@@ -115,7 +116,10 @@ public class AppDbContext : DbContext
         b.Entity<Rastreo>().Property(r => r.Origen).HasConversion<string>();
         b.Entity<Rastreo>().HasIndex(r => r.Clave).IsUnique();
         b.Entity<Rastreo>().HasIndex(r => r.Fecha);
-        // EjecucionAgenteId sin clave foránea: la tabla EjecucionAgente llega en la F7.
+        // Borrar la ejecución no borra el rastreo: solo lo desenlaza.
+        b.Entity<Rastreo>()
+            .HasOne(r => r.EjecucionAgente).WithMany()
+            .HasForeignKey(r => r.EjecucionAgenteId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
         b.Entity<Rastreo>().HasIndex(r => r.EjecucionAgenteId);
         b.Entity<Rastreo>().Property(r => r.Clave).HasMaxLength(Rastreo.LargoClave);
         b.Entity<Rastreo>().Property(r => r.Titulo).HasMaxLength(Rastreo.LargoTitulo);
@@ -136,6 +140,33 @@ public class AppDbContext : DbContext
         b.Entity<OfertaRastreo>().Property(o => o.Puesto).HasMaxLength(OfertaRastreo.LargoPuesto);
         b.Entity<OfertaRastreo>().Property(o => o.Enlace).HasMaxLength(OfertaRastreo.LargoEnlace);
         b.Entity<OfertaRastreo>().Property(o => o.Pega).HasMaxLength(OfertaRastreo.LargoPega);
+
+        // --- Ejecuciones de agentes: enums como texto; los importes en decimal y sumados en memoria (son
+        // pocas filas al día y SQLite no suma decimal en el servidor) ---
+        b.Entity<EjecucionAgente>(e =>
+        {
+            e.Property(x => x.Tarea).HasConversion<string>().HasMaxLength(30);
+            e.Property(x => x.Estado).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Espera).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.ParametrosJson).HasMaxLength(EjecucionAgente.LargoParametros);
+            e.Property(x => x.QuienBloquea).HasMaxLength(EjecucionAgente.LargoQuien);
+            e.Property(x => x.Modelo).HasMaxLength(EjecucionAgente.LargoModelo);
+            e.Property(x => x.Resumen).HasMaxLength(EjecucionAgente.LargoResumen);
+            e.Property(x => x.Error).HasMaxLength(EjecucionAgente.LargoError);
+            e.Property(x => x.SesionClaude).HasMaxLength(EjecucionAgente.LargoSesion);
+            e.Property(x => x.RutaLog).HasMaxLength(EjecucionAgente.LargoRutaLog);
+            e.Property(x => x.HashRegistroAntes).HasMaxLength(EjecucionAgente.LargoHash);
+            e.Property(x => x.HashRegistroDespues).HasMaxLength(EjecucionAgente.LargoHash);
+            e.Property(x => x.HashPerfilAntes).HasMaxLength(EjecucionAgente.LargoHash);
+            e.Property(x => x.HashPerfilDespues).HasMaxLength(EjecucionAgente.LargoHash);
+            e.HasIndex(x => x.Estado);
+            e.HasIndex(x => new { x.Tarea, x.CandidaturaId });
+            e.HasIndex(x => x.Inicio);
+            // Borrar la candidatura deja la ejecución en la lista, sin ella.
+            e.HasOne(x => x.Candidatura).WithMany()
+                .HasForeignKey(x => x.CandidaturaId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            // PreparacionId y EnvioId sin clave foránea: sus tablas llegan en la F8-F10.
+        });
     }
 }
 

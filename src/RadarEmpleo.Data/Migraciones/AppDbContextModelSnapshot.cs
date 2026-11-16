@@ -214,6 +214,129 @@ namespace RadarEmpleo.Data.Migraciones
                     b.ToTable("Documentos");
                 });
 
+            modelBuilder.Entity("RadarEmpleo.Domain.EjecucionAgente", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("CancelacionPedida")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CandidaturaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("CosteUsd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EnvioId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Espera")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FechaAlta")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("Fin")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HashPerfilAntes")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HashPerfilDespues")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HashRegistroAntes")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HashRegistroDespues")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("Inicio")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("InicioProceso")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Modelo")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParametrosJson")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Paso")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Pid")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("PreparacionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("PresupuestoUsd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("QuienBloquea")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultadoJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Resumen")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RutaLog")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SesionClaude")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tarea")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TiempoMaximoSegundos")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Turnos")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CandidaturaId");
+
+                    b.HasIndex("Estado");
+
+                    b.HasIndex("Inicio");
+
+                    b.HasIndex("Tarea", "CandidaturaId");
+
+                    b.ToTable("EjecucionesAgente");
+                });
+
             modelBuilder.Entity("RadarEmpleo.Domain.Empresa", b =>
                 {
                     b.Property<int>("Id")
@@ -472,6 +595,16 @@ namespace RadarEmpleo.Data.Migraciones
                     b.Navigation("Candidatura");
                 });
 
+            modelBuilder.Entity("RadarEmpleo.Domain.EjecucionAgente", b =>
+                {
+                    b.HasOne("RadarEmpleo.Domain.Candidatura", "Candidatura")
+                        .WithMany()
+                        .HasForeignKey("CandidaturaId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Candidatura");
+                });
+
             modelBuilder.Entity("RadarEmpleo.Domain.Nota", b =>
                 {
                     b.HasOne("RadarEmpleo.Domain.Candidatura", "Candidatura")
@@ -499,6 +632,16 @@ namespace RadarEmpleo.Data.Migraciones
                     b.Navigation("Candidatura");
 
                     b.Navigation("Rastreo");
+                });
+
+            modelBuilder.Entity("RadarEmpleo.Domain.Rastreo", b =>
+                {
+                    b.HasOne("RadarEmpleo.Domain.EjecucionAgente", "EjecucionAgente")
+                        .WithMany()
+                        .HasForeignKey("EjecucionAgenteId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("EjecucionAgente");
                 });
 
             modelBuilder.Entity("RadarEmpleo.Domain.Recordatorio", b =>
