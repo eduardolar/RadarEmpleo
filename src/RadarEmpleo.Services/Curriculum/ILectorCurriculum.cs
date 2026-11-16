@@ -8,6 +8,12 @@ namespace RadarEmpleo.Services.Curriculum;
 /// </summary>
 public interface ILectorCurriculum
 {
+    /// <summary>
+    /// Lo que da <see cref="LeerHashAsync"/> cuando el archivo (o la carpeta Curriculum) no está: distinto de cualquier
+    /// hash, así que borrar o renombrar el registro mientras trabaja un agente cuenta como cambio.
+    /// </summary>
+    const string HashAusente = "ausente";
+
     /// <summary>Texto completo del registro de candidaturas.</summary>
     /// <exception cref="ReglaNegocioException">Falta la carpeta o el registro, o no se puede leer.</exception>
     Task<string> LeerRegistroAsync(CancellationToken cancelacion = default);
@@ -19,6 +25,14 @@ public interface ILectorCurriculum
     /// <summary>Texto completo del perfil de búsqueda y su fecha de modificación.</summary>
     /// <exception cref="ReglaNegocioException">Falta la carpeta o el perfil, o no se puede leer.</exception>
     Task<TextoLeido> LeerPerfilAsync(CancellationToken cancelacion = default);
+
+    /// <summary>
+    /// SHA-256 (hexadecimal en minúsculas) de <c>ofertas-enviadas.md</c> o de <c>perfil-busqueda.md</c>, para
+    /// saber si han cambiado mientras trabajaba un agente. <see cref="HashAusente"/> si el archivo o la carpeta
+    /// configurada no están; null solo si no hay ninguna carpeta configurada.
+    /// </summary>
+    /// <exception cref="ReglaNegocioException">El archivo está pero no se puede leer (quien llama decide; no es «ausente»).</exception>
+    Task<string?> LeerHashAsync(ArchivoVigilado archivo, CancellationToken cancelacion = default);
 
     /// <summary>
     /// Archivos .pdf y .docx que se pueden vincular: los sueltos de la raíz, los de cada
@@ -57,7 +71,15 @@ public sealed record InformesRastreo(
     IReadOnlyList<string> NoLeidos);
 
 /// <summary>Texto de un archivo de Curriculum con su fecha de modificación (UTC).</summary>
-public sealed record TextoLeido(string Texto, DateTime FechaModificacion);
+/// <param name="Hash">SHA-256 de los mismos bytes de los que sale <paramref name="Texto"/> (como <see cref="ILectorCurriculum.LeerHashAsync"/>).</param>
+public sealed record TextoLeido(string Texto, DateTime FechaModificacion, string Hash);
+
+/// <summary>Archivos de Curriculum que la app vigila (y nunca escribe) mientras trabaja un agente.</summary>
+public enum ArchivoVigilado
+{
+    Registro,
+    Perfil
+}
 
 /// <summary>Un archivo que se puede vincular.</summary>
 /// <param name="RutaRelativa">Ruta dentro de Curriculum con «/».</param>

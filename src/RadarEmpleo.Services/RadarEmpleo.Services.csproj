@@ -1,6 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!-- ILogger y BackgroundService para la cola de agentes: es el framework compartido, no un paquete NuGet. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\RadarEmpleo.Domain\RadarEmpleo.Domain.csproj" />
     <ProjectReference Include="..\RadarEmpleo.Data\RadarEmpleo.Data.csproj" />
   </ItemGroup>
