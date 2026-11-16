@@ -10,7 +10,7 @@ public readonly record struct RedLocal(IPAddress Direccion, int Prefijo);
 /// <summary>
 /// Contra SSRF: a qué direcciones no se conecta nunca la descarga de ofertas (apartado 6 del plan). Todo lo que no es
 /// una dirección pública de internet: sin especificar, loopback, privadas, link-local, CGNAT, de documentación, de
-/// pruebas, multicast, reservadas y las de la red de este PC. Las IPv4 dentro de IPv6 (<c>::ffff:a.b.c.d</c>) se miran
+/// pruebas, multicast, reservadas, la del servicio de Azure (168.63.129.16) y las de la red de este PC. Las IPv4 dentro de IPv6 (<c>::ffff:a.b.c.d</c>) se miran
 /// como IPv4, y las de transición (NAT64, 6to4 y Teredo) se rechazan enteras, porque esconden una IPv4 cualquiera.
 /// </summary>
 public static class DireccionesBloqueadas
@@ -19,13 +19,14 @@ public static class DireccionesBloqueadas
     [
         .. new[]
         {
-            "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24",
-            "192.0.2.0/24", "192.88.99.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24",
-            "224.0.0.0/4", "240.0.0.0/4",
-            // IPv6: sin especificar y loopback (dentro de ::/96, las «compatibles con IPv4»), NAT64, descarte, Teredo,
-            // documentación, 6to4, locales únicas, link-local, site-local (obsoletas) y multicast.
-            "::/96", "::ffff:0:0:0/96", "64:ff9b::/96", "64:ff9b:1::/48", "100::/64", "2001::/32", "2001:db8::/32",
-            "2002::/16", "fc00::/7", "fe80::/10", "fec0::/10", "ff00::/8"
+            "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "168.63.129.16/32", "169.254.0.0/16", "172.16.0.0/12",
+            "192.0.0.0/24", "192.0.2.0/24", "192.31.196.0/24", "192.52.193.0/24", "192.88.99.0/24", "192.168.0.0/16",
+            "192.175.48.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4",
+            // IPv6: todo ::/8 (sin especificar, loopback, compatibles con IPv4, SIIT…; las IPv4 dentro de IPv6 ya se han
+            // mirado como IPv4), NAT64, descarte, Teredo, benchmarking, ORCHIDv2, documentación, 6to4, SRv6, locales
+            // únicas, link-local, site-local (obsoletas) y multicast.
+            "::/8", "64:ff9b::/96", "64:ff9b:1::/48", "100::/64", "2001::/32", "2001:2::/48", "2001:10::/28", "2001:20::/28",
+            "2001:db8::/32", "2002::/16", "3fff::/20", "5f00::/16", "fc00::/7", "fe80::/10", "fec0::/10", "ff00::/8"
         }.Select(Rango)
     ];
 

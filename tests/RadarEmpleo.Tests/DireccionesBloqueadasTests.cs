@@ -32,6 +32,10 @@ public class DireccionesBloqueadasTests
     [InlineData("239.255.255.250")]
     [InlineData("240.0.0.1")]
     [InlineData("255.255.255.255")]
+    [InlineData("168.63.129.16")]
+    [InlineData("192.31.196.1")]
+    [InlineData("192.52.193.1")]
+    [InlineData("192.175.48.6")]
     // IPv6: sin especificar, loopback, compatibles con IPv4, IPv4 dentro de IPv6 (privadas), SIIT, NAT64, descarte,
     // Teredo, documentación, 6to4, locales únicas, link-local, site-local y multicast.
     [InlineData("::")]
@@ -55,6 +59,14 @@ public class DireccionesBloqueadasTests
     [InlineData("febf::1")]
     [InlineData("fec0::1")]
     [InlineData("ff02::1")]
+    [InlineData("::1:2:3:4")]
+    [InlineData("ff:ffff::1")]
+    [InlineData("2001:2::1")]
+    [InlineData("2001:10::1")]
+    [InlineData("2001:2f::1")]
+    [InlineData("3fff::1")]
+    [InlineData("3fff:fff::1")]
+    [InlineData("5f00::1")]
     public void EstaBloqueada_LoQueNoEsInternetPublico_SeRechaza(string direccion)
     {
         Assert.True(DireccionesBloqueadas.EstaBloqueada(IPAddress.Parse(direccion), []));
@@ -75,6 +87,12 @@ public class DireccionesBloqueadasTests
     [InlineData("2606:4700:4700::1111")]
     [InlineData("2a00:1450:4003:80e::200e")]
     [InlineData("2001:4860:4860::8888")]
+    [InlineData("168.63.129.17")]
+    [InlineData("192.31.197.1")]
+    [InlineData("2001:3::1")]
+    [InlineData("2001:30::1")]
+    [InlineData("3fff:1000::1")]
+    [InlineData("100:0:0:1::1")]
     public void EstaBloqueada_UnaDireccionPublica_SePermite(string direccion)
     {
         Assert.False(DireccionesBloqueadas.EstaBloqueada(IPAddress.Parse(direccion), []));
