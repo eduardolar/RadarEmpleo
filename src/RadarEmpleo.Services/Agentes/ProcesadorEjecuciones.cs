@@ -12,10 +12,10 @@ namespace RadarEmpleo.Services.Agentes;
 /// <summary>
 /// Lanza las ejecuciones de una en una y por orden (la más antigua en cola primero). Para cada una: vuelve a mirar el
 /// tope, coge el bloqueo compartido (o espera, como mucho una hora), calcula los hashes del registro y del perfil,
-/// lanza Claude, vuelve a calcular los hashes y deja la ejecución en Ok, Error o Cancelada. Al arrancar, nada de lo
-/// que se quedó a medias se relanza solo (<see cref="RecuperarAsync"/>). Si otra API ya procesa la cola de la misma
-/// base de datos (<see cref="ExclusionBaseDatos"/>), esta no recupera, no mata ni lanza nada: lo avisa en el log y lo
-/// vuelve a intentar en cada sondeo.
+/// lanza Claude (o no, si el manejador la termina sin él), vuelve a calcular los hashes y deja la ejecución en Ok, Error
+/// o Cancelada. Al arrancar, nada de lo que se quedó a medias se relanza solo (<see cref="RecuperarAsync"/>). Si otra
+/// API ya procesa la cola de la misma base de datos (<see cref="ExclusionBaseDatos"/>), esta no recupera, no mata ni
+/// lanza nada: lo avisa en el log y lo vuelve a intentar en cada sondeo.
 /// </summary>
 public sealed class ProcesadorEjecuciones : BackgroundService
 {
@@ -170,7 +170,7 @@ public sealed class ProcesadorEjecuciones : BackgroundService
         }
         if (!await CabeAsync(ejecucion, parada))
         {
-            await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.TopeDiario(_opciones.TopeGastoDiarioUsd)));
+            await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.TopeDiario));
             return;
         }
 
@@ -191,14 +191,30 @@ public sealed class ProcesadorEjecuciones : BackgroundService
 
         try
         {
-            PeticionClaude peticion;
+            PreparacionTarea preparacion;
             try
             {
-                peticion = await manejador.ConstruirAsync(ejecucion, contexto, corte.Token);
+                preparacion = await manejador.ConstruirAsync(ejecucion, contexto, corte.Token);
             }
             catch (ReglaNegocioException error)
             {
-                await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, error.Message, null, hashRegistro, hashPerfil));
+                // Sin Claude no ha gastado nada: con coste null contaría el presupuesto entero en el tope del día.
+                await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, error.Message, 0m, hashRegistro, hashPerfil));
+                return;
+            }
+            if (preparacion.Peticion is not { } peticion)
+            {
+                // Terminada sin Claude: no ha gastado nada. Los hashes se vuelven a mirar igual que con Claude.
+                var sinClaude = preparacion.SinClaude!;
+                var registroSinClaude = await HashAsync(ArchivoVigilado.Registro);
+                var perfilSinClaude = await HashAsync(ArchivoVigilado.Perfil);
+                // Si la han cancelado mientras se preparaba, queda Cancelada (también con coste 0), no Ok.
+                var cortada = corte.IsCancellationRequested && !parada.IsCancellationRequested;
+                await CambiarAsync(id, e =>
+                {
+                    if (cortada && e.CancelacionPedida) e.ConfirmarCancelacion(_reloj.AhoraUtc, 0m, registroSinClaude, perfilSinClaude);
+                    else e.Terminar(_reloj.AhoraUtc, 0m, null, null, sinClaude.Resumen, sinClaude.ResultadoJson, registroSinClaude, perfilSinClaude);
+                });
                 return;
             }
             Task? anotar = null;
@@ -234,7 +250,7 @@ public sealed class ProcesadorEjecuciones : BackgroundService
             if (!respuesta.Correcta)
             {
                 _log.LogInformation("La ejecución {Id} no ha salido: {Fallo} ({Detalle}).", id, respuesta.Fallo, respuesta.Detalle);
-                var mensaje = MensajesEjecucion.De(respuesta.Fallo ?? FalloClaude.ErrorDeClaude, definicion.TiempoMaximo, definicion.PresupuestoUsd);
+                var mensaje = MensajesEjecucion.De(respuesta.Fallo ?? FalloClaude.ErrorDeClaude, definicion.TiempoMaximo);
                 await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, mensaje, respuesta.CosteUsd, registroDespues, perfilDespues));
                 return;
             }

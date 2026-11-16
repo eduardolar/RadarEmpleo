@@ -1,12 +1,12 @@
-using System.Globalization;
-
 namespace RadarEmpleo.Services.Agentes;
 
-/// <summary>Los mensajes para Eduardo cuando una ejecución no sale. Sin nombres de tipos ni detalles técnicos (esos van al log).</summary>
+/// <summary>
+/// Los mensajes para Eduardo cuando una ejecución no sale. Sin nombres de tipos ni detalles técnicos (esos van al log)
+/// y sin dólares: Claude Code va con su suscripción, así que se habla de «uso estimado» (decisión del 14/11/2026). Por
+/// dentro los topes siguen en el equivalente en USD que devuelve Claude.
+/// </summary>
 public static class MensajesEjecucion
 {
-    private static readonly CultureInfo Espanol = CultureInfo.GetCultureInfo("es-ES");
-
     public const string NoInstalado = "No encuentro Claude Code en este PC.";
     public const string SalidaNoValida = "Claude ha respondido en un formato que no entiendo.";
     public const string ErrorDeClaude = "Claude ha devuelto un error.";
@@ -25,27 +25,26 @@ public static class MensajesEjecucion
     public static string SinExclusion(string detalle) =>
         $"No puedo usar los agentes: el archivo de control junto a la base de datos {detalle}.";
 
-    /// <summary>El mensaje de un fallo de Claude en una tarea con ese tiempo máximo y presupuesto.</summary>
-    public static string De(FalloClaude fallo, TimeSpan tiempoMaximo, decimal presupuestoUsd) => fallo switch
+    /// <summary>Error cuando una ejecución se pasa del tope de uso de su tarea (<c>--max-budget-usd</c>).</summary>
+    public const string TopeTarea = "Ha llegado al tope de uso de esta tarea y la he parado.";
+
+    /// <summary>Error al encolar o al empezar cuando ya no cabe en el tope de uso de hoy.</summary>
+    public const string TopeDiario = "Has llegado al tope de uso estimado de hoy. Mañana se puede volver a lanzar.";
+
+    /// <summary>El mensaje de un fallo de Claude en una tarea con ese tiempo máximo.</summary>
+    public static string De(FalloClaude fallo, TimeSpan tiempoMaximo) => fallo switch
     {
         FalloClaude.NoInstalado => NoInstalado,
         FalloClaude.TiempoAgotado => $"Ha tardado más de {Duracion(tiempoMaximo)} y la he parado.",
-        FalloClaude.PresupuestoAgotado => $"Ha llegado al tope de {Usd(presupuestoUsd)} de esta tarea y la he parado.",
+        FalloClaude.PresupuestoAgotado => TopeTarea,
         FalloClaude.SalidaNoValida => SalidaNoValida,
         FalloClaude.Cancelado => Cancelada,
         _ => ErrorDeClaude
     };
 
-    /// <summary>Error al encolar o al empezar cuando ya no cabe en el tope de hoy.</summary>
-    public static string TopeDiario(decimal topeUsd) =>
-        $"Has llegado al tope de gasto de hoy ({Usd(topeUsd)}). Mañana se puede volver a lanzar.";
-
     /// <summary>Error cuando el bloqueo compartido sigue ocupado después de la espera máxima.</summary>
     public static string BloqueoDemasiadoTiempo(string quien) =>
         $"La otra ejecución ({quien}) sigue en marcha después de una hora.";
-
-    /// <summary>«0,50 USD».</summary>
-    public static string Usd(decimal importe) => $"{importe.ToString("0.00", Espanol)} USD";
 
     /// <summary>«5 min», «90 s», «1 h 2 min».</summary>
     public static string Duracion(TimeSpan tiempo)

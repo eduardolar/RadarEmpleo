@@ -17,6 +17,31 @@ public sealed record ContextoTarea(string CarpetaTrabajo, string RutaLog, string
 public sealed record ResultadoTarea(string Resumen, string? ResultadoJson);
 
 /// <summary>
+/// Lo que sale de preparar una ejecución: o la petición para Claude, o un resultado sin lanzarlo (por ejemplo, la
+/// oferta ya no está publicada y no hay nada que analizar). Sin Claude, la ejecución termina en Ok con coste 0.
+/// </summary>
+public sealed record PreparacionTarea
+{
+    private PreparacionTarea(PeticionClaude? peticion, ResultadoTarea? sinClaude)
+    {
+        Peticion = peticion;
+        SinClaude = sinClaude;
+    }
+
+    /// <summary>Lo que hay que mandar a Claude, o null si la tarea ya ha terminado sin él.</summary>
+    public PeticionClaude? Peticion { get; }
+
+    /// <summary>El resultado de la tarea si no hace falta Claude, o null si hay que lanzarlo.</summary>
+    public ResultadoTarea? SinClaude { get; }
+
+    /// <summary>Hay que lanzar Claude con esta petición.</summary>
+    public static PreparacionTarea ConClaude(PeticionClaude peticion) => new(peticion, null);
+
+    /// <summary>La tarea ya ha terminado: no se lanza Claude y no gasta nada.</summary>
+    public static PreparacionTarea Terminada(ResultadoTarea resultado) => new(null, resultado);
+}
+
+/// <summary>
 /// Lo propio de cada tarea: qué parámetros admite, qué prompt monta y qué hace con la respuesta. Se registra uno por
 /// tarea (scoped); una tarea sin manejador no se puede encolar. Los de AnalizarEncaje y ExtraerRegistro llegan en la
 /// F7b y el de Rastreo en la F7c.
@@ -32,8 +57,11 @@ public interface IManejadorTarea
     /// </summary>
     Task<bool> ValidarAsync(int? candidaturaId, CancellationToken cancelacion);
 
-    /// <summary>Monta la petición con datos de la BD (nunca del cuerpo de una petición HTTP).</summary>
-    Task<PeticionClaude> ConstruirAsync(EjecucionAgente ejecucion, ContextoTarea contexto, CancellationToken cancelacion);
+    /// <summary>
+    /// Monta la petición con datos de la BD (nunca del cuerpo de una petición HTTP), o termina la tarea sin Claude
+    /// (<see cref="PreparacionTarea.Terminada"/>). Corre ya en curso y con el bloqueo cogido.
+    /// </summary>
+    Task<PreparacionTarea> ConstruirAsync(EjecucionAgente ejecucion, ContextoTarea contexto, CancellationToken cancelacion);
 
     /// <summary>
     /// Valida y aplica una respuesta correcta de Claude. Lanza <see cref="ReglaNegocioException"/> con el mensaje para

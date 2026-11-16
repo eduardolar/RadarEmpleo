@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["encaje", "pega", "analisis", "resumen"],
+  "properties": {
+    "encaje": {
+      "type": "string",
+      "enum": ["Alto", "Medio", "TiroLargo", "No"]
+    },
+    "pega": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "analisis": {
+      "type": "string",
+      "maxLength": 8000
+    },
+    "resumen": {
+      "type": "string",
+      "maxLength": 300
+    }
+  }
+}
