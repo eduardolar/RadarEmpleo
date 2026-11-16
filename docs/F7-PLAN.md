@@ -897,6 +897,15 @@ Notas para quien guarde el plan:
 - Archivos clave para la F7: `src/RadarEmpleo.Api/Program.cs`, `src/RadarEmpleo.Api/Configuracion/OpcionesRadar.cs`, `src/RadarEmpleo.Api/Controllers/SistemaController.cs`, `src/RadarEmpleo.Api/Controllers/ImportacionController.cs`, `src/RadarEmpleo.Services/Importacion/ImportacionService.cs`, `src/RadarEmpleo.Services/Contratos/Importacion.cs`, `src/RadarEmpleo.Services/Curriculum/ILectorCurriculum.cs`, `src/RadarEmpleo.Services/Curriculum/RutasCurriculum.cs`, `src/RadarEmpleo.Services/Rastreos/RastreosService.cs`, `src/RadarEmpleo.Services/Rastreos/AnalizadorRastreo.cs`, `src/RadarEmpleo.Domain/Rastreos.cs`, `tests/RadarEmpleo.Tests/Api/FabricaApi.cs` y `web/src/app/ajustes/pages/ajustes-page/ajustes-page.component.html`, todos bajo `C:\Users\Usuario\Desktop\RadarEmpleo\`.
 - Dos cosas dependen de que existan en .NET 10 y hay que confirmarlas al construir: `IConnectionItemsFeature` en las peticiones de Kestrel y `WebApplicationFactory.UseKestrel`. Las dos tienen plan B en el plan.
 
+## Añadidos a la F7b tras revisar AIHawk (15/11/2026)
+
+Eduardo aprobó el 15/11/2026 dos ideas sacadas de la revisión de [AIHawk](https://github.com/feder-cr/jobs_applier_ai_agent_aihawk) (MIT; se toman ideas, no código). Mandan sobre lo anterior para la F7b.
+
+1. **¿Sigue abierta la oferta?** Antes de lanzar AnalizarEncaje, la app comprueba si la oferta sigue publicada, sin IA ni navegador. Se aprovecha la misma descarga de la oferta (apartado 6) y, cuando el enlace es de un sistema de selección con listado público (Greenhouse, Lever, Ashby, Workable), se consulta ese listado. Si está cerrada, el análisis no se lanza (no gasta) y la ejecución termina en Ok con «La oferta ya no está publicada: no he analizado nada.»; la ficha ofrece descartarla con el motivo «Oferta cerrada». Si no se puede saber, se analiza igual y se dice. Lógica pura y testeable (`ReglasOfertaAbierta`), con el detector de sistema por el enlace junto a `portal-desde-enlace`. Deja la base para la comprobación previa de la F8.
+2. **Medir si AnalizarEncaje acierta.** Un conjunto de unas 20 ofertas **inventadas** (`datos-ejemplo/encaje/`, sin datos personales), cada una con el encaje que daría Eduardo, y un test de evaluación que compara lo que devuelve el agente con lo esperado (aciertos exactos y a un nivel de distancia). No va en `dotnet test` (gastaría): se lanza a mano con su propio OK y tope de gasto, y el resultado se apunta aquí con la fecha y el prompt usado, para saber si un cambio de prompt mejora o empeora.
+
+Al planificar la F7b, el arquitecto la trocea en PR de como mucho 800-1.000 líneas sin contar lo generado.
+
 ## Decisiones aprobadas
 
 El 14/11/2026 Eduardo aprobó todas las decisiones del apartado 10 con la opción recomendada, y el paso 0 con `claude` real (tope de 1 USD en total). Los cambios en `_rastreo_semanal.ps1` y en `SKILL.md` (decisión 5) se le vuelven a preguntar al llegar a la F7c.
@@ -937,3 +946,90 @@ Dentro del mismo presupuesto aprobado, con `--model haiku`, `--max-budget-usd 0.
 | S4 | `--tools WebFetch --allowedTools "WebFetch(domain:example.com)"` | `https://example.org/` **se deniega** (sale en `permission_denials`); `https://example.com/` se lee. | 0,0193 |
 
 **Gasto de esta comprobación: 0,0791 USD.** Total del paso 0: 0,6034 + 0,0791 = **0,6825 USD medidos**, más C10b (≤0,05) = **0,7325 USD como mucho**, dentro de 1 USD.
+
+## Plan de la F7b por PR
+
+Propuesto por el arquitecto el 15/11/2026 y **aprobado por Eduardo el 15/11/2026 con todas las opciones recomendadas** (ver «Decisiones de la F7b»). Aplica los apartados 4.4, 6, 7, 9 (pasos 10-15), 11 y 12, «Decisiones aprobadas» y «Añadidos a la F7b tras revisar AIHawk»; aquí solo se reparte en PR y se concreta lo que faltaba.
+
+**Reglas comunes**
+- Cada PR, como mucho unas 900 líneas añadidas (código, tests, prompts y datos), medidas con `git diff --shortstat <base>..<rama>`. Si uno se pasa de 1.000, se parte por el último commit, nunca a mitad de uno.
+- PR encadenados: cada uno contra el anterior; el primero (`f7b-plan`) contra `f7a-4-api` mientras la F7a no esté en `main`.
+- Cada commit compila y deja en verde `dotnet test RadarEmpleo.slnx`, `npx ng test --watch=false` y `npx prettier --check src` (comprobado con LF, como en el CI).
+- **Sin migración**: el estado de la oferta va dentro de `ResultadoJson`.
+- Ningún test lanza `claude` ni sale a internet: `EjecutorClaudeFalso` y `DescargadorOfertasFalso`.
+
+### Tabla de PR
+
+| # | Rama | Qué incluye | Archivos principales | Líneas (código / tests) | Agente | Aceptación |
+|---|---|---|---|---|---|---|
+| 0 | `f7b-plan` | Este plan y los añadidos de AIHawk | `docs/F7-PLAN.md`, `docs/PLAN-AMPLIACION.md` | documentación | — | Aprobado por Eduardo |
+| 1 | `f7b-1-prompts` | Prompts y esquemas de AnalizarEncaje y ExtraerRegistro embebidos; un manejador puede terminar **sin lanzar Claude**; mensajes de tope sin dólares | `prompts/*.md`, `prompts/*.schema.json`, `Services.csproj`, `Agentes/Prompts.cs`, `IManejadorTarea.cs`, `ProcesadorEjecuciones.cs`, `MensajesEjecucion.cs` | 280 / 240 | desarrollador-dotnet | Plantillas embebidas legibles y esquemas válidos con los campos y límites de la tabla 4.4; «sin Claude» deja Ok con coste 0, sin llamar al ejecutor y con el bloqueo liberado |
+| 2 | `f7b-2-descarga-oferta` | `DescargadorOfertas` con las reglas anti-SSRF del apartado 6, HTML a texto y versión falsa | `Services/Ofertas/`: `IDescargadorOfertas`, `DireccionesBloqueadas`, `ConectorSeguro`, `HtmlATexto`, `DescargadorOfertasHttp`, `DescargadorOfertasFalso`; `Program.cs`; `datos-ejemplo/agentes/descargas.json` | 400 / 450 | desarrollador-dotnet (+ auditor-seguridad) | Todos los casos del apartado 6 (https y 443, sin proxy, ≤3 redirecciones revisadas, 15 s, 2 MB descomprimidos, tipos admitidos, todos los rangos, IPv4 dentro de IPv6); con `Ejecutor=Falso` se usa el falso |
+| 3 | `f7b-3-oferta-abierta` | Detector del sistema de selección, `ReglasOfertaAbierta` y comprobador | `Domain/SistemasSeleccion.cs`, `Domain/Enums.cs` (`EstadoOferta`), `Services/Ofertas/ReglasOfertaAbierta.cs`, `ComprobadorOfertaAbierta.cs` | 300 / 400 | desarrollador-dotnet | Reconoce Greenhouse, Lever, Ashby y Workable (cuenta e id); distingue Abierta, Cerrada y NoSeSabe con motivo; una sola descarga de la página, reutilizada para el prompt |
+| 4 | `f7b-4-manejador-encaje` | `ManejadorAnalizarEncaje`, `PromptAnalizarEncaje` (puro) y `AplicarAnalisisAgenteAsync` | `Agentes/ManejadorAnalizarEncaje.cs`, `PromptAnalizarEncaje.cs`, `CandidaturasService.cs`, `Contratos/Agentes.cs`, `Program.cs` | 380 / 450 | desarrollador-dotnet | Casos «Manejadores» del apartado 11; oferta cerrada → Ok sin llamar al ejecutor; NoSeSabe → se analiza y el resumen lo dice |
+| 5 | `f7b-5-api-encaje` | `POST /api/agentes/analizar/{candidaturaId}` y `estadoOferta` en el DTO | `AgentesController.cs`, `Contratos/Agentes.cs`, `AgentesService.cs`, `Api/AgentesApiTests.cs` | 90 / 280 | desarrollador-dotnet | 202 con `Location`, 200 al repetir, 404, 409 (descartada o cerrada), 403 por el remoto antes que el 415, 415; `estadoOferta` null en otras tareas |
+| 6 | `f7b-6-evaluacion-encaje` | 20 ofertas inventadas y evaluador manual fuera de `dotnet test` | `datos-ejemplo/encaje/` (`LEEME.md`, `oferta-01..20.md`, `esperado.json`), `tests/EvaluacionEncaje/` (consola), `RadarEmpleo.slnx` | 220 + ~450 de datos / 160 | desarrollador-dotnet (Eduardo corrige los encajes esperados) | Compila en el CI y nunca se ejecuta solo; tests de la puntuación (exacto y a un nivel) y del conjunto (20 ofertas, JSON válido, los cuatro niveles, sin datos personales) |
+| 7 | `f7b-7-extraer-registro` | `ManejadorExtraerRegistro`, texto libre del registro y `POST /api/agentes/extraer-registro` | `Importacion/AnalizadorRegistro.cs` (`TextoLibre`), `Agentes/ManejadorExtraerRegistro.cs`, `Contratos/Agentes.cs`, `AgentesController.cs`, `Program.cs` | 330 / 430 | desarrollador-dotnet | Prompt sin la tabla ni los «## Rastreo…»; salida validada (≤1000 filas, ≤50 dudas) en `ResultadoJson`, sin crear nada; endpoint 202/200/403/409/415 |
+| 8 | `f7b-8-combinador-lotes` | `CombinadorLotes`, puro | `Importacion/CombinadorLotes.cs` | 220 / 380 | desarrollador-dotnet | Manda la fila de la tabla; misma empresa a ±3 días fuera con aviso; `cita` inexistente a SinLeer; `Linea` correcta; límites de `LimitesLote` |
+| 9 | `f7b-9-importacion-hash` | Aplicar con hash y lote rehecho en el servidor; `extraccion/{id}/previsualizar`; **adaptación mínima del front en el mismo commit** | `Contratos/Importacion.cs`, `ImportacionService.cs`, `ImportacionController.cs`; `web/.../importacion.service.ts`, `importacion.interface.ts`, `importacion-de-prueba.ts` y specs | 280 + 60 front / 450 | desarrollador-dotnet (+ desarrollador-angular en el commit del front) | Casos «Importación» del apartado 11 de principio a fin con el falso; el front sigue aplicando la tabla, ahora con `hashRegistro`; apartado 12, puntos 1-10 |
+| 10 | `f7b-10-agentes-servicio` | Front: interfaces, textos de «uso estimado», servicio con seguimiento cada 5 s, `agentesDisponibles` | `web/src/app/agentes/` (interfaces, `textos-ejecucion.ts`, `ejecucion-de-prueba.ts`, `agentes.service.ts` + specs), `core/interfaces/sistema-info.interface.ts` | 330 / 450 | desarrollador-angular (+ experto-ux en los textos) | Specs del apartado 11 con «uso estimado»; sin `agentesDisponibles` no pide el estado; expone `llevaLaCola` y `motivoCola` |
+| 11 | `f7b-11-estado-ejecucion` | Componente `estado-ejecucion` | `web/src/app/agentes/components/estado-ejecucion/` | 230 / 300 | desarrollador-angular, después disenador-ui | Spec del apartado 11; sin `mat-flat-button` ni relleno lima |
+| 12 | `f7b-12-pagina-agentes` | Página `/agentes`, ruta, menú y quinta tarjeta de Más | `agentes/pages/agentes-page/`, `app.routes.ts`, `layout/utils/opciones-menu.ts`, `mas-page.component.html` | 220 / 280 | desarrollador-angular, después disenador-ui | Specs de la página, Más, menú y rutas; «uso estimado» sin USD |
+| 13 | `f7b-13-ajustes-agentes` | Bloque «Agentes de Claude» en Ajustes | `ajustes/pages/ajustes-page/*` | 90 / 150 | desarrollador-angular, después disenador-ui | `dl` sin botones: estado (con `motivoCola`), uso estimado de hoy con «No se cobra aparte: sale del mismo cupo que usas con Claude Code.», tope, versión y «Ver ejecuciones» |
+| 14 | `f7b-14-ficha-encaje` | «Analizar encaje con Claude» y «Descartar: oferta cerrada» en la ficha | `ficha-page/*`, `dialogo-cambio-estado.ts`, `cambio-estado.service.ts`, `portal-desde-enlace.ts` | 230 / 400 | desarrollador-angular, después disenador-ui | Spec de la ficha del apartado 11; con la oferta cerrada propone descartar con el motivo ya elegido, nunca sola; un solo `mat-flat-button` |
+| 15 | `f7b-15-importacion-extraer` | «Extraer el texto libre con Claude» en Importación | `importacion-page/*`, `importacion.service.ts`, `resumen-importacion.ts` | 210 / 400 | desarrollador-angular, después disenador-ui | Spec de Importación del apartado 11; dudas plegadas como texto; un 409 vuelve a previsualizar; un solo relleno; apartado 12, puntos 11-14 con el falso |
+| 16 | `f7b-16-cierre` | Revisión UX, documentación y resultados de la aceptación y la evaluación | `docs/DISENO.md` («Agentes y ejecuciones»), `docs/PLAN.md` §11, `README.md`, `docs/F7-PLAN.md` | ~100 / 50 + documentación | experto-ux y disenador-ui | Arreglos de experto-ux hechos; resultados con fecha, hash del prompt y gasto |
+
+Total aproximado: 3.700 líneas de código y 4.700 de tests.
+
+### Commits de cada PR (resumen)
+
+- **PR 1**: (1) prompts y esquemas embebidos + `Prompts.cs`; (2) `ConstruirAsync` devuelve `PreparacionTarea` (petición a Claude o resultado sin Claude) y el procesador termina con coste 0; (3) `MensajesEjecucion` sin dólares («Has llegado al tope de uso estimado de hoy…», «Ha llegado al tope de uso de esta tarea y la he parado.»).
+- **PR 2**: (1) `DireccionesBloqueadas`, pura, con tabla de casos IPv4/IPv6 y direcciones de este PC; (2) `HtmlATexto`, puro; (3) `ConectorSeguro` con `IResolvedorDns` inyectable (rechaza sin abrir socket); (4) `DescargadorOfertasHttp` (`UseProxy=false`, `AllowAutoRedirect=false`, HTTP/2 como máximo, ≤3 redirecciones revalidadas, tope descomprimido, tipos por `TipoDescarga`: Página `text/html`/`text/plain`, ListadoJson `application/json`, 15 s); (5) `DescargadorOfertasFalso` con `datos-ejemplo/agentes/descargas.json` y registro en `Program.cs`.
+- **PR 3**: (1) `SistemasSeleccion.Detectar(enlace)` (`boards.greenhouse.io`/`job-boards.greenhouse.io/{cuenta}/jobs/{id}`, `jobs.lever.co/{cuenta}/{id}`, `jobs.ashbyhq.com/{cuenta}/{id}`, `apply.workable.com/{cuenta}/j/{id}`); (2) `ReglasOfertaAbierta.Decidir`, pura (404/410, redirección de Greenhouse con `error=true`, frases de oferta cerrada en español e inglés, id presente o ausente en el listado, muro de inicio de sesión); (3) `ComprobadorOfertaAbierta.ComprobarAsync`.
+- **PR 4**: (1) `AplicarAnalisisAgenteAsync` (nota con lo anterior, reintento por `FechaUltimoCambio`, radar regenerado); (2) `PromptAnalizarEncaje.Montar`, puro, compartido con el evaluador; (3) `ManejadorAnalizarEncaje` (validar, construir con perfil y comprobación de la oferta, aplicar con `estadoOferta` y `ofertaLeida`).
+- **PR 5**: (1) `EstadoOferta` en `EjecucionAgenteDto`; (2) endpoint con sus tests de API, incluido de principio a fin con el falso y una oferta cerrada en `descargas.json` con coste 0.
+- **PR 6**: (1) conjunto inventado + `ConjuntoEncajeTests`; (2) consola `tests/EvaluacionEncaje/` (solo arranca con `--confirmo-gasto` y `--tope-usd <n>`; resumen con aciertos, matriz de confusión, coste y hash del prompt); (3) `PuntuacionEncaje`, pura, con sus tests.
+- **PR 7**: (1) `AnalizadorRegistro.TextoLibre` con las líneas originales; (2) `ManejadorExtraerRegistro`; (3) endpoint.
+- **PR 8**: `CombinadorLotes`; la `cita` se compara con el texto **limpiado igual que en `PlantillaPrompt`** (NFKC, sin invisibles, espacios normalizados), línea a línea.
+- **PR 9**: (1) `HashRegistro` y `EjecucionId` en la vista previa (aditivo, también en la interfaz del front); (2) `AplicarImportacionRequest` sustituye a `AplicarLoteRequest` y el front manda `{origen, ejecucionId, hashRegistro, claves}` en el mismo commit; (3) `OrigenLote.RegistroConClaude`, `PrevisualizarExtraccionAsync` y su endpoint con `[SoloPcConAgentes]`.
+- **PR 10**: (1) interfaces y `agentesDisponibles`; (2) `textos-ejecucion.ts` con `usoEstimado(...)` (ningún texto con «USD»); (3) `agentes.service.ts` con seguimiento único cada 5 s que se pausa con la pestaña oculta y `puedeLanzar` (disponibles y `llevaLaCola`); (4) revisión de textos de experto-ux.
+- **PR 11 a 15**: un commit de lógica y accesibilidad y otro de diseño por pantalla, como en la tabla.
+- **PR 16**: revisión de experto-ux, `DISENO.md`, `PLAN.md` §11, README y resultados.
+
+### Pruebas con `claude` real (cada una con su OK expreso de Eduardo)
+
+Siempre con `--Agentes:Ejecutor=Cli`, oculto, BD temporal y el uso mirado en Ajustes antes y después; nunca `Desktop\Curriculum` ni `radar.db`. Los importes son el equivalente en USD de `total_cost_usd`: salen del cupo del plan Pro, no se cobran aparte.
+
+| Prueba | Cuándo | Tope |
+|---|---|---|
+| A. Evaluación del acierto (20 ofertas, modelo por defecto) | Tras el PR 6 | 0,50 por oferta y **5,00 en total**, con corte automático del evaluador. Repetir tras cambiar el prompt es otro OK |
+| B. ExtraerRegistro real sobre una **copia temporal nueva** del registro y del perfil | Tras el PR 15 | 1,00 la tarea y **1,50 en total**; si se corta, no se relanza sin preguntar |
+| C. AnalizarEncaje real con una oferta abierta y otra cerrada que elija Eduardo | Con B | 0,50 por análisis y **1,00 en total**; la cerrada tiene que costar 0 |
+
+A en otra franja de 5 horas del plan que B y C. Sin gasto, pero avisando antes: una prueba en vivo de la descarga contra 3 o 4 enlaces públicos que elija Eduardo.
+
+### Decisiones de la F7b (aprobadas el 15/11/2026)
+
+1. **Sin CV en AnalizarEncaje en la F7b**: la oferta, la ficha y `perfil-busqueda.md`; la plantilla lo dice. El texto del CV (PDF/DOCX) llega en la F8.
+2. **Uso como porcentaje del tope diario**: «Uso estimado de tu suscripción hoy: 3 % del tope diario» y, por ejecución, «uso estimado: 1 % del tope del día» (o «hasta el 3 %» si no se sabe el coste). Ninguna cifra en USD en pantalla; los DTO siguen en USD por dentro.
+3. **Excepción en el PR 9**: lleva la adaptación mínima del front (unas 60 líneas) en el mismo commit, para que `main` no quede roto entre PR.
+4. **JSON solo en los listados**: `application/json` solo con `TipoDescarga.ListadoJson` y las URL de hosts fijos que monta `SistemasSeleccion`, con las mismas reglas y el mismo tope; si se pasa, NoSeSabe.
+5. **Evaluación contra `datos-ejemplo/perfil-ejemplo.md`**, no el perfil real; los encajes esperados los propone el desarrollador y los corrige Eduardo.
+6. **El detector va en el servidor** (`SistemasSeleccion`, junto a `Enlaces.cs`); además, los cuatro sistemas se añaden a `PORTALES` del front en el PR 14.
+7. **Oferta cerrada**: la ejecución termina en Ok con `estadoOferta: "Cerrada"` en `ResultadoJson`; la ficha propone descartar con el motivo Cerrada ya elegido, nunca sola.
+8. **El evaluador es una consola** dentro del `.slnx` (se compila en el CI, no se ejecuta con `dotnet test`).
+9. **Con `Agentes:Ejecutor=Falso`, la descarga también es la falsa**: la demo y las pruebas no salen a internet.
+10. **PR 0** de documentación contra `f7a-4-api`; `f7b-1-prompts` sale de él.
+
+### Riesgos propios del troceo
+
+- **La `cita` contra el texto limpiado** (PR 8): comparar con la misma limpieza que `PlantillaPrompt` y línea a línea, o saldrán como «Sin leer» filas buenas o con la línea desplazada.
+- **Tamaño de ExtraerRegistro**: ~100 KB de texto son ~45.000 tokens por turno. Si B se corta por presupuesto, partir el texto por secciones (decisión 7 del apartado 10), en una consulta aparte.
+- **La descarga dentro del bloqueo**: hasta 30 s cuentan para el tiempo de la tarea; el token de corte también cancela la descarga.
+- **Editar la ficha mientras se analiza**: `AplicarAnalisisAgenteAsync` cambia `FechaUltimoCambio` y puede dar el 409 de «otra pestaña»; la ficha lo explica (PR 14).
+- **Specs del front**: solo la ficha, Importación y Ajustes tienen que responder a `/api/agentes/estado` (PR 13 a 15).
+
+### Cómo comprobarlo
+
+Tras el PR 9, apartado 12 puntos 1-10; tras el PR 15, puntos 11-14 con el falso (1366 y 390 px, día y noche, solo teclado); después las pruebas A, B y C con su OK; siempre al final, puntos 19-20. En ninguna pantalla sale una cifra en USD; un análisis de una oferta cerrada no gasta nada y ofrece descartarla; el hash del registro y del perfil originales no cambia.
