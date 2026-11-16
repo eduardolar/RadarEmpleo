@@ -109,3 +109,11 @@ public enum EstadoOfertaRastreo
     Convertida,
     Ignorada
 }
+
+/// <summary>Si la oferta sigue publicada, según la comprobación previa a AnalizarEncaje (sin IA ni navegador).</summary>
+public enum EstadoOferta
+{
+    Abierta,
+    Cerrada,
+    NoSeSabe
+}
