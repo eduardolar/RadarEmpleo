@@ -20,10 +20,10 @@ public sealed record OfertaEnSistema(SistemaSeleccion Sistema, string Cuenta, st
     /// </summary>
     public string UrlListado => Sistema switch
     {
-        SistemaSeleccion.Greenhouse => $"https://boards-api.greenhouse.io/v1/boards/{Cuenta}/jobs",
-        SistemaSeleccion.Lever => $"https://api.lever.co/v0/postings/{Cuenta}?mode=json",
-        SistemaSeleccion.Ashby => $"https://api.ashbyhq.com/posting-api/job-board/{Cuenta}",
-        _ => $"https://apply.workable.com/api/v1/widget/accounts/{Cuenta}"
+        SistemaSeleccion.Greenhouse => $"https://{ListadosPublicos.Greenhouse}/v1/boards/{Cuenta}/jobs",
+        SistemaSeleccion.Lever => $"https://{ListadosPublicos.Lever}/v0/postings/{Cuenta}?mode=json",
+        SistemaSeleccion.Ashby => $"https://{ListadosPublicos.Ashby}/posting-api/job-board/{Cuenta}",
+        _ => $"https://{ListadosPublicos.Workable}/api/v1/widget/accounts/{Cuenta}"
     };
 }
 
@@ -40,10 +40,14 @@ public static partial class SistemasSeleccion
     [GeneratedRegex("^[0-9]{1,20}$", RegexOptions.CultureInvariant)]
     private static partial Regex Numero();
 
+    // Lever y Ashby: el id de la oferta es un UUID.
+    [GeneratedRegex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", RegexOptions.CultureInvariant)]
+    private static partial Regex Uuid();
+
     /// <summary>
     /// La oferta del enlace, o null si no es de ninguno de los cuatro: <c>boards.greenhouse.io</c> o
     /// <c>job-boards.greenhouse.io/{cuenta}/jobs/{id}</c>, <c>jobs.lever.co/{cuenta}/{id}</c>,
-    /// <c>jobs.ashbyhq.com/{cuenta}/{id}</c> y <c>apply.workable.com/{cuenta}/j/{id}</c> (lo que siga, como <c>/apply</c>,
+    /// <c>jobs.ashbyhq.com/{cuenta}/{id}</c> (en estos dos, el id es un UUID) y <c>apply.workable.com/{cuenta}/j/{id}</c> (lo que siga, como <c>/apply</c>,
     /// no cuenta).
     /// </summary>
     public static OfertaEnSistema? Detectar(string? enlace)
@@ -58,8 +62,8 @@ public static partial class SistemasSeleccion
         {
             ("boards.greenhouse.io" or "job-boards.greenhouse.io", [var cuenta, "jobs", var id, ..]) when Numero().IsMatch(id)
                 => new OfertaEnSistema(SistemaSeleccion.Greenhouse, cuenta, id),
-            ("jobs.lever.co", [var cuenta, var id, ..]) => new OfertaEnSistema(SistemaSeleccion.Lever, cuenta, id),
-            ("jobs.ashbyhq.com", [var cuenta, var id, ..]) => new OfertaEnSistema(SistemaSeleccion.Ashby, cuenta, id),
+            ("jobs.lever.co", [var cuenta, var id, ..]) when Uuid().IsMatch(id) => new OfertaEnSistema(SistemaSeleccion.Lever, cuenta, id),
+            ("jobs.ashbyhq.com", [var cuenta, var id, ..]) when Uuid().IsMatch(id) => new OfertaEnSistema(SistemaSeleccion.Ashby, cuenta, id),
             ("apply.workable.com", [var cuenta, "j", var id, ..]) => new OfertaEnSistema(SistemaSeleccion.Workable, cuenta, id),
             _ => null
         };
