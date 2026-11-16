@@ -521,6 +521,36 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CancelarMientrasSePreparaUnaSinClaude_QuedaCanceladaConCosteCero()
+    {
+        var ejecucion = await EncolarAsync();
+        ManejadorDePrueba.AlConstruir = async _ => await _cola.CancelarAsync(ejecucion.Id);
+        ManejadorDePrueba.SinClaude = new ResultadoTarea("No hacía falta Claude.", null);
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Cancelada, final.Estado);
+        Assert.Equal(0m, ReglasGasto.GastoComputable(final));
+        Assert.Empty(_falso.Peticiones);
+        Assert.False(File.Exists(RutaBloqueo));
+    }
+
+    [Fact]
+    public async Task UnaReglaDeNegocioAlPreparar_FallaSinContarGasto()
+    {
+        var ejecucion = await EncolarAsync();
+        ManejadorDePrueba.AlConstruir = _ => throw new ReglaNegocioException("La candidatura ya no existe.");
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal((EstadoEjecucion.Error, "La candidatura ya no existe."), (final.Estado, final.Error));
+        Assert.Equal(0m, ReglasGasto.GastoComputable(final));
+        Assert.Empty(_falso.Peticiones);
+    }
+
+    [Fact]
     public async Task CancelarUnaEnCursoHuerfanaEnLaApiQueLlevaLaCola_QuedaCanceladaAlMomento()
     {
         // En curso, pero nadie la procesa aquí (no hay corte) y esta API lleva la cola: nadie la va a terminar.

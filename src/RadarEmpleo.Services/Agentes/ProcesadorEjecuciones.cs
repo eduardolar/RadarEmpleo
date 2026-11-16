@@ -198,7 +198,8 @@ public sealed class ProcesadorEjecuciones : BackgroundService
             }
             catch (ReglaNegocioException error)
             {
-                await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, error.Message, null, hashRegistro, hashPerfil));
+                // Sin Claude no ha gastado nada: con coste null contaría el presupuesto entero en el tope del día.
+                await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, error.Message, 0m, hashRegistro, hashPerfil));
                 return;
             }
             if (preparacion.Peticion is not { } peticion)
@@ -207,8 +208,13 @@ public sealed class ProcesadorEjecuciones : BackgroundService
                 var sinClaude = preparacion.SinClaude!;
                 var registroSinClaude = await HashAsync(ArchivoVigilado.Registro);
                 var perfilSinClaude = await HashAsync(ArchivoVigilado.Perfil);
-                await CambiarAsync(id, e => e.Terminar(_reloj.AhoraUtc, 0m, null, null, sinClaude.Resumen, sinClaude.ResultadoJson,
-                    registroSinClaude, perfilSinClaude));
+                // Si la han cancelado mientras se preparaba, queda Cancelada (también con coste 0), no Ok.
+                var cortada = corte.IsCancellationRequested && !parada.IsCancellationRequested;
+                await CambiarAsync(id, e =>
+                {
+                    if (cortada && e.CancelacionPedida) e.ConfirmarCancelacion(_reloj.AhoraUtc, 0m, registroSinClaude, perfilSinClaude);
+                    else e.Terminar(_reloj.AhoraUtc, 0m, null, null, sinClaude.Resumen, sinClaude.ResultadoJson, registroSinClaude, perfilSinClaude);
+                });
                 return;
             }
             Task? anotar = null;
