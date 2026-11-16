@@ -42,12 +42,27 @@ public class DescargadorOfertasFalsoTests
     public async Task Descargar_ConLasReglasDelDeVerdad_JsonSoloEnListadosYSinProgramarComoSinRed()
     {
         var falso = new DescargadorOfertasFalso();
-        falso.Programar("https://empleo.ejemplo.es/a", new RespuestaDescargaFalsa(TipoContenido: "application/json", Cuerpo: "{}"));
+        const string Listado = "https://api.lever.co/v0/postings/empresa-ficticia?mode=json";
+        falso.Programar(Listado, new RespuestaDescargaFalsa(TipoContenido: "application/json", Cuerpo: "{}"));
 
-        Assert.Equal(FalloDescarga.TipoNoAdmitido, (await falso.DescargarAsync("https://empleo.ejemplo.es/a", TipoDescarga.Pagina, CancellationToken.None)).Fallo);
-        Assert.True((await falso.DescargarAsync("https://empleo.ejemplo.es/a", TipoDescarga.ListadoJson, CancellationToken.None)).Ok);
+        Assert.Equal(FalloDescarga.TipoNoAdmitido, (await falso.DescargarAsync(Listado, TipoDescarga.Pagina, CancellationToken.None)).Fallo);
+        Assert.True((await falso.DescargarAsync(Listado, TipoDescarga.ListadoJson, CancellationToken.None)).Ok);
         Assert.Equal(FalloDescarga.ErrorDeRed, (await falso.DescargarAsync("https://empleo.ejemplo.es/b", TipoDescarga.Pagina, CancellationToken.None)).Fallo);
         Assert.Equal(3, falso.Peticiones.Count);
+    }
+
+    [Fact]
+    public async Task Descargar_UnUrlFinalQueNoEsAbsoluto_NoLanzaYElListadoSoloDeSusHosts()
+    {
+        var falso = new DescargadorOfertasFalso();
+        falso.Programar("https://empleo.ejemplo.es/a", new RespuestaDescargaFalsa(UrlFinal: "/relativa", Cuerpo: "<p>Hola</p>"));
+        falso.Programar("https://empleo.ejemplo.es/jobs.json", new RespuestaDescargaFalsa(TipoContenido: "application/json", Cuerpo: "[]"));
+
+        var pagina = await falso.DescargarAsync("https://empleo.ejemplo.es/a", TipoDescarga.Pagina, CancellationToken.None);
+        var listado = await falso.DescargarAsync("https://empleo.ejemplo.es/jobs.json", TipoDescarga.ListadoJson, CancellationToken.None);
+
+        Assert.Equal(("Hola", (Uri?)null), (pagina.Texto, pagina.UrlFinal));
+        Assert.Equal(FalloDescarga.DireccionNoPermitida, listado.Fallo);
     }
 
     [Theory]

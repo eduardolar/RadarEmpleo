@@ -1,5 +1,7 @@
 using System.IO.Compression;
 using System.Net;
+using System.Net.Sockets;
+using RadarEmpleo.Domain;
 using System.Text;
 
 namespace RadarEmpleo.Services.Ofertas;
@@ -66,7 +68,8 @@ public sealed class DescargadorOfertasHttp : IDescargadorOfertas, IDisposable
         {
             return DescargaOferta.Fallida(FalloDescarga.DireccionNoPermitida);
         }
-        catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException)
+        // SocketException: el DNS de verdad no encuentra el nombre.
+        catch (Exception error) when (error is HttpRequestException or IOException or SocketException or UriFormatException)
         {
             return DescargaOferta.Fallida(FalloDescarga.ErrorDeRed);
         }
@@ -77,6 +80,7 @@ public sealed class DescargadorOfertasHttp : IDescargadorOfertas, IDisposable
         for (var saltos = 0; ; saltos++)
         {
             if (url.Scheme != Uri.UriSchemeHttps || url.UserInfo.Length > 0) return DescargaOferta.Fallida(FalloDescarga.EnlaceNoValido, urlFinal: url);
+            if (!HostAdmitido(tipo, url)) return DescargaOferta.Fallida(FalloDescarga.DireccionNoPermitida, urlFinal: url);
             // Antes de pedir nada: con un manejador cualquiera (el de los tests) también se rechaza. El ConnectCallback lo
             // vuelve a comprobar con la dirección a la que conecta de verdad.
             await _conector.ComprobarAsync(url.IdnHost, url.Port, cancelacion);
@@ -118,7 +122,17 @@ public sealed class DescargadorOfertasHttp : IDescargadorOfertas, IDisposable
         await using var comprimido = await contenido.ReadAsStreamAsync(cancelacion);
         await using var cuerpo = Descomprimir(comprimido, contenido.Headers.ContentEncoding);
         if (cuerpo is null) return DescargaOferta.Fallida(FalloDescarga.TipoNoAdmitido, codigo, url);
-        var (bytes, recortada) = await LeerHastaElTopeAsync(cuerpo, cancelacion);
+        byte[] bytes;
+        bool recortada;
+        try
+        {
+            (bytes, recortada) = await LeerHastaElTopeAsync(cuerpo, cancelacion);
+        }
+        catch (Exception error) when (error is InvalidOperationException or InvalidDataException)
+        {
+            // Lo que dice ser gzip, deflate o br y no lo es.
+            return DescargaOferta.Fallida(FalloDescarga.ErrorDeRed, codigo, url);
+        }
         if (recortada && tipo == TipoDescarga.ListadoJson) return DescargaOferta.Fallida(FalloDescarga.DemasiadoGrande, codigo, url);
 
         var texto = Codificacion(contenido.Headers.ContentType?.CharSet).GetString(bytes).TrimStart('﻿');
@@ -128,6 +142,9 @@ public sealed class DescargadorOfertasHttp : IDescargadorOfertas, IDisposable
     /// <summary>Si se admite ese tipo de contenido: JSON solo para los listados (decisión 4 de la F7b).</summary>
     internal static bool Admite(TipoDescarga tipo, string? tipoContenido) =>
         tipo == TipoDescarga.ListadoJson ? tipoContenido == "application/json" : tipoContenido is "text/html" or "text/plain";
+
+    /// <summary>Un listado, solo de los hosts fijos de <see cref="ListadosPublicos"/>; una página, de cualquiera.</summary>
+    internal static bool HostAdmitido(TipoDescarga tipo, Uri url) => tipo != TipoDescarga.ListadoJson || ListadosPublicos.EsDeUnListado(url);
 
     /// <summary>Una página, a texto plano; un listado, tal cual.</summary>
     internal static string ATexto(TipoDescarga tipo, string? tipoContenido, string cuerpo) =>
@@ -172,7 +189,7 @@ public sealed class DescargadorOfertasHttp : IDescargadorOfertas, IDisposable
         {
             return CodePagesEncodingProvider.Instance.GetEncoding(nombre) ?? Encoding.GetEncoding(nombre);
         }
-        catch (ArgumentException)
+        catch (Exception error) when (error is ArgumentException or NotSupportedException)
         {
             return Encoding.UTF8;
         }

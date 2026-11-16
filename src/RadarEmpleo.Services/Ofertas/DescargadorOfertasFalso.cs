@@ -60,10 +60,12 @@ public sealed class DescargadorOfertasFalso : IDescargadorOfertas
         _peticiones.Enqueue((enlace, tipo));
         if (!_respuestas.TryGetValue(enlace.Trim(), out var respuesta)) return Task.FromResult(DescargaOferta.Fallida(FalloDescarga.ErrorDeRed));
 
-        var url = new Uri(respuesta.UrlFinal ?? enlace.Trim());
+        // Un urlFinal mal escrito en descargas.json no rompe nada: se queda sin URL final.
+        var url = Uri.TryCreate(respuesta.UrlFinal ?? enlace.Trim(), UriKind.Absolute, out var absoluta) ? absoluta : null;
         var descarga = respuesta switch
         {
             { Fallo: { } fallo } => DescargaOferta.Fallida(fallo, null, url),
+            _ when url is not null && !DescargadorOfertasHttp.HostAdmitido(tipo, url) => DescargaOferta.Fallida(FalloDescarga.DireccionNoPermitida, null, url),
             { Codigo: < 200 or > 299 } => DescargaOferta.Fallida(FalloDescarga.CodigoNoValido, respuesta.Codigo, url),
             _ when !DescargadorOfertasHttp.Admite(tipo, respuesta.TipoContenido) => DescargaOferta.Fallida(FalloDescarga.TipoNoAdmitido, respuesta.Codigo, url),
             _ => new DescargaOferta(null, respuesta.Codigo, url, DescargadorOfertasHttp.ATexto(tipo, respuesta.TipoContenido, respuesta.Cuerpo))

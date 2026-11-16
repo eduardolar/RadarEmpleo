@@ -11,7 +11,12 @@ namespace RadarEmpleo.Tests;
 public class DescargadorOfertasHttpTests
 {
     private const string Oferta = "https://empleo.ejemplo.es/ofertas/42";
-    private readonly ResolvedorDnsFalso _dns = new() { ["empleo.ejemplo.es"] = ["81.40.10.20"], ["otro.ejemplo.es"] = ["81.40.10.30"], ["interno.ejemplo.es"] = ["192.168.1.10"] };
+    private const string Listado = "https://boards-api.greenhouse.io/v1/boards/empresa-ficticia/jobs";
+    private readonly ResolvedorDnsFalso _dns = new()
+    {
+        ["empleo.ejemplo.es"] = ["81.40.10.20"], ["otro.ejemplo.es"] = ["81.40.10.30"], ["interno.ejemplo.es"] = ["192.168.1.10"],
+        ["boards-api.greenhouse.io"] = ["81.40.10.40"], ["api.lever.co"] = ["81.40.10.41"]
+    };
     private readonly ManejadorFalso _web = new();
 
     private DescargadorOfertasHttp Descargador(OpcionesDescarga? opciones = null) =>
@@ -124,7 +129,7 @@ public class DescargadorOfertasHttpTests
     {
         _web.Responder(_ => Respuesta("{\"jobs\":[]}", tipoContenido));
 
-        var descarga = await Descargador().DescargarAsync(Oferta, tipo, CancellationToken.None);
+        var descarga = await Descargador().DescargarAsync(tipo == TipoDescarga.ListadoJson ? Listado : Oferta, tipo, CancellationToken.None);
 
         Assert.Equal(admitido ? null : (FalloDescarga?)FalloDescarga.TipoNoAdmitido, descarga.Fallo);
         if (tipo == TipoDescarga.ListadoJson && admitido) Assert.Equal("{\"jobs\":[]}", descarga.Texto);
@@ -142,10 +147,10 @@ public class DescargadorOfertasHttpTests
     public async Task Descargar_PasadoElTope_LaPaginaSeRecortaYElListadoFalla()
     {
         var opciones = OpcionesDescarga.PorDefecto with { TopeBytes = 100 };
-        _web.Responder(p => Respuesta(new string('a', 500), p.RequestUri!.AbsolutePath == "/listado" ? "application/json" : "text/plain"));
+        _web.Responder(p => Respuesta(new string('a', 500), p.RequestUri!.Host == "boards-api.greenhouse.io" ? "application/json" : "text/plain"));
 
         var pagina = await Descargador(opciones).DescargarAsync(Oferta, TipoDescarga.Pagina, CancellationToken.None);
-        var listado = await Descargador(opciones).DescargarAsync("https://empleo.ejemplo.es/listado", TipoDescarga.ListadoJson, CancellationToken.None);
+        var listado = await Descargador(opciones).DescargarAsync(Listado, TipoDescarga.ListadoJson, CancellationToken.None);
 
         Assert.Equal((true, 100), (pagina.Recortada, pagina.Texto!.Length));
         Assert.Equal(FalloDescarga.DemasiadoGrande, listado.Fallo);
@@ -231,6 +236,74 @@ public class DescargadorOfertasHttpTests
 
         Assert.Equal(FalloDescarga.DireccionNoPermitida, (await Descargador().DescargarAsync("https://empleo.ejemplo.es/rechazo", TipoDescarga.Pagina, CancellationToken.None)).Fallo);
         Assert.Equal(FalloDescarga.ErrorDeRed, (await Descargador().DescargarAsync(Oferta, TipoDescarga.Pagina, CancellationToken.None)).Fallo);
+    }
+
+    [Theory]
+    [InlineData("https://empleo.ejemplo.es/jobs.json")]
+    [InlineData("https://boards-api.greenhouse.io.ejemplo.es/v1/boards/x/jobs")]
+    [InlineData("https://otro.boards-api.greenhouse.io/v1/boards/x/jobs")]
+    public async Task Descargar_UnListadoDeOtroHost_FallaSinPedirNada(string enlace)
+    {
+        var descarga = await Descargador().DescargarAsync(enlace, TipoDescarga.ListadoJson, CancellationToken.None);
+
+        Assert.Equal(FalloDescarga.DireccionNoPermitida, descarga.Fallo);
+        Assert.Empty(_web.Peticiones);
+    }
+
+    [Theory]
+    [InlineData("https://empleo.ejemplo.es/jobs.json", FalloDescarga.DireccionNoPermitida)]
+    [InlineData("https://api.lever.co/v0/postings/empresa-ficticia?mode=json", null)]
+    public async Task Descargar_UnListadoQueRedirige_SoloSigueAOtroHostDeListados(string destino, FalloDescarga? fallo)
+    {
+        _web.Responder(p => p.RequestUri!.AbsoluteUri == Listado ? Redireccion(destino) : Respuesta("[]", "application/json"));
+
+        var descarga = await Descargador().DescargarAsync(Listado, TipoDescarga.ListadoJson, CancellationToken.None);
+
+        Assert.Equal(fallo, descarga.Fallo);
+        Assert.Equal(fallo is null ? 2 : 1, _web.Peticiones.Count);
+    }
+
+    [Fact]
+    public async Task Descargar_UnNombreQueNoExisteEnElDns_EsErrorDeRedSinLanzar()
+    {
+        var dns = new ConectorSeguro(new ResolvedorQueFalla(), () => []);
+
+        var descarga = await new DescargadorOfertasHttp(dns, null, _web).DescargarAsync(Oferta, TipoDescarga.Pagina, CancellationToken.None);
+
+        Assert.Equal(FalloDescarga.ErrorDeRed, descarga.Fallo);
+        Assert.Empty(_web.Peticiones);
+    }
+
+    [Theory]
+    [InlineData("br")]
+    [InlineData("gzip")]
+    [InlineData("deflate")]
+    public async Task Descargar_UnCuerpoQueNoEstaComprimidoComoDice_EsErrorDeRedSinLanzar(string compresion)
+    {
+        _web.Responder(_ =>
+        {
+            var respuesta = Respuesta("esto no está comprimido de ninguna manera, aunque lo diga la cabecera", "text/plain");
+            respuesta.Content.Headers.ContentEncoding.Add(compresion);
+            return respuesta;
+        });
+
+        Assert.Equal(FalloDescarga.ErrorDeRed, (await Descargador().DescargarAsync(Oferta, TipoDescarga.Pagina, CancellationToken.None)).Fallo);
+    }
+
+    [Theory]
+    [InlineData("utf-7")]
+    [InlineData("no-existe")]
+    public async Task Descargar_ConUnJuegoDeCaracteresNoAdmitido_LeeEnUtf8(string juego)
+    {
+        _web.Responder(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Encoding.UTF8.GetBytes("Peña +AGEA-")) { Headers = { { "Content-Type", $"text/plain; charset={juego}" } } } });
+
+        Assert.Equal("Peña +AGEA-", (await Descargador().DescargarAsync(Oferta, TipoDescarga.Pagina, CancellationToken.None)).Texto);
+    }
+
+    private sealed class ResolvedorQueFalla : IResolvedorDns
+    {
+        public Task<System.Net.IPAddress[]> ResolverAsync(string host, CancellationToken cancelacion) =>
+            throw new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.HostNotFound);
     }
 
     [Fact]
