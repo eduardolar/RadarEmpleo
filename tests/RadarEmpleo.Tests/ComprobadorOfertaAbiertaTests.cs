@@ -42,6 +42,15 @@ public class ComprobadorOfertaAbiertaTests
     }
 
     [Fact]
+    public async Task Comprobar_UnEnlaceHttp_SeDescargaPorHttps()
+    {
+        var comprobada = await new ComprobadorOfertaAbierta(_descargador).ComprobarAsync("http://empleo.ejemplo.es/ofertas/analista-datos-1234", CancellationToken.None);
+
+        Assert.Equal(EstadoOferta.Abierta, comprobada.Comprobacion.Estado);
+        Assert.Equal(["https://empleo.ejemplo.es/ofertas/analista-datos-1234"], _descargador.Peticiones.Select(p => p.Enlace));
+    }
+
+    [Fact]
     public async Task Comprobar_SinEsquema_SeNormalizaComoEnLaFicha()
     {
         var comprobada = await new ComprobadorOfertaAbierta(_descargador).ComprobarAsync("empleo.ejemplo.es/ofertas/analista-datos-1234", CancellationToken.None);

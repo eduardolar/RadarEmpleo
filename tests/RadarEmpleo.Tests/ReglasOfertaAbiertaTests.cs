@@ -16,12 +16,15 @@ public class ReglasOfertaAbiertaTests
 
     private static readonly DescargaOferta PaginaNormal = Pagina("Analista de datos\nRequisitos: SQL.");
 
+    private static ComprobacionOferta Decidir(OfertaEnSistema? sistema, DescargaOferta pagina, DescargaOferta? listado) =>
+        ReglasOfertaAbierta.Decidir(new Uri("https://empleo.ejemplo.es/ofertas/1"), sistema, pagina, listado);
+
     [Theory]
     [InlineData(404)]
     [InlineData(410)]
     public void Decidir_LaPaginaYaNoExiste_Cerrada(int codigo)
     {
-        var resultado = ReglasOfertaAbierta.Decidir(null, DescargaOferta.Fallida(FalloDescarga.CodigoNoValido, codigo), null);
+        var resultado = Decidir(null, DescargaOferta.Fallida(FalloDescarga.CodigoNoValido, codigo), null);
 
         Assert.Equal(new ComprobacionOferta(EstadoOferta.Cerrada, $"La página de la oferta ya no existe ({codigo})."), resultado);
     }
@@ -31,40 +34,76 @@ public class ReglasOfertaAbiertaTests
     {
         var pagina = Pagina("Ofertas abiertas", "https://job-boards.greenhouse.io/empresa-ficticia?error=true");
 
-        var resultado = ReglasOfertaAbierta.Decidir(Greenhouse, pagina, DescargaOferta.Fallida(FalloDescarga.TiempoAgotado));
+        var resultado = Decidir(Greenhouse, pagina, DescargaOferta.Fallida(FalloDescarga.TiempoAgotado));
 
         Assert.Equal(EstadoOferta.Cerrada, resultado.Estado);
         Assert.Contains("Greenhouse", resultado.Motivo);
     }
 
     [Theory]
-    [InlineData("""{"jobs":[{"id":4000002},{"id":4000001,"title":"Analista"}]}""", EstadoOferta.Abierta)]
-    [InlineData("""{"jobs":[{"id":4000002}]}""", EstadoOferta.Cerrada)]
-    [InlineData("""{"jobs":[]}""", EstadoOferta.Cerrada)]
-    [InlineData("""{"jobs":[{"id":"40000010"}]}""", EstadoOferta.Cerrada)]
-    public void Decidir_ConElListado_MandaSiEstaElId(string json, EstadoOferta estado)
+    [InlineData("""{"jobs":[{"id":4000002},{"id":4000001,"title":"Analista"}]}""", EstadoOferta.Abierta, "Sigue en el listado público de Greenhouse.")]
+    [InlineData("""{"jobs":[{"id":4000002}]}""", EstadoOferta.NoSeSabe, "No sale en el listado público de Greenhouse, pero la página se lee.")]
+    [InlineData("""{"jobs":[]}""", EstadoOferta.NoSeSabe, "No sale en el listado público de Greenhouse, pero la página se lee.")]
+    [InlineData("""{"jobs":[{"id":"40000010"}]}""", EstadoOferta.NoSeSabe, "No sale en el listado público de Greenhouse, pero la página se lee.")]
+    public void Decidir_ConElListado_EstarDaAbiertaYNoEstarConLaPaginaLegibleNoSeSabe(string json, EstadoOferta estado, string motivo)
     {
-        // La página dice «oferta cerrada», pero el listado manda.
-        var resultado = ReglasOfertaAbierta.Decidir(Greenhouse, Pagina("Oferta cerrada"), Listado(json));
+        Assert.Equal(new ComprobacionOferta(estado, motivo), Decidir(Greenhouse, PaginaNormal, Listado(json)));
+    }
 
-        Assert.Equal(estado, resultado.Estado);
-        Assert.EndsWith("listado público de Greenhouse.", resultado.Motivo);
+    [Fact]
+    public void Decidir_ConElListado_EstarMandaSobreLaPaginaYNoEstarSinPaginaLegibleEsCerrada()
+    {
+        const string Esta = """{"jobs":[{"id":4000001}]}""", NoEsta = """{"jobs":[{"id":4000002}]}""";
+        var cerrada = new ComprobacionOferta(EstadoOferta.Cerrada, "Ya no está en el listado público de Greenhouse.");
+
+        Assert.Equal(EstadoOferta.Abierta, Decidir(Greenhouse, Pagina("Oferta cerrada"), Listado(Esta)).Estado);
+        Assert.Equal(cerrada, Decidir(Greenhouse, Pagina("Oferta cerrada"), Listado(NoEsta)));
+        Assert.Equal(cerrada, Decidir(Greenhouse, DescargaOferta.Fallida(FalloDescarga.CodigoNoValido, 403), Listado(NoEsta)));
+        Assert.Equal(cerrada, Decidir(Greenhouse, Pagina("Sign in to view"), Listado(NoEsta)));
+        Assert.Equal(cerrada, Decidir(Greenhouse, Pagina("Ofertas", "https://www.ejemplo-portal.es/"), Listado(NoEsta)));
+    }
+
+    [Theory]
+    [InlineData("https://portal-generico.ejemplo.es/ofertas/1")]
+    [InlineData("https://empleo.ejemplo.es/")]
+    [InlineData("https://empleo.ejemplo.es")]
+    [InlineData("https://otrogreenhouse.io/empresa-ficticia?error=true")]
+    public void Decidir_LaPaginaAcabaEnOtraWebOEnLaPortada_NoSeSabe(string urlFinal)
+    {
+        Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, "La oferta lleva a otra página: no sé si sigue abierta."),
+            Decidir(null, Pagina("Bienvenido a nuestra web", urlFinal), null));
+    }
+
+    [Theory]
+    [InlineData("https://www.empleo.ejemplo.es/ofertas/1")]
+    [InlineData("https://EMPLEO.ejemplo.es/ofertas/1-analista")]
+    public void Decidir_ElMismoHostConOSinWww_SigueSiendoLaOferta(string urlFinal)
+    {
+        Assert.Equal(EstadoOferta.Abierta, Decidir(null, Pagina("Analista de datos", urlFinal), null).Estado);
+    }
+
+    [Theory]
+    [InlineData("https://boards.greenhouse.io/empresa-ficticia?error=true")]
+    [InlineData("https://greenhouse.io/empresa-ficticia?error=true")]
+    public void Decidir_GreenhouseConError_SoloEnSusHosts(string urlFinal)
+    {
+        Assert.Equal(EstadoOferta.Cerrada, Decidir(null, Pagina("Ofertas", urlFinal), null).Estado);
     }
 
     [Theory]
     [InlineData("""[{"id":"00000000-0000-4000-8000-000000000001"}]""", EstadoOferta.Abierta)]
-    [InlineData("""[{"id":"00000000-0000-4000-8000-000000000002"}]""", EstadoOferta.Cerrada)]
+    [InlineData("""[{"id":"00000000-0000-4000-8000-000000000002"}]""", EstadoOferta.NoSeSabe)]
     public void Decidir_ElListadoDeLever_EsUnArray(string json, EstadoOferta estado)
     {
-        Assert.Equal(estado, ReglasOfertaAbierta.Decidir(Lever, PaginaNormal, Listado(json)).Estado);
+        Assert.Equal(estado, Decidir(Lever, PaginaNormal, Listado(json)).Estado);
     }
 
     [Theory]
     [InlineData("""{"jobs":[{"shortcode":"ab12cd34ef","id":"x"}]}""", EstadoOferta.Abierta)]
-    [InlineData("""{"jobs":[{"id":"AB12CD34EF"}]}""", EstadoOferta.Cerrada)]
+    [InlineData("""{"jobs":[{"id":"AB12CD34EF"}]}""", EstadoOferta.NoSeSabe)]
     public void Decidir_ElListadoDeWorkable_VaPorElShortcode(string json, EstadoOferta estado)
     {
-        Assert.Equal(estado, ReglasOfertaAbierta.Decidir(Workable, PaginaNormal, Listado(json)).Estado);
+        Assert.Equal(estado, Decidir(Workable, PaginaNormal, Listado(json)).Estado);
     }
 
     [Theory]
@@ -73,13 +112,13 @@ public class ReglasOfertaAbiertaTests
     [InlineData("42")]
     public void Decidir_UnListadoConOtraForma_SeIgnoraYDecideLaPagina(string json)
     {
-        Assert.Equal(EstadoOferta.Abierta, ReglasOfertaAbierta.Decidir(Greenhouse, PaginaNormal, Listado(json)).Estado);
+        Assert.Equal(EstadoOferta.Abierta, Decidir(Greenhouse, PaginaNormal, Listado(json)).Estado);
     }
 
     [Fact]
     public void Decidir_SinListado_DecideLaPagina()
     {
-        var resultado = ReglasOfertaAbierta.Decidir(Greenhouse, PaginaNormal, DescargaOferta.Fallida(FalloDescarga.DemasiadoGrande));
+        var resultado = Decidir(Greenhouse, PaginaNormal, DescargaOferta.Fallida(FalloDescarga.DemasiadoGrande));
 
         Assert.Equal(new ComprobacionOferta(EstadoOferta.Abierta, "La página de la oferta se lee y no dice que esté cerrada."), resultado);
     }
@@ -93,7 +132,7 @@ public class ReglasOfertaAbiertaTests
     [InlineData("This position has been filled.")]
     public void Decidir_LaPaginaDiceQueEstaCerrada_EnEspanolOIngles(string texto)
     {
-        var resultado = ReglasOfertaAbierta.Decidir(null, Pagina(texto), null);
+        var resultado = Decidir(null, Pagina(texto), null);
 
         Assert.Equal(new ComprobacionOferta(EstadoOferta.Cerrada, "La página dice que la oferta ya no admite candidaturas."), resultado);
     }
@@ -105,7 +144,7 @@ public class ReglasOfertaAbiertaTests
     [InlineData("Sign in to view the full job description", "https://empleo.ejemplo.es/ofertas/1")]
     public void Decidir_UnMuroDeInicioDeSesion_NoSeSabe(string texto, string url)
     {
-        var resultado = ReglasOfertaAbierta.Decidir(null, Pagina(texto, url), null);
+        var resultado = Decidir(null, Pagina(texto, url), null);
 
         Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, "La página pide iniciar sesión: no sé si sigue abierta."), resultado);
     }
@@ -118,7 +157,7 @@ public class ReglasOfertaAbiertaTests
     [InlineData(FalloDescarga.ErrorDeRed, null, "No he podido leer la oferta: no se ha podido conectar.")]
     public void Decidir_SinPaginaNiListado_NoSeSabeConElMotivo(FalloDescarga fallo, int? codigo, string motivo)
     {
-        var resultado = ReglasOfertaAbierta.Decidir(null, DescargaOferta.Fallida(fallo, codigo), null);
+        var resultado = Decidir(null, DescargaOferta.Fallida(fallo, codigo), null);
 
         Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, motivo), resultado);
     }

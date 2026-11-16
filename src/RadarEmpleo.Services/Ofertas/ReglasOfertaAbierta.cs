@@ -9,9 +9,10 @@ public sealed record ComprobacionOferta(EstadoOferta Estado, string Motivo);
 /// <summary>
 /// ¿Sigue abierta la oferta? (añadido de la F7b tras revisar AIHawk). Pura: decide con la página ya descargada y, si el
 /// enlace es de un sistema de selección, con su listado público. Por orden: la página no existe (404/410) o Greenhouse ha
-/// llevado al listado con <c>error=true</c>; el listado, si se ha podido leer, manda (está o no está el id); una página
+/// llevado al listado con <c>error=true</c>; el listado, si se ha podido leer, manda (si está el id, abierta; si no, cerrada,
+/// salvo que la página se lea bien: entonces no se sabe); una página
 /// que pide iniciar sesión no dice nada; una página que dice que ya no se admiten candidaturas; y una página que se lee
-/// sin decir nada de eso, abierta.
+/// sin decir nada de eso, abierta, salvo que haya acabado en otra web o en una portada.
 /// </summary>
 public static class ReglasOfertaAbierta
 {
@@ -34,30 +35,50 @@ public static class ReglasOfertaAbierta
 
     private static readonly string[] RutasSesion = ["/authwall", "/login", "/signin", "/sign-in", "/uas/login", "/checkpoint"];
 
+    /// <param name="enlace">El enlace de la oferta, ya normalizado: si la página acaba en otra web, no se sabe.</param>
     /// <param name="sistema">El de <see cref="SistemasSeleccion.Detectar"/> (null si no es de ninguno).</param>
     /// <param name="listado">Su listado público (null si no hay sistema).</param>
-    public static ComprobacionOferta Decidir(OfertaEnSistema? sistema, DescargaOferta pagina, DescargaOferta? listado)
+    public static ComprobacionOferta Decidir(Uri enlace, OfertaEnSistema? sistema, DescargaOferta pagina, DescargaOferta? listado)
     {
         if (pagina.Codigo is 404 or 410)
             return new(EstadoOferta.Cerrada, $"La página de la oferta ya no existe ({pagina.Codigo}).");
-        if (pagina.UrlFinal is { } final && final.Host.EndsWith("greenhouse.io", StringComparison.OrdinalIgnoreCase)
-            && final.Query.Contains("error=true", StringComparison.OrdinalIgnoreCase))
+        if (pagina.UrlFinal is { } final && EsDe(final, "greenhouse.io") && final.Query.Contains("error=true", StringComparison.OrdinalIgnoreCase))
             return new(EstadoOferta.Cerrada, "Greenhouse lleva al listado de la empresa: la oferta ya no está.");
 
+        var texto = pagina.Ok ? TextoComparable.Normalizar(pagina.Texto) : "";
+        var pideSesion = pagina.Ok && PideSesion(pagina.UrlFinal, texto);
+        var diceCerrada = pagina.Ok && !pideSesion && FrasesCerrada.Any(texto.Contains);
         if (sistema is not null && listado is { Ok: true, Texto: { } json } && EstaEnElListado(sistema, json) is { } esta)
-            return esta
-                ? new(EstadoOferta.Abierta, $"Sigue en el listado público de {sistema.Sistema}.")
-                : new(EstadoOferta.Cerrada, $"Ya no está en el listado público de {sistema.Sistema}.");
+        {
+            if (esta) return new(EstadoOferta.Abierta, $"Sigue en el listado público de {sistema.Sistema}.");
+            // Lever y Ashby tienen ofertas que no salen en el listado («unlisted») y se pueden abrir con el enlace.
+            if (pagina.Ok && !pideSesion && !diceCerrada && !OtraPagina(enlace, pagina.UrlFinal))
+                return new(EstadoOferta.NoSeSabe, $"No sale en el listado público de {sistema.Sistema}, pero la página se lee.");
+            return new(EstadoOferta.Cerrada, $"Ya no está en el listado público de {sistema.Sistema}.");
+        }
 
         if (!pagina.Ok)
             return new(EstadoOferta.NoSeSabe, $"No he podido leer la oferta: {PorQue(pagina)}.");
-        var texto = TextoComparable.Normalizar(pagina.Texto);
-        if (PideSesion(pagina.UrlFinal, texto))
+        if (pideSesion)
             return new(EstadoOferta.NoSeSabe, "La página pide iniciar sesión: no sé si sigue abierta.");
-        if (FrasesCerrada.Any(texto.Contains))
+        if (diceCerrada)
             return new(EstadoOferta.Cerrada, "La página dice que la oferta ya no admite candidaturas.");
+        if (OtraPagina(enlace, pagina.UrlFinal))
+            return new(EstadoOferta.NoSeSabe, "La oferta lleva a otra página: no sé si sigue abierta.");
         return new(EstadoOferta.Abierta, "La página de la oferta se lee y no dice que esté cerrada.");
     }
+
+    /// <summary>Si la página acaba en otra web (otro host, sin contar «www.») o en una portada (ruta vacía o «/»).</summary>
+    private static bool OtraPagina(Uri enlace, Uri? final)
+    {
+        if (final is null) return false;
+        static string Host(Uri url) => url.IdnHost.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? url.IdnHost[4..] : url.IdnHost;
+        return !string.Equals(Host(enlace), Host(final), StringComparison.OrdinalIgnoreCase) || final.AbsolutePath is "" or "/";
+    }
+
+    /// <summary>Si <paramref name="url"/> es de <paramref name="dominio"/> o de un subdominio suyo (no «otrogreenhouse.io»).</summary>
+    private static bool EsDe(Uri url, string dominio) =>
+        url.IdnHost.Equals(dominio, StringComparison.OrdinalIgnoreCase) || url.IdnHost.EndsWith("." + dominio, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Si el id está en el listado; null si el JSON no tiene la forma esperada.</summary>
     private static bool? EstaEnElListado(OfertaEnSistema sistema, string json)

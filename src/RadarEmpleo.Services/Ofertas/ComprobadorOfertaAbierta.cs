@@ -18,9 +18,14 @@ public sealed class ComprobadorOfertaAbierta(IDescargadorOfertas descargador)
         if (Enlaces.Normalizar(enlace) is not { Length: > 0 } normalizado)
             return new(new(EstadoOferta.NoSeSabe, "La candidatura no tiene un enlace a la oferta."), DescargaOferta.Fallida(FalloDescarga.EnlaceNoValido));
 
+        // Un enlace «http://» se pide por https: la descarga no admite otra cosa.
+        if (normalizado.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) normalizado = "https://" + normalizado[7..];
+        if (!Uri.TryCreate(normalizado, UriKind.Absolute, out var url))
+            return new(new(EstadoOferta.NoSeSabe, "La candidatura no tiene un enlace a la oferta."), DescargaOferta.Fallida(FalloDescarga.EnlaceNoValido));
+
         var pagina = await descargador.DescargarAsync(normalizado, TipoDescarga.Pagina, cancelacion);
         var sistema = SistemasSeleccion.Detectar(normalizado);
         var listado = sistema is null ? null : await descargador.DescargarAsync(sistema.UrlListado, TipoDescarga.ListadoJson, cancelacion);
-        return new(ReglasOfertaAbierta.Decidir(sistema, pagina, listado), pagina);
+        return new(ReglasOfertaAbierta.Decidir(url, sistema, pagina, listado), pagina);
     }
 }
