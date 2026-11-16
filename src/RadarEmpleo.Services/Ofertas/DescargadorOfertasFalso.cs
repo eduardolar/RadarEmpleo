@@ -61,7 +61,9 @@ public sealed class DescargadorOfertasFalso : IDescargadorOfertas
         if (!_respuestas.TryGetValue(enlace.Trim(), out var respuesta)) return Task.FromResult(DescargaOferta.Fallida(FalloDescarga.ErrorDeRed));
 
         // Un urlFinal mal escrito en descargas.json no rompe nada: se queda sin URL final.
-        var url = Uri.TryCreate(respuesta.UrlFinal ?? enlace.Trim(), UriKind.Absolute, out var absoluta) ? absoluta : null;
+        // Solo http(s): en Linux, «/relativa» también es una URI absoluta (file:///relativa).
+        var url = Uri.TryCreate(respuesta.UrlFinal ?? enlace.Trim(), UriKind.Absolute, out var absoluta)
+                  && absoluta.Scheme is "https" or "http" ? absoluta : null;
         var descarga = respuesta switch
         {
             { Fallo: { } fallo } => DescargaOferta.Fallida(fallo, null, url),
