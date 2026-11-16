@@ -1,0 +1,31 @@
+{
+  "https://empleo.ejemplo.es/ofertas/analista-datos-1234": {
+    "codigo": 200,
+    "tipoContenido": "text/html",
+    "cuerpo": "<html><head><title>Analista de datos junior (oferta inventada)</title><script>seguimiento()</script></head><body><h1>Analista de datos junior</h1><p>Empresa Ficticia Datos S.L. (inventada) busca analista de datos para su equipo de Madrid.</p><ul><li>SQL y Excel avanzado.</li><li>Inglés B2.</li><li>Remoto dos días a la semana.</li></ul><p>Salario: 26.000-30.000 € brutos al año.</p></body></html>"
+  },
+  "https://boards.greenhouse.io/empresa-ficticia/jobs/4000001": {
+    "codigo": 200,
+    "tipoContenido": "text/html",
+    "urlFinal": "https://boards.greenhouse.io/empresa-ficticia?error=true",
+    "cuerpo": "<html><head><title>Empresa Ficticia (inventada): ofertas</title></head><body><h1>Ofertas abiertas</h1><p>Técnico de soporte (inventada)</p></body></html>"
+  },
+  "https://boards-api.greenhouse.io/v1/boards/empresa-ficticia/jobs": {
+    "codigo": 200,
+    "tipoContenido": "application/json",
+    "cuerpo": "{\"jobs\":[{\"id\":4000002,\"title\":\"Técnico de soporte (inventada)\"}]}"
+  },
+  "https://jobs.lever.co/empresa-ficticia/00000000-0000-4000-8000-000000000001": {
+    "codigo": 404,
+    "tipoContenido": "text/html"
+  },
+  "https://www.linkedin.com/jobs/view/1000000001": {
+    "codigo": 200,
+    "tipoContenido": "text/html",
+    "urlFinal": "https://www.linkedin.com/authwall?sessionRedirect=inventado",
+    "cuerpo": "<html><body><h1>Inicia sesión para ver esta oferta</h1></body></html>"
+  },
+  "https://empleo.ejemplo.es/ofertas/lenta-5678": {
+    "fallo": "TiempoAgotado"
+  }
+}

@@ -1,6 +1,7 @@
 using RadarEmpleo.Services;
 using RadarEmpleo.Services.Agentes;
 using RadarEmpleo.Services.Curriculum;
+using RadarEmpleo.Services.Ofertas;
 
 namespace RadarEmpleo.Api.Configuracion;
 
@@ -32,11 +33,23 @@ public static class ConfiguracionAgentes
 
         ExigirFalsoPermitido(agentes, radar);
         var falso = new EjecutorClaudeFalso(servicios.GetRequiredService<IClock>());
-        falso.CargarDe(string.IsNullOrWhiteSpace(agentes.CarpetaRespuestasFalso)
-            ? Path.Combine(AppContext.BaseDirectory, "datos-ejemplo", "agentes")
-            : Path.GetFullPath(Environment.ExpandEnvironmentVariables(agentes.CarpetaRespuestasFalso)));
+        falso.CargarDe(CarpetaRespuestasFalso(agentes));
         return falso;
     }
+
+    /// <summary>
+    /// El descargador de ofertas: con el ejecutor falso, también el falso (decisión 9 de la F7b: la demo y las pruebas no
+    /// salen a internet), con <c>descargas.json</c> de la misma carpeta que las respuestas del ejecutor.
+    /// </summary>
+    public static IDescargadorOfertas Descargador(OpcionesAgentes agentes) =>
+        agentes.Ejecutor == TipoEjecutor.Falso
+            ? new DescargadorOfertasFalso().CargarDe(CarpetaRespuestasFalso(agentes))
+            : new DescargadorOfertasHttp(new ConectorSeguro(new ResolvedorDnsSistema()));
+
+    private static string CarpetaRespuestasFalso(OpcionesAgentes agentes) =>
+        string.IsNullOrWhiteSpace(agentes.CarpetaRespuestasFalso)
+            ? Path.Combine(AppContext.BaseDirectory, "datos-ejemplo", "agentes")
+            : Path.GetFullPath(Environment.ExpandEnvironmentVariables(agentes.CarpetaRespuestasFalso));
 
     /// <summary>
     /// Comprueba la configuración de los agentes al arrancar, antes de abrir la BD: el falso, solo en modo Local y con la

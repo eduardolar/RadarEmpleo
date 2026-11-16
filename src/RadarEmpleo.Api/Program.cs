@@ -62,6 +62,7 @@ builder.Services.AddSingleton(sp => ConfiguracionAgentes.Opciones(
     sp.GetRequiredService<IOptions<OpcionesAgentes>>().Value, sp.GetRequiredService<IOptions<OpcionesRadar>>().Value));
 builder.Services.AddSingleton(sp => ConfiguracionAgentes.Ejecutor(sp,
     sp.GetRequiredService<IOptions<OpcionesAgentes>>().Value, sp.GetRequiredService<IOptions<OpcionesRadar>>().Value));
+builder.Services.AddSingleton(sp => ConfiguracionAgentes.Descargador(sp.GetRequiredService<IOptions<OpcionesAgentes>>().Value));
 builder.Services.AddSingleton<BloqueoCompartido>();
 builder.Services.AddSingleton<GuardiaCola>();
 builder.Services.AddSingleton<ColaEjecuciones>();
