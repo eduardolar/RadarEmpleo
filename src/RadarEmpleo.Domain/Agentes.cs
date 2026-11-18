@@ -223,12 +223,13 @@ public class EjecucionAgente
     /// Al arrancar la API: lo que estaba en curso queda en Error y lo que estaba en cola, Cancelada (un reinicio
     /// no gasta sin que Eduardo lo vea).
     /// </summary>
-    public void Interrumpir(DateTime ahoraUtc)
+    /// <param name="coste">El de la que estaba en curso: 0 si Claude no llegó a lanzarse; null si no se sabe (cuenta el presupuesto).</param>
+    public void Interrumpir(DateTime ahoraUtc, decimal? coste = null)
     {
         switch (Estado)
         {
             case EstadoEjecucion.EnCurso:
-                Fallar(ahoraUtc, MensajeInterrumpida);
+                Fallar(ahoraUtc, MensajeInterrumpida, coste);
                 break;
             case EstadoEjecucion.EnCola:
                 PedirCancelacion(ahoraUtc);

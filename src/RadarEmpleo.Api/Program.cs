@@ -12,6 +12,7 @@ using RadarEmpleo.Services.Agentes;
 using RadarEmpleo.Services.Curriculum;
 using RadarEmpleo.Services.Estadisticas;
 using RadarEmpleo.Services.Importacion;
+using RadarEmpleo.Services.Ofertas;
 using RadarEmpleo.Services.Rastreos;
 using Scalar.AspNetCore;
 
@@ -57,12 +58,14 @@ builder.Services.AddSingleton<ILectorCurriculum, LectorCurriculum>();
 builder.Services.AddSingleton<IExportadorRadar, ExportadorRadarMd>();
 
 // --- Agentes de Claude: una ejecución a la vez, con la BD como fuente de verdad ---
-// Los manejadores de cada tarea (IManejadorTarea) llegan en la F7b y la F7c; sin manejador, la tarea no se encola.
+// Un manejador por tarea (IManejadorTarea): sin manejador, la tarea no se encola. ExtraerRegistro llega en la F7b y Rastreo en la F7c.
 builder.Services.AddSingleton(sp => ConfiguracionAgentes.Opciones(
     sp.GetRequiredService<IOptions<OpcionesAgentes>>().Value, sp.GetRequiredService<IOptions<OpcionesRadar>>().Value));
 builder.Services.AddSingleton(sp => ConfiguracionAgentes.Ejecutor(sp,
     sp.GetRequiredService<IOptions<OpcionesAgentes>>().Value, sp.GetRequiredService<IOptions<OpcionesRadar>>().Value));
 builder.Services.AddSingleton(sp => ConfiguracionAgentes.Descargador(sp.GetRequiredService<IOptions<OpcionesAgentes>>().Value));
+builder.Services.AddSingleton<ComprobadorOfertaAbierta>();
+builder.Services.AddScoped<IManejadorTarea, ManejadorAnalizarEncaje>();
 builder.Services.AddSingleton<BloqueoCompartido>();
 builder.Services.AddSingleton<GuardiaCola>();
 builder.Services.AddSingleton<ColaEjecuciones>();

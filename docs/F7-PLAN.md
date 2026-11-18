@@ -1033,3 +1033,20 @@ A en otra franja de 5 horas del plan que B y C. Sin gasto, pero avisando antes: 
 ### Cómo comprobarlo
 
 Tras el PR 9, apartado 12 puntos 1-10; tras el PR 15, puntos 11-14 con el falso (1366 y 390 px, día y noche, solo teclado); después las pruebas A, B y C con su OK; siempre al final, puntos 19-20. En ninguna pantalla sale una cifra en USD; un análisis de una oferta cerrada no gasta nada y ofrece descartarla; el hash del registro y del perfil originales no cambia.
+
+## Pendientes menores de la F7b (PR 4)
+
+Encontrados por el revisor .NET, el auditor de seguridad y el tester en el PR 4. No bloquean; se arreglan en un PR posterior de la F7b.
+
+- Validar el encaje con el texto exacto («Alto», «Medio», «TiroLargo» o «No»): hoy `JsonStringEnumConverter` acepta «Alto, Medio» (que da TiroLargo), « Alto» y «alto»; con claves duplicadas, gana la última.
+- Segundo choque de concurrencia en `AplicarAnalisisAgenteAsync`: lanzar `ReglaNegocioException` para conservar el coste real.
+- Volver a comprobar en `ConstruirAsync` y `AplicarAnalisisAgenteAsync` que la candidatura no esté descartada ni cerrada (puede cambiar mientras espera en la cola).
+- Quitar invisibles, controles y marcas bidi de la salida de Claude antes de guardarla (`QuitarInvisibles`).
+- Delimitadores con nonce por ejecución y por sección; no sustituir el cierre por algo que se le parece (`DATOS›››`); la oferta puede imitar la sección «Perfil de búsqueda».
+- Avisar a Claude cuando el perfil se recorta a 20.000 caracteres.
+- No partir surrogados al recortar el resumen.
+- Nota con lo anterior: el encaje con texto legible; tope de `Analisis` en la API (la nota puede pasar de 5.000 caracteres).
+- Pasar a Claude el enlace http ya convertido a https.
+- El `resumen` de Claude no se usa (gasta tokens) y, con el aviso, deja poco sitio a la pega.
+- La firma de `AplicarAnalisisAgenteAsync` va sin `ejecucionId`: ajustar el apartado 6 de este plan.
+- Tests que faltan: el borde exacto de los largos, que el manejador regenera el radar, inyección en el perfil y el aviso de NoSeSabe pasando por el manejador.

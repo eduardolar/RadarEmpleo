@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using RadarEmpleo.Domain;
 
 namespace RadarEmpleo.Services.Contratos;
@@ -34,3 +35,23 @@ public sealed record EstadoAgentesDto(
     string? VersionClaude, string VersionProbada, bool VersionDistinta,
     GastoHoyDto Gasto, EjecucionAgenteDto? EnCurso, int EnCola,
     bool LlevaLaCola, string? MotivoCola);
+
+/// <summary>
+/// La salida de AnalizarEncaje (tabla 4.4 del plan), validada otra vez en C# con los mismos límites que el esquema: lo que
+/// no los cumple es <see cref="Agentes.MensajesEjecucion.SalidaNoValida"/>.
+/// </summary>
+public sealed record ResultadoAnalisisEncaje(
+    [property: Required, AllowedValues(Encaje.Alto, Encaje.Medio, Encaje.TiroLargo, Encaje.No)] Encaje? Encaje,
+    [property: Required(AllowEmptyStrings = true), MaxLength(2000)] string Pega,
+    [property: Required(AllowEmptyStrings = true), MaxLength(8000)] string Analisis,
+    [property: Required(AllowEmptyStrings = true), MaxLength(300)] string Resumen);
+
+/// <summary>
+/// El <c>ResultadoJson</c> de AnalizarEncaje (sin migración: el estado de la oferta va aquí). Con la oferta cerrada no se
+/// analiza y solo lleva el estado de la oferta.
+/// </summary>
+/// <param name="MotivoOferta">Por qué se sabe (o no) si sigue abierta (<see cref="Ofertas.ComprobacionOferta"/>).</param>
+/// <param name="OfertaLeida">Si el texto de la oferta se ha podido descargar y ha ido al prompt.</param>
+public sealed record AnalisisEncajeGuardado(
+    EstadoOferta EstadoOferta, string MotivoOferta, bool OfertaLeida,
+    Encaje? Encaje = null, string? Pega = null, string? Analisis = null, string? Resumen = null);
