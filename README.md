@@ -6,22 +6,48 @@
 
 Aplicación para llevar mi propia búsqueda de empleo: un tablero con las candidaturas por estado, la ficha de cada una con su historial y el CV que envié, y una bandeja donde caen las ofertas de la búsqueda de cada semana. La uso yo y es, a la vez, mi proyecto de portfolio con el stack que piden las ofertas a las que me presento.
 
-![Pantalla Inicio de RadarEmpleo: lo que toca hoy, los próximos siete días y el resumen de la semana](docs/img/inicio.png)
+<h3 align="center">
+  <a href="https://eduardolar.github.io/RadarEmpleo-web/">▶ Verla en 30 segundos: eduardolar.github.io/RadarEmpleo-web</a>
+</h3>
 
-![Tablero de RadarEmpleo en el ordenador](docs/img/tablero.png)
+## Cómo funciona
 
-![RadarEmpleo en el móvil: tablero, ficha y rastreo](docs/img/movil.png)
+_Vídeos de la app real con datos inventados. También en MP4: [inicio](docs/demo/inicio.mp4), [tablero](docs/demo/tablero.mp4), [rastreos](docs/demo/radar.mp4), [importar](docs/demo/importar.mp4) y [móvil](docs/demo/movil.mp4)._
 
-![Tablero de RadarEmpleo en modo oscuro](docs/img/tablero-oscuro.png)
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/demo/inicio.gif" alt="En Inicio se marca como hecho un seguimiento vencido; sale el aviso con Deshacer y, al pulsarlo, vuelve a estar pendiente.">
+      <br><b>Inicio:</b> lo que toca hoy, con Hecho, Posponer y Deshacer.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/demo/tablero.gif" alt="En el tablero se arrastra una candidatura de Enviada a Entrevista; la app ofrece apuntar la entrevista, se elige mañana a las 10:30 y se guarda el recordatorio.">
+      <br><b>Tablero:</b> arrastrar a Entrevista y apuntarla con su hora; el seguimiento pendiente se cierra solo.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/demo/radar.gif" alt="En Rastreos se pasa una oferta al tablero; otra oferta lleva el aviso «Puede que ya la tengas» y se descarta con «No me interesa».">
+      <br><b>Rastreos:</b> las ofertas de la semana pasan al tablero con un clic, y avisa si ya la tienes.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/demo/importar.gif" alt="Importar del registro: la vista previa dice 5 nuevas y 3 que ya están; se añaden las 5 y sale «Todo al día».">
+      <br><b>Importar:</b> el registro que llevaba a mano en Markdown, con vista previa y sin duplicados.
+    </td>
+  </tr>
+</table>
 
-_Las capturas son con datos de ejemplo._
+<p align="center">
+  <img src="docs/demo/movil.gif" width="300" alt="En el móvil, la ficha de una candidatura con el sello Enviada, el CV vinculado y el historial; después se ve en modo oscuro.">
+  <br><b>En el móvil:</b> la ficha con su historial y el CV enviado, en modo claro y oscuro.
+</p>
 
 ## Qué hace
 
 - **Inicio**: arriba lo vencido y lo de hoy, con Hecho, Posponer y Deshacer; debajo, los próximos siete días y las candidaturas enviadas que siguen sin respuesta. Los recordatorios tienen tipo (seguimiento, entrevista, publicación de LinkedIn, plazo u otro) y, al pasar una candidatura a Entrevista, el seguimiento pendiente se cierra solo y la app ofrece apuntar la entrevista con la hora obligatoria.
 - **Estadísticas**: candidaturas por estado, enviadas por semana, tasa de respuesta, días de media hasta la respuesta y motivos de descarte. Cada cifra se lee también como texto, sin depender del color.
 - **Fechas en hora de Madrid**: probado con el cambio de hora de marzo, incluida la hora que ese día no existe.
-- **Tablero por estados**: Detectada, Preparada, Enviada, Entrevista, Oferta, Descartada y Cerrada. Las transiciones válidas las decide el dominio, no el front. Se mueve arrastrando o con el menú ⋮, y las columnas sin uso se pliegan para que todo quepa sin desplazamiento lateral.
+- **Tablero por estados**: Detectada, Preparada, Enviada, Entrevista, Oferta, Descartada y Cerrada. Las transiciones válidas las decide el dominio, no el front. Se mueve arrastrando o con el menú ⋮, y las columnas sin uso se pliegan para que quepan más a la vista; si no caben todas, unas flechas desplazan el tablero.
 - **Deshacer**: cualquier cambio de estado se puede deshacer durante 10 minutos desde el aviso o con Ctrl+Z. Vuelve exactamente a como estaba: fechas, motivo de descarte y seguimientos.
 - **Ficha de candidatura**: historial de estados, notas, motivo de descarte y los documentos enviados (CV y carta), que se abren dentro de la propia ficha.
 - **Importar del registro**: importa la tabla de candidaturas que llevaba a mano en Markdown, con vista previa y sin duplicar lo que ya está.
