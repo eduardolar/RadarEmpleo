@@ -537,6 +537,60 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CancelarMientrasSePreparaAntesDeLanzarClaude_QuedaCanceladaSinGastoEnElDia()
+    {
+        var ejecucion = await EncolarAsync();
+        // Como una descarga que espera hasta que la cortan.
+        ManejadorDePrueba.AlConstruir = async corte =>
+        {
+            await _cola.CancelarAsync(ejecucion.Id);
+            await Task.Delay(Timeout.Infinite, corte);
+        };
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Cancelada, final.Estado);
+        Assert.Equal(0m, final.CosteUsd);
+        Assert.Empty(_falso.Peticiones);
+        await using var db = _factory.CreateDbContext();
+        Assert.Equal(0m, (await ColaEjecuciones.LeerGastoAsync(db, _reloj.AhoraUtc)).Dia.Gastado);
+    }
+
+    [Fact]
+    public async Task UnaExcepcionAlPrepararla_QuedaErrorConCosteCero()
+    {
+        var ejecucion = await EncolarAsync();
+        ManejadorDePrueba.AlConstruir = _ => throw new InvalidOperationException("Fallo interno");
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Error, final.Estado);
+        Assert.Equal(MensajesEjecucion.Inesperado, final.Error);
+        Assert.Equal(0m, final.CosteUsd);
+        Assert.False(File.Exists(RutaBloqueo));
+    }
+
+    [Fact]
+    public async Task PararLaApiMientrasSePrepara_QuedaInterrumpidaConCosteCero()
+    {
+        var ejecucion = await EncolarAsync();
+        using var parada = new CancellationTokenSource();
+        ManejadorDePrueba.AlConstruir = async corte =>
+        {
+            await parada.CancelAsync();
+            await Task.Delay(Timeout.Infinite, corte);
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _procesador.ProcesarSiguienteAsync(parada.Token));
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Error, final.Estado);
+        Assert.Equal(0m, final.CosteUsd);
+    }
+
+    [Fact]
     public async Task CanceladaEnLaBdMientrasSePreparaUnaSinClaude_QuedaCanceladaAunqueElCorteNoHayaSaltado()
     {
         var ejecucion = await EncolarAsync();

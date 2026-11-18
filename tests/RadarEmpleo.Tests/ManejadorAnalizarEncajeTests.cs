@@ -28,6 +28,7 @@ public sealed class ManejadorAnalizarEncajeTests : IDisposable
     private readonly RutasCurriculum _rutas;
     private readonly EjecutorClaudeFalso _claude;
     private readonly DescargadorOfertasFalso _descargas = new();
+    private IDescargadorOfertas? _descargaQueEspera;
     private readonly ExportadorFalso _exportador = new();
     private readonly ServiceProvider _servicios;
     private readonly GuardiaCola _guardia;
@@ -51,7 +52,7 @@ public sealed class ManejadorAnalizarEncajeTests : IDisposable
             .AddSingleton<IDbContextFactory<AppDbContext>>(_factory)
             .AddSingleton<IClock>(_reloj)
             .AddSingleton<IExportadorRadar>(_exportador)
-            .AddSingleton<IDescargadorOfertas>(_descargas)
+            .AddSingleton<IDescargadorOfertas>(_ => _descargaQueEspera ?? (IDescargadorOfertas)_descargas)
             .AddSingleton<ILectorCurriculum>(lector)
             .AddSingleton(_rutas)
             .AddSingleton<ComprobadorOfertaAbierta>()
@@ -266,6 +267,36 @@ public sealed class ManejadorAnalizarEncajeTests : IDisposable
         Assert.Equal(ManejadorAnalizarEncaje.MensajeCandidaturaBorrada, ejecucion.Resumen);
         Assert.Empty(_claude.Peticiones);
         Assert.Empty(_descargas.Peticiones);
+    }
+
+    /// <summary>Una descarga que no acaba hasta que la cortan; antes, pide cancelar la ejecución.</summary>
+    private sealed class DescargaQueEspera(Func<Task> alEmpezar) : IDescargadorOfertas
+    {
+        public async Task<DescargaOferta> DescargarAsync(string enlace, TipoDescarga tipo, CancellationToken cancelacion)
+        {
+            await alEmpezar();
+            await Task.Delay(Timeout.Infinite, cancelacion);
+            throw new InvalidOperationException("No llega.");
+        }
+    }
+
+    [Fact]
+    public async Task CancelarMientrasSeDescargaLaOferta_QuedaCanceladaSinGastoNiClaude()
+    {
+        var id = Sembrar();
+        var ejecucionId = 0;
+        _descargaQueEspera = new DescargaQueEspera(() => _cola.CancelarAsync(ejecucionId));
+
+        var ejecucion = await AnalizarAsync(id, () =>
+        {
+            using var db = _factory.CreateDbContext();
+            ejecucionId = db.EjecucionesAgente.Single().Id;
+        });
+
+        Assert.Equal(EstadoEjecucion.Cancelada, ejecucion.Estado);
+        Assert.Equal(0m, ejecucion.CosteUsd);
+        Assert.Equal(0m, ReglasGasto.GastoComputable(ejecucion));
+        Assert.Empty(_claude.Peticiones);
     }
 
     [Fact]

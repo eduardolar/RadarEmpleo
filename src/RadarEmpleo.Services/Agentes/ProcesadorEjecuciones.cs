@@ -189,6 +189,8 @@ public sealed class ProcesadorEjecuciones : BackgroundService
         });
         if (!empezada) return;
 
+        // Hasta que se lanza Claude no se gasta nada: si acaba antes, con coste 0 (null contaría el presupuesto entero).
+        var lanzado = false;
         try
         {
             PreparacionTarea preparacion;
@@ -225,6 +227,7 @@ public sealed class ProcesadorEjecuciones : BackgroundService
             RespuestaClaude respuesta;
             try
             {
+                lanzado = true;
                 respuesta = await _ejecutor.EjecutarAsync(peticion,
                     (pid, inicio) => anotar = CambiarAsync(id, e => e.AnotarProceso(pid, inicio)), corte.Token);
             }
@@ -274,13 +277,25 @@ public sealed class ProcesadorEjecuciones : BackgroundService
             // Cancelada justo al empezar (mientras se montaba la petición o se lanzaba el proceso): no es un fallo.
             var registroDespues = await HashAsync(ArchivoVigilado.Registro);
             var perfilDespues = await HashAsync(ArchivoVigilado.Perfil);
+            decimal? coste = lanzado ? null : 0m;
             await CambiarAsync(id, e =>
             {
                 if (e.EsTerminal) return false;
-                if (e.CancelacionPedida) e.ConfirmarCancelacion(_reloj.AhoraUtc, null, registroDespues, perfilDespues);
-                else e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.Inesperado, null, registroDespues, perfilDespues);
+                if (e.CancelacionPedida) e.ConfirmarCancelacion(_reloj.AhoraUtc, coste, registroDespues, perfilDespues);
+                else e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.Inesperado, coste, registroDespues, perfilDespues);
                 return true;
             });
+        }
+        catch (OperationCanceledException) when (!lanzado && parada.IsCancellationRequested)
+        {
+            // La API se para mientras se preparaba: se interrumpe sin gasto (ProcesarSiguienteAsync ya la encuentra cerrada).
+            await CerrarAsync(id, e => e.Interrumpir(_reloj.AhoraUtc, 0m));
+            throw;
+        }
+        catch (Exception error) when (!lanzado && !parada.IsCancellationRequested)
+        {
+            _log.LogError(error, "Fallo inesperado al preparar la ejecución {Id}.", id);
+            await CerrarAsync(id, e => e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.Inesperado, 0m));
         }
         finally
         {
