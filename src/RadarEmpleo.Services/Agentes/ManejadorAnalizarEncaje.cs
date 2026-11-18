@@ -60,7 +60,8 @@ public sealed class ManejadorAnalizarEncaje(IDbContextFactory<AppDbContext> fact
 
         var (comprobacion, pagina) = await comprobador.ComprobarAsync(candidatura.Enlace, cancelacion);
         _oferta = comprobacion;
-        _ofertaLeida = pagina.Ok && !string.IsNullOrWhiteSpace(pagina.Texto);
+        // Un muro de inicio de sesión, una portada u otra web no son la oferta: se analiza con la ficha.
+        _ofertaLeida = comprobacion.TextoDeLaOferta && !string.IsNullOrWhiteSpace(pagina.Texto);
         if (comprobacion.Estado == EstadoOferta.Cerrada)
             return PreparacionTarea.Terminada(new ResultadoTarea(MensajeOfertaCerrada, Guardado(null)));
 

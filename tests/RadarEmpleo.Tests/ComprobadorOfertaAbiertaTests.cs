@@ -35,7 +35,7 @@ public class ComprobadorOfertaAbiertaTests
 
         var comprobada = await new ComprobadorOfertaAbierta(_descargador).ComprobarAsync(Enlace, CancellationToken.None);
 
-        Assert.Equal(new ComprobacionOferta(EstadoOferta.Abierta, "Sigue en el listado público de Greenhouse."), comprobada.Comprobacion);
+        Assert.Equal(new ComprobacionOferta(EstadoOferta.Abierta, "Sigue en el listado público de Greenhouse.", true), comprobada.Comprobacion);
         Assert.Equal("Técnico de soporte\n\nTurno de mañana.", comprobada.Pagina.Texto);
         Assert.Equal([(Enlace, TipoDescarga.Pagina), ("https://boards-api.greenhouse.io/v1/boards/empresa-ficticia/jobs", TipoDescarga.ListadoJson)],
             _descargador.Peticiones);

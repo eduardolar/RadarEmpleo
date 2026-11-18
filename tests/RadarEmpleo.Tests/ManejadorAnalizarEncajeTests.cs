@@ -75,12 +75,12 @@ public sealed class ManejadorAnalizarEncajeTests : IDisposable
         try { Directory.Delete(_raiz, recursive: true); } catch (IOException) { /* temporal */ }
     }
 
-    private int Sembrar(EstadoCandidatura estado = EstadoCandidatura.Detectada)
+    private int Sembrar(EstadoCandidatura estado = EstadoCandidatura.Detectada, string enlace = Enlace)
     {
         using var db = _factory.CreateDbContext();
         var candidatura = Candidatura.Nueva(new Empresa { Nombre = "Empresa Ficticia", NombreNormalizado = "empresa ficticia" },
             "Analista de datos", _reloj.AhoraUtc, Origen.Manual);
-        candidatura.Enlace = Enlace;
+        candidatura.Enlace = enlace;
         candidatura.Modalidad = Modalidad.Hibrido;
         if (estado != EstadoCandidatura.Detectada) candidatura.CambiarEstado(estado, _reloj.AhoraUtc, Origen.Manual, MotivoDescarte.Experiencia);
         db.Candidaturas.Add(candidatura);
@@ -172,17 +172,40 @@ public sealed class ManejadorAnalizarEncajeTests : IDisposable
         Assert.Equal(Encaje.TiroLargo, (await LeerAsync(id))!.Encaje);
     }
 
-    [Fact]
-    public async Task OfertaQuePideIniciarSesion_SeAnalizaYElResumenDiceQueNoSeSabeConUnaPegaLargaRecortada()
+    [Theory]
+    [InlineData("<p>Inicia sesión para ver esta oferta</p>", null)]
+    [InlineData("<h1>Bienvenido a Otra Web</h1>", "https://otra.ejemplo.es/empleo/1")]
+    [InlineData("<h1>Todas nuestras ofertas</h1>", "https://empleo.ejemplo.es/")]
+    public async Task PaginaQueNoEsLaOferta_SeAnalizaConLaFichaSinMandarSuTexto(string cuerpo, string? urlFinal)
     {
-        _descargas.Programar(Enlace, new RespuestaDescargaFalsa(Cuerpo: "<p>Inicia sesión para ver esta oferta</p>"));
-        ProgramarClaude(Salida(pega: new string('x', 500)));
+        _descargas.Programar(Enlace, new RespuestaDescargaFalsa(Cuerpo: cuerpo, UrlFinal: urlFinal));
+        ProgramarClaude(Salida());
 
         var ejecucion = await AnalizarAsync(Sembrar());
+
+        Assert.StartsWith("Encaje medio. No he podido leer la oferta", ejecucion.Resumen);
+        Assert.False(Json(ejecucion).GetProperty("ofertaLeida").GetBoolean());
+        Assert.Equal("NoSeSabe", Json(ejecucion).GetProperty("estadoOferta").GetString());
+        var prompt = Assert.Single(_claude.Peticiones).EntradaEstandar;
+        Assert.Contains(PromptAnalizarEncaje.OfertaSinLeer, prompt);
+        Assert.DoesNotContain(HtmlATexto.Convertir(cuerpo), prompt);
+    }
+
+    [Fact]
+    public async Task OfertaDeLeverFueraDelListadoConLaPaginaLegible_SeAnalizaYElResumenDiceQueNoSeSabeConLaPegaRecortada()
+    {
+        const string EnlaceLever = "https://jobs.lever.co/empresa-ficticia/00000000-0000-4000-8000-000000000001";
+        _descargas.Programar(EnlaceLever, new RespuestaDescargaFalsa(Cuerpo: "<h1>Analista de datos</h1><p>Buscamos SQL.</p>"));
+        _descargas.Programar(SistemasSeleccion.Detectar(EnlaceLever)!.UrlListado, new RespuestaDescargaFalsa(TipoContenido: "application/json", Cuerpo: "[]"));
+        ProgramarClaude(Salida(pega: new string('x', 500)));
+
+        var ejecucion = await AnalizarAsync(Sembrar(enlace: EnlaceLever));
 
         Assert.StartsWith("Encaje medio. No sé si sigue abierta. Pega: xxx", ejecucion.Resumen);
         Assert.Equal(ManejadorAnalizarEncaje.LargoResumen, ejecucion.Resumen!.Length);
         Assert.EndsWith("…", ejecucion.Resumen);
+        Assert.True(Json(ejecucion).GetProperty("ofertaLeida").GetBoolean());
+        Assert.Contains("Buscamos SQL.", Assert.Single(_claude.Peticiones).EntradaEstandar);
     }
 
     public static TheoryData<string> SalidasNoValidas => new()

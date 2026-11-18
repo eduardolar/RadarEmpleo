@@ -48,7 +48,7 @@ public class ReglasOfertaAbiertaTests
     [InlineData("""{"jobs":[{"id":"40000010"}]}""", EstadoOferta.Cerrada, "Ya no está en el listado público de Greenhouse.")]
     public void Decidir_ConElListadoDeGreenhouse_EstarDaAbiertaYNoEstarCerradaAunqueLaPaginaSeLea(string json, EstadoOferta estado, string motivo)
     {
-        Assert.Equal(new ComprobacionOferta(estado, motivo), Decidir(Greenhouse, PaginaNormal, Listado(json)));
+        Assert.Equal(new ComprobacionOferta(estado, motivo, estado == EstadoOferta.Abierta), Decidir(Greenhouse, PaginaNormal, Listado(json)));
     }
 
     [Fact]
@@ -57,9 +57,9 @@ public class ReglasOfertaAbiertaTests
         const string Otra = """[{"id":"00000000-0000-4000-8000-000000000002"}]""";
         const string OtraAshby = """{"jobs":[{"id":"00000000-0000-4000-8000-000000000002"}]}""";
 
-        Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, "No sale en el listado público de Lever, pero la página se lee."),
+        Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, "No sale en el listado público de Lever, pero la página se lee.", true),
             Decidir(Lever, PaginaNormal, Listado(Otra)));
-        Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, "No sale en el listado público de Ashby, pero la página se lee."),
+        Assert.Equal(new ComprobacionOferta(EstadoOferta.NoSeSabe, "No sale en el listado público de Ashby, pero la página se lee.", true),
             Decidir(Ashby, PaginaNormal, Listado(OtraAshby)));
         Assert.Equal(new ComprobacionOferta(EstadoOferta.Cerrada, "Ya no está en el listado público de Lever."),
             Decidir(Lever, Pagina("Oferta cerrada"), Listado(Otra)));
@@ -130,12 +130,24 @@ public class ReglasOfertaAbiertaTests
         Assert.Equal(EstadoOferta.Abierta, Decidir(Greenhouse, PaginaNormal, Listado(json)).Estado);
     }
 
+    [Theory]
+    [InlineData("Inicia sesión para ver esta oferta", "https://empleo.ejemplo.es/ofertas/1")]
+    [InlineData("Analista de datos", "https://otra.ejemplo.es/ofertas/1")]
+    [InlineData("Analista de datos", "https://empleo.ejemplo.es/")]
+    public void Decidir_AbiertaEnElListadoConUnMuroUnaPortadaUOtraWeb_ElTextoNoEsLaOferta(string texto, string url)
+    {
+        var resultado = Decidir(Greenhouse, Pagina(texto, url), Listado("""{"jobs":[{"id":4000001}]}"""));
+
+        Assert.Equal(EstadoOferta.Abierta, resultado.Estado);
+        Assert.False(resultado.TextoDeLaOferta);
+    }
+
     [Fact]
     public void Decidir_SinListado_DecideLaPagina()
     {
         var resultado = Decidir(Greenhouse, PaginaNormal, DescargaOferta.Fallida(FalloDescarga.DemasiadoGrande));
 
-        Assert.Equal(new ComprobacionOferta(EstadoOferta.Abierta, "La página de la oferta se lee y no dice que esté cerrada."), resultado);
+        Assert.Equal(new ComprobacionOferta(EstadoOferta.Abierta, "La página de la oferta se lee y no dice que esté cerrada.", true), resultado);
     }
 
     [Theory]
