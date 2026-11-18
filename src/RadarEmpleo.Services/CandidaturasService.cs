@@ -233,6 +233,56 @@ public class CandidaturasService
         }
     }
 
+    /// <summary>
+    /// Aplica el análisis de AnalizarEncaje (decisión 6 del plan): pone el encaje, la pega y el análisis y, si la pega o el
+    /// análisis anteriores no estaban vacíos y cambian, los guarda antes en una nota de origen Agente. Cambia
+    /// <see cref="Candidatura.FechaUltimoCambio"/> (el token de concurrencia): si otra petición la cambia entre medias, se
+    /// vuelve a leer y se reintenta una vez. Después regenera el radar. Devuelve false si la candidatura ya no existe.
+    /// Solo lo llama el manejador de la tarea, con la salida ya validada; nunca llega del cuerpo de una petición.
+    /// </summary>
+    public async Task<bool> AplicarAnalisisAgenteAsync(int id, ResultadoAnalisisEncaje resultado)
+    {
+        if (resultado.Encaje is not { } encaje || encaje == Encaje.SinValorar || !Enum.IsDefined(encaje))
+            throw new ValidacionException("El encaje no es válido.", "encaje");
+
+        for (var intento = 1; ; intento++)
+        {
+            await using var db = await _factory.CreateDbContextAsync();
+            var candidatura = await db.Candidaturas.FirstOrDefaultAsync(c => c.Id == id);
+            if (candidatura is null) return false;
+
+            var ahora = _reloj.AhoraUtc;
+            if (NotaAnalisisAnterior(candidatura, resultado, ahora) is { } texto)
+                db.Notas.Add(new Nota { CandidaturaId = id, Texto = texto, Fecha = ahora, Origen = Origen.Agente });
+            candidatura.Encaje = encaje;
+            candidatura.Pega = TextoOpcional(resultado.Pega);
+            candidatura.Analisis = TextoOpcional(resultado.Analisis);
+            candidatura.FechaUltimoCambio = ahora;
+            try
+            {
+                await db.SaveChangesAsync();
+                break;
+            }
+            catch (DbUpdateConcurrencyException) when (intento == 1)
+            {
+                // Otra petición la ha cambiado (o borrado) entre medias: se vuelve a leer con lo suyo y se reintenta.
+            }
+        }
+        await _exportador.ExportarAsync();
+        return true;
+    }
+
+    /// <summary>«Análisis anterior, sustituido por Claude el 16/11: …», o null si no había nada que perder.</summary>
+    private static string? NotaAnalisisAnterior(Candidatura c, ResultadoAnalisisEncaje nuevo, DateTime ahoraUtc)
+    {
+        var pega = TextoOpcional(c.Pega);
+        var analisis = TextoOpcional(c.Analisis);
+        if ((pega is null || pega == TextoOpcional(nuevo.Pega)) && (analisis is null || analisis == TextoOpcional(nuevo.Analisis)))
+            return null;
+        var dia = Fechas.UtcAMadrid(ahoraUtc).ToString("dd/MM", System.Globalization.CultureInfo.InvariantCulture);
+        return $"Análisis anterior, sustituido por Claude el {dia}:\n\nEncaje: {c.Encaje}\nPega: {pega ?? "(sin pega)"}\n\n{analisis}".TrimEnd();
+    }
+
     /// <summary>Añade una nota con la fecha actual. Devuelve null si la candidatura no existe.</summary>
     /// <param name="origen">Lo pone quien llama, nunca el cuerpo de la petición.</param>
     public async Task<NotaDto?> AnadirNotaAsync(int candidaturaId, CrearNotaRequest peticion, Origen origen = Origen.Manual)

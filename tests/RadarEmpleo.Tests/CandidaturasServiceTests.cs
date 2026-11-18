@@ -623,4 +623,99 @@ public class CandidaturasServiceTests : ArnesSqliteTests
 
         Assert.Equal("Primera", (await _candidaturas.ObtenerAsync(creada.Id))!.Puesto);
     }
+
+    // ---------------------------------------------------------------- análisis de AnalizarEncaje
+
+    private static ResultadoAnalisisEncaje Analisis(Encaje? encaje = Encaje.Medio, string pega = "Piden inglés B2.",
+        string analisis = "- Encaja el puesto.\n- Falla el inglés.") => new(encaje, pega, analisis, "Encaje medio.");
+
+    private Task<CandidaturaDetalleDto> CrearConAnalisisAsync(string? pega, string? analisis) =>
+        _candidaturas.CrearAsync(new GuardarCandidaturaRequest("Acme", "Backend", Encaje: Encaje.Alto, Pega: pega, Analisis: analisis));
+
+    [Fact]
+    public async Task AplicarAnalisisAgenteAsync_SinAnalisisAnterior_RellenaSinNotaYRegeneraElRadar()
+    {
+        var creada = await CrearAsync();
+        var llamadas = Exportador.Llamadas;
+        Reloj.Avanzar(TimeSpan.FromMinutes(5));
+
+        Assert.True(await _candidaturas.AplicarAnalisisAgenteAsync(creada.Id, Analisis()));
+
+        var ficha = (await _candidaturas.ObtenerAsync(creada.Id))!;
+        Assert.Equal(Encaje.Medio, ficha.Encaje);
+        Assert.Equal("Piden inglés B2.", ficha.Pega);
+        Assert.Equal("- Encaja el puesto.\n- Falla el inglés.", ficha.Analisis);
+        Assert.Equal(Reloj.AhoraUtc, ficha.FechaUltimoCambio);
+        Assert.Empty(ficha.Notas);
+        Assert.Equal(llamadas + 1, Exportador.Llamadas);
+    }
+
+    [Fact]
+    public async Task AplicarAnalisisAgenteAsync_ConOtroAnalisisAnterior_LoGuardaEnUnaNotaDelAgente()
+    {
+        var creada = await CrearConAnalisisAsync("Está lejos.", "Mi análisis a mano.");
+        Reloj.AhoraUtc = new DateTime(2026, 11, 15, 23, 30, 0, DateTimeKind.Utc); // 16/11 a las 00:30 en Madrid
+
+        await _candidaturas.AplicarAnalisisAgenteAsync(creada.Id, Analisis());
+
+        var nota = Assert.Single((await _candidaturas.ObtenerAsync(creada.Id))!.Notas);
+        Assert.Equal(Origen.Agente, nota.Origen);
+        Assert.Equal("Análisis anterior, sustituido por Claude el 16/11:\n\nEncaje: Alto\nPega: Está lejos.\n\nMi análisis a mano.", nota.Texto);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("  ", "")]
+    [InlineData("Piden inglés B2.", "- Encaja el puesto.\n- Falla el inglés.")]
+    public async Task AplicarAnalisisAgenteAsync_SinNadaQuePerder_NoCreaNota(string? pega, string? analisis)
+    {
+        var creada = await CrearConAnalisisAsync(pega, analisis);
+
+        await _candidaturas.AplicarAnalisisAgenteAsync(creada.Id, Analisis());
+
+        Assert.Empty((await _candidaturas.ObtenerAsync(creada.Id))!.Notas);
+    }
+
+    [Fact]
+    public async Task AplicarAnalisisAgenteAsync_CandidaturaQueNoExiste_DevuelveFalseSinExportar()
+    {
+        Assert.False(await _candidaturas.AplicarAnalisisAgenteAsync(999, Analisis()));
+        Assert.Equal(0, Exportador.Llamadas);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(Encaje.SinValorar)]
+    [InlineData((Encaje)99)]
+    public async Task AplicarAnalisisAgenteAsync_EncajeNoValido_Lanza(Encaje? encaje)
+    {
+        var creada = await CrearAsync();
+
+        await Assert.ThrowsAsync<ValidacionException>(() => _candidaturas.AplicarAnalisisAgenteAsync(creada.Id, Analisis(encaje)));
+    }
+
+    [Fact]
+    public async Task AplicarAnalisisAgenteAsync_OtraPeticionLaEditaEntreMedias_ReintentaYConservaLoDeLaOtra()
+    {
+        var creada = await CrearAsync();
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+        var lenta = new CandidaturasService(FactoryAntesDeGuardar(() =>
+            _candidaturas.EditarAsync(creada.Id, new GuardarCandidaturaRequest("Acme", "Cambiada", Pega: "Pega a mano."))), Reloj, Exportador);
+
+        Assert.True(await lenta.AplicarAnalisisAgenteAsync(creada.Id, Analisis()));
+
+        var ficha = (await _candidaturas.ObtenerAsync(creada.Id))!;
+        Assert.Equal("Cambiada", ficha.Puesto);
+        Assert.Equal("Piden inglés B2.", ficha.Pega);
+        Assert.Contains("Pega a mano.", Assert.Single(ficha.Notas).Texto);
+    }
+
+    [Fact]
+    public async Task AplicarAnalisisAgenteAsync_OtraPeticionLaBorraEntreMedias_DevuelveFalse()
+    {
+        var creada = await CrearAsync();
+        var lenta = new CandidaturasService(FactoryAntesDeGuardar(() => _candidaturas.BorrarAsync(creada.Id)), Reloj, Exportador);
+
+        Assert.False(await lenta.AplicarAnalisisAgenteAsync(creada.Id, Analisis()));
+    }
 }
