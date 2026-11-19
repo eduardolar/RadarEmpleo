@@ -138,6 +138,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         Assert.DoesNotContain("Empresa Rastreo", peticion.EntradaEstandar);
         Assert.Equal(new[] { "--tools", "" }, peticion.Argumentos.SkipWhile(a => a != "--tools").Take(2));
         Assert.Equal(new[] { "--model", "sonnet" }, peticion.Argumentos.SkipWhile(a => a != "--model").Take(2));
+        Assert.True(peticion.SalidaPrivada);
 
         await using var db = _factory.CreateDbContext();
         Assert.Empty(db.Candidaturas);
