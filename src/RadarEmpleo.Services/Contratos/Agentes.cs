@@ -68,5 +68,14 @@ public sealed record FilaExtraida(
     string Seccion, DateOnly Fecha, bool FechaAproximada, string Empresa, string Puesto, EstadoCandidatura Estado,
     string? Enlace, Modalidad Modalidad, string? Ubicacion, MotivoDescarte? MotivoDescarte, string? Nota, string Cita);
 
-/// <summary>El <c>ResultadoJson</c> de ExtraerRegistro: las candidaturas leídas y lo que Claude no ha sabido leer.</summary>
-public sealed record ResultadoExtraccionRegistro(IReadOnlyList<FilaExtraida> Candidaturas, IReadOnlyList<string> Dudas);
+/// <summary>Una fila de ExtraerRegistro que cumple el esquema pero no las reglas de la app (una fecha imposible, un campo vacío o largo).</summary>
+/// <param name="Cita">El principio de su <c>cita</c>, para encontrarla en el registro («(sin cita)» si no la trae).</param>
+/// <param name="Motivo">Por qué no se ha leído, en español.</param>
+public sealed record FilaExtraidaSinLeer(string Cita, string Motivo);
+
+/// <summary>
+/// El <c>ResultadoJson</c> de ExtraerRegistro: las candidaturas leídas, las filas que no se han podido leer (sin tumbar las
+/// demás) y lo que Claude no ha sabido leer.
+/// </summary>
+public sealed record ResultadoExtraccionRegistro(
+    IReadOnlyList<FilaExtraida> Candidaturas, IReadOnlyList<string> Dudas, IReadOnlyList<FilaExtraidaSinLeer> SinLeer);

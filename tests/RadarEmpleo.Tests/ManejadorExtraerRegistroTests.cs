@@ -161,11 +161,11 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     [Fact]
-    public async Task SalidaFueraDelEsquema_DaErrorConElCosteYNoGuardaNada()
+    public async Task EstructuraFueraDelEsquema_DaErrorConElCosteYNoGuardaNada()
     {
         var mala = Fila();
-        mala["estado"] = "Enviada, Cerrada";
-        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([mala]), CosteUsd: 0.30m));
+        mala["estado"] = 2;
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([Fila(), mala]), CosteUsd: 0.30m));
 
         var ejecucion = await ExtraerAsync();
 
@@ -173,6 +173,25 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         Assert.Equal(MensajesEjecucion.SalidaNoValida, ejecucion.Error);
         Assert.Equal(0.30m, ejecucion.CosteUsd);
         Assert.Null(ejecucion.ResultadoJson);
+    }
+
+    [Fact]
+    public async Task UnaFechaImposibleEntreDosFilasBuenas_QuedaOkConLasDosYLaOtraSinLeer()
+    {
+        var mala = Fila();
+        mala["fecha"] = "2025-02-29";
+        mala["cita"] = "- Empresa Texto Tres: ENVIADA por la web.";
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([Fila(), mala, Fila()]), CosteUsd: 0.30m));
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
+        Assert.Equal("Ha encontrado 2 candidaturas en el texto libre. 1 no se ha podido leer.", ejecucion.Resumen);
+        var guardado = Guardado(ejecucion);
+        Assert.Equal(2, guardado.Candidaturas.Count);
+        var sinLeer = Assert.Single(guardado.SinLeer);
+        Assert.Equal("- Empresa Texto Tres: ENVIADA por la web.", sinLeer.Cita);
+        Assert.Equal("La fecha «2025-02-29» no es un día válido con la forma AAAA-MM-DD.", sinLeer.Motivo);
     }
 
     [Fact]
@@ -272,55 +291,112 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     [Theory]
-    [InlineData("estado", "\"enviada\"")]
-    [InlineData("estado", "\" Enviada\"")]
-    [InlineData("estado", "\"Enviada, Cerrada\"")]
     [InlineData("estado", "2")]
     [InlineData("estado", "null")]
-    [InlineData("modalidad", "\"Híbrido\"")]
-    [InlineData("modalidad", "\"Remoto,Presencial\"")]
-    [InlineData("motivoDescarte", "\"Ninguno\"")]
     [InlineData("motivoDescarte", "1")]
-    [InlineData("fecha", "\"2026-9-10\"")]
-    [InlineData("fecha", "\"10/09/2026\"")]
-    [InlineData("fecha", "\"2026-02-30\"")]
-    [InlineData("fecha", "\"2026-09-10T00:00:00\"")]
     [InlineData("fechaAproximada", "\"false\"")]
-    [InlineData("empresa", "\"\"")]
-    [InlineData("empresa", "\"\\u200B \"")]
     [InlineData("empresa", "null")]
     [InlineData("empresa", "7")]
-    [InlineData("puesto", "\"\"")]
-    [InlineData("cita", "\"\"")]
     [InlineData("seccion", "null")]
-    public void Validar_UnCampoFueraDelEsquema_DaSalidaNoValida(string campo, string valor)
+    public void Validar_UnCampoDeOtroTipo_DaSalidaNoValida(string campo, string valor)
     {
         var fila = Fila();
         fila[campo] = JsonNode.Parse(valor);
-        AssertNoValida(Salida([fila]));
+        AssertNoValida(Salida([Fila(), fila]));
     }
 
     [Theory]
-    [InlineData("seccion", 301)]
-    [InlineData("empresa", 201)]
-    [InlineData("puesto", 301)]
-    [InlineData("enlace", 2001)]
-    [InlineData("ubicacion", 201)]
-    [InlineData("nota", 5001)]
-    [InlineData("cita", 2001)]
-    public void Validar_UnCampoDemasiadoLargo_DaSalidaNoValida(string campo, int largo)
+    [InlineData("estado", "\"enviada\"", "El campo «estado» no admite «enviada».")]
+    [InlineData("estado", "\" Enviada\"", "El campo «estado» no admite «Enviada».")]
+    [InlineData("estado", "\"Enviada, Cerrada\"", "El campo «estado» no admite «Enviada, Cerrada».")]
+    [InlineData("modalidad", "\"Híbrido\"", "El campo «modalidad» no admite «Híbrido».")]
+    [InlineData("modalidad", "\"Remoto,Presencial\"", "El campo «modalidad» no admite «Remoto,Presencial».")]
+    [InlineData("motivoDescarte", "\"Ninguno\"", "El campo «motivoDescarte» no admite «Ninguno».")]
+    [InlineData("fecha", "\"2026-9-10\"", "La fecha «2026-9-10» no es un día válido con la forma AAAA-MM-DD.")]
+    [InlineData("fecha", "\"10/09/2026\"", "La fecha «10/09/2026» no es un día válido con la forma AAAA-MM-DD.")]
+    [InlineData("fecha", "\"2026-09-31\"", "La fecha «2026-09-31» no es un día válido con la forma AAAA-MM-DD.")]
+    [InlineData("fecha", "\"2026-09-10T00:00:00\"", "La fecha «2026-09-10T00:00:00» no es un día válido con la forma AAAA-MM-DD.")]
+    [InlineData("empresa", "\"\"", "Falta el campo «empresa».")]
+    [InlineData("empresa", "\"\\u200B\\u202E \\n\"", "Falta el campo «empresa».")]
+    [InlineData("puesto", "\"\"", "Falta el campo «puesto».")]
+    public void Validar_UnaFilaQueNoCumple_VaASinLeerSinTumbarLasDemas(string campo, string valor, string motivo)
     {
         var fila = Fila();
-        fila[campo] = new string('x', largo);
-        AssertNoValida(Salida([fila]));
+        fila[campo] = JsonNode.Parse(valor);
+
+        var resultado = ManejadorExtraerRegistro.Validar(Salida([Fila(), fila, Fila()], ["Una duda"]));
+
+        Assert.Equal(2, resultado.Candidaturas.Count);
+        Assert.Equal(new FilaExtraidaSinLeer(Cita, motivo), Assert.Single(resultado.SinLeer));
+        Assert.Equal(["Una duda"], resultado.Dudas);
+    }
+
+    [Theory]
+    [InlineData("seccion", 300)]
+    [InlineData("empresa", 200)]
+    [InlineData("puesto", 300)]
+    [InlineData("enlace", 2000)]
+    [InlineData("ubicacion", 200)]
+    [InlineData("nota", 5000)]
+    [InlineData("cita", 2000)]
+    public void Validar_UnCampoDemasiadoLargo_VaASinLeer_YLosLargosSeCuentanEnCaracteresUnicode(string campo, int largo)
+    {
+        // Un emoji son dos unidades UTF-16 y un solo carácter, como lo cuenta el esquema.
+        var justa = Fila();
+        justa[campo] = string.Concat(Enumerable.Repeat("😀", largo));
+        var larga = Fila();
+        larga[campo] = new string('x', largo + 1);
+
+        var resultado = ManejadorExtraerRegistro.Validar(Salida([justa, larga]));
+
+        Assert.Single(resultado.Candidaturas);
+        Assert.Equal($"El campo «{campo}» pasa de {largo} caracteres.", Assert.Single(resultado.SinLeer).Motivo);
     }
 
     [Fact]
-    public void Validar_DemasiadasFilasODudasOUnaDudaLarga_DaSalidaNoValida()
+    public void Validar_LaCitaDeUnaFilaSinLeerSaleRecortadaOVacia()
+    {
+        var larga = Fila();
+        larga["cita"] = new string('c', 3000);
+        var sinCita = Fila();
+        sinCita["cita"] = "";
+
+        var sinLeer = ManejadorExtraerRegistro.Validar(Salida([larga, sinCita])).SinLeer;
+
+        Assert.Equal(ManejadorExtraerRegistro.LargoCitaSinLeer, sinLeer[0].Cita.Length);
+        Assert.EndsWith("…", sinLeer[0].Cita);
+        Assert.Equal("(sin cita)", sinLeer[1].Cita);
+    }
+
+    [Fact]
+    public void Validar_LosCamposDeUnaLineaPierdenLosSaltosYTabuladores_LaNotaLosConserva()
+    {
+        var fila = Fila();
+        fila["empresa"] = "Empresa\nTexto\tUno\u2028S.L.\r\n";
+        fila["puesto"] = "Desarrollador\u2029.NET";
+        fila["ubicacion"] = "Málaga\r(híbrido)";
+        fila["seccion"] = "Notas\u0085sueltas";
+        fila["cita"] = "- Empresa Texto Uno\nS.L.";
+        fila["nota"] = "Primera línea.\nSegunda línea.";
+
+        var leida = Assert.Single(ManejadorExtraerRegistro.Validar(Salida([fila], ["Una\nduda"])).Candidaturas);
+
+        Assert.Equal("Empresa Texto Uno S.L.", leida.Empresa);
+        Assert.Equal("Desarrollador .NET", leida.Puesto);
+        Assert.Equal("Málaga (híbrido)", leida.Ubicacion);
+        Assert.Equal("Notas sueltas", leida.Seccion);
+        Assert.Equal("- Empresa Texto Uno S.L.", leida.Cita);
+        Assert.Equal("Primera línea.\nSegunda línea.", leida.Nota);
+    }
+
+    [Fact]
+    public void Validar_DemasiadasFilasODudas_DaSalidaNoValida_YUnaDudaLargaSeRecorta()
     {
         AssertNoValida(Salida(Enumerable.Range(0, LimitesLote.Filas + 1).Select(_ => (JsonNode)Fila())));
         AssertNoValida(Salida([], Enumerable.Repeat("Duda", ManejadorExtraerRegistro.MaximoDudas + 1)));
-        AssertNoValida(Salida([], [new string('d', ManejadorExtraerRegistro.LargoDuda + 1)]));
+
+        var duda = Assert.Single(ManejadorExtraerRegistro.Validar(Salida([], [new string('d', ManejadorExtraerRegistro.LargoDuda + 1)])).Dudas);
+        Assert.Equal(ManejadorExtraerRegistro.LargoDuda, duda.Length);
     }
 
     public static TheoryData<string> SalidasMalFormadas => new()

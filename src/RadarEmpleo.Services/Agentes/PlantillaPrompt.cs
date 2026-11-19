@@ -54,21 +54,33 @@ public static partial class PlantillaPrompt
 
     private static string Limpiar(DatoPrompt dato)
     {
-        var texto = dato.Valor ?? "";
+        var texto = Normalizar(dato.Valor, dato.UnaLinea);
+        if (texto.Length > dato.LargoMaximo) texto = texto[..dato.LargoMaximo];
+        return texto.Length == 0 ? "(sin dato)" : texto;
+    }
+
+    /// <summary>
+    /// El valor tal como entra en el prompt, pero sin recortar: para que quien llama mida lo que de verdad se mandaría
+    /// (NFKC puede alargarlo) y decida antes de que <see cref="Rellenar"/> lo recorte.
+    /// </summary>
+    internal static string Normalizar(string? valor, bool unaLinea)
+    {
+        var texto = valor ?? "";
         // En una línea, los separadores pasan a espacio antes de quitar los controles, para no pegar palabras.
-        if (dato.UnaLinea) texto = SaltosDeLinea().Replace(texto, " ");
+        if (unaLinea) texto = EnUnaLinea(texto);
         // Fuera los controles, los de formato (ancho cero, dirección del texto, guion blando, BOM), los de uso privado
         // y los «tag»: servirían para esconder texto que Claude lee y Eduardo no ve, o un «<<<» partido en dos.
         texto = QuitarInvisibles(texto);
         // NFKC convierte los homoglifos de ancho completo («＞＞＞») en los normales, que se neutralizan abajo.
         texto = texto.Normalize(NormalizationForm.FormKC).Trim();
         // Sin delimitadores: ni «<<<», ni «>>>», ni marcadores que parezcan de la plantilla.
-        texto = texto.Replace("<<<", "‹‹‹", StringComparison.Ordinal)
-                     .Replace(">>>", "›››", StringComparison.Ordinal)
-                     .Replace("{{", "{ {", StringComparison.Ordinal);
-        if (texto.Length > dato.LargoMaximo) texto = texto[..dato.LargoMaximo];
-        return texto.Length == 0 ? "(sin dato)" : texto;
+        return texto.Replace("<<<", "‹‹‹", StringComparison.Ordinal)
+                    .Replace(">>>", "›››", StringComparison.Ordinal)
+                    .Replace("{{", "{ {", StringComparison.Ordinal);
     }
+
+    /// <summary>Los saltos de línea de cualquier tipo (también U+2028, U+2029, NEL…) pasan a un espacio.</summary>
+    internal static string EnUnaLinea(string texto) => SaltosDeLinea().Replace(texto, " ");
 
     /// <summary>
     /// Quita los controles (salvo tabulador y saltos), los de formato, los de uso privado y los «tag»: lo que serviría para

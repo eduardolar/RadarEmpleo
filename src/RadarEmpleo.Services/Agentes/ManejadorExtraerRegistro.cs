@@ -26,6 +26,9 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
     /// <summary>Límites del esquema (<c>prompts/extraer-registro.schema.json</c>), los mismos que los de <see cref="LimitesLote"/>.</summary>
     public const int MaximoDudas = 50, LargoDuda = 500, LargoSeccion = 300, LargoCita = 2000;
 
+    /// <summary>Lo que se guarda de la cita de una fila sin leer, para encontrarla en el registro.</summary>
+    public const int LargoCitaSinLeer = 200;
+
     // Lo que devuelve Claude se lee estricto: sin propiedades de más ni repetidas, sin nombres en otra caja, con todas las
     // del esquema y sin null donde no cabe. Los enumerados se leen como texto y se comparan aparte, letra a letra.
     private static readonly JsonSerializerOptions Lectura = new(JsonSerializerOptions.Strict)
@@ -52,7 +55,7 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
     {
         var libre = AnalizadorRegistro.TextoLibre(await lector.LeerRegistroAsync(cancelacion));
         if (libre.Vacio)
-            return PreparacionTarea.Terminada(new ResultadoTarea(MensajeSinTextoLibre, Guardar(new ResultadoExtraccionRegistro([], []))));
+            return PreparacionTarea.Terminada(new ResultadoTarea(MensajeSinTextoLibre, Guardar(new ResultadoExtraccionRegistro([], [], []))));
         var texto = libre.Texto;
         if (texto.Length > LargoRegistro) throw new ReglaNegocioException(MensajeDemasiadoLargo);
 
@@ -71,79 +74,120 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
     }
 
     /// <summary>
-    /// La salida de Claude con los límites del esquema: como mucho 1000 filas y 50 dudas, cada campo con su largo, la fecha
-    /// AAAA-MM-DD y los enumerados con su nombre exacto (ni números, ni otra caja, ni espacios, ni «Enviada, Cerrada»). Antes
-    /// de medir, quita de los textos los controles, invisibles y marcas de dirección. Si algo no cumple, toda la salida es
-    /// <see cref="MensajesEjecucion.SalidaNoValida"/>.
+    /// La salida de Claude contra el esquema, en dos niveles. La <b>estructura</b> (lectura estricta: sin campos de más, de
+    /// menos ni repetidos, con sus tipos; como mucho 1000 filas y 50 dudas) o vale entera o es
+    /// <see cref="MensajesEjecucion.SalidaNoValida"/>. Dentro, una <b>fila</b> que no cumple (fecha imposible, enumerado que
+    /// no es exactamente uno de los nombres, campo obligatorio vacío o más largo que el esquema) va a
+    /// <see cref="ResultadoExtraccionRegistro.SinLeer"/> sin tumbar las demás. Antes de medir, los textos se quedan sin
+    /// controles, invisibles ni marcas de dirección, y los de una línea sin saltos; los largos se cuentan en caracteres
+    /// Unicode, como el esquema. Una duda demasiado larga se recorta.
     /// </summary>
-    /// <exception cref="ReglaNegocioException">La salida no cumple el esquema.</exception>
+    /// <exception cref="ReglaNegocioException">La estructura no cumple el esquema.</exception>
     public static ResultadoExtraccionRegistro Validar(JsonElement? salida)
     {
+        SalidaCruda? cruda = null;
         try
         {
-            if (salida is { ValueKind: JsonValueKind.Object } objeto && objeto.Deserialize<SalidaCruda>(Lectura) is { } cruda
-                && cruda.Candidaturas.Count <= LimitesLote.Filas && cruda.Dudas.Count <= MaximoDudas)
-                return new ResultadoExtraccionRegistro(
-                    cruda.Candidaturas.Select(Fila).ToList(),
-                    cruda.Dudas.Select(d => Texto(d, LargoDuda)).ToList());
+            if (salida is { ValueKind: JsonValueKind.Object } objeto) cruda = objeto.Deserialize<SalidaCruda>(Lectura);
         }
         catch (JsonException)
         {
-            // Un tipo que no es el del esquema, un campo de más o de menos, o un valor fuera de sus límites.
+            // Un tipo que no es el del esquema, o un campo de más, de menos o repetido.
         }
-        throw new ReglaNegocioException(MensajesEjecucion.SalidaNoValida);
+        if (cruda is null || cruda.Candidaturas.Count > LimitesLote.Filas || cruda.Dudas.Count > MaximoDudas
+            || cruda.Candidaturas.Any(f => f is null) || cruda.Dudas.Any(d => d is null))
+            throw new ReglaNegocioException(MensajesEjecucion.SalidaNoValida);
+
+        var filas = new List<FilaExtraida>();
+        var sinLeer = new List<FilaExtraidaSinLeer>();
+        foreach (var fila in cruda.Candidaturas)
+        {
+            try
+            {
+                filas.Add(Fila(fila!));
+            }
+            catch (FilaNoValida error)
+            {
+                sinLeer.Add(new FilaExtraidaSinLeer(Linea(fila!.Cita) is { Length: > 0 } cita ? Recortar(cita, LargoCitaSinLeer) : "(sin cita)",
+                    error.Message));
+            }
+        }
+        var dudas = cruda.Dudas.Select(d => Recortar(Linea(d!), LargoDuda)).Where(d => d.Length > 0).ToList();
+        return new ResultadoExtraccionRegistro(filas, dudas, sinLeer);
     }
 
-    private static FilaExtraida Fila(FilaCruda? f) => f is null ? throw new JsonException() : new FilaExtraida(
-        Texto(f.Seccion, LargoSeccion),
+    private static FilaExtraida Fila(FilaCruda f) => new(
+        Texto(f.Seccion, LargoSeccion, "seccion", obligatorio: false),
         Fecha(f.Fecha),
         f.FechaAproximada,
-        Texto(f.Empresa, LimitesLote.Empresa, obligatorio: true),
-        Texto(f.Puesto, LimitesLote.Puesto, obligatorio: true),
-        Enumerado<EstadoCandidatura>(f.Estado),
-        Opcional(f.Enlace, LimitesLote.Enlace),
-        Enumerado<Modalidad>(f.Modalidad),
-        Opcional(f.Ubicacion, LimitesLote.Ubicacion),
-        f.MotivoDescarte is null ? null : Enumerado<MotivoDescarte>(f.MotivoDescarte),
-        Opcional(f.Nota, LimitesLote.Nota),
-        Texto(f.Cita, LargoCita, obligatorio: true));
+        Texto(f.Empresa, LimitesLote.Empresa, "empresa"),
+        Texto(f.Puesto, LimitesLote.Puesto, "puesto"),
+        Enumerado<EstadoCandidatura>(f.Estado, "estado"),
+        Opcional(f.Enlace, LimitesLote.Enlace, "enlace"),
+        Enumerado<Modalidad>(f.Modalidad, "modalidad"),
+        Opcional(f.Ubicacion, LimitesLote.Ubicacion, "ubicacion"),
+        f.MotivoDescarte is null ? null : Enumerado<MotivoDescarte>(f.MotivoDescarte, "motivoDescarte"),
+        Opcional(f.Nota, LimitesLote.Nota, "nota", unaLinea: false),
+        Texto(f.Cita, LargoCita, "cita"));
 
-    /// <summary>Sin invisibles y sin espacios en los extremos; vacío si no es <paramref name="obligatorio"/>.</summary>
-    private static string Texto(string? valor, int largo, bool obligatorio = false)
+    private static string Texto(string valor, int largo, string campo, bool obligatorio = true, bool unaLinea = true)
     {
-        var limpio = PlantillaPrompt.QuitarInvisibles(valor ?? throw new JsonException()).Trim();
-        return limpio.Length > largo || (obligatorio && limpio.Length == 0) ? throw new JsonException() : limpio;
+        var limpio = unaLinea ? Linea(valor) : PlantillaPrompt.QuitarInvisibles(valor).Trim();
+        if (obligatorio && limpio.Length == 0) throw new FilaNoValida($"Falta el campo «{campo}».");
+        return Largo(limpio) > largo ? throw new FilaNoValida($"El campo «{campo}» pasa de {largo} caracteres.") : limpio;
     }
 
-    private static string? Opcional(string? valor, int largo) =>
-        valor is null ? null : Texto(valor, largo) is { Length: > 0 } limpio ? limpio : null;
+    private static string? Opcional(string? valor, int largo, string campo, bool unaLinea = true) =>
+        valor is null ? null : Texto(valor, largo, campo, obligatorio: false, unaLinea) is { Length: > 0 } limpio ? limpio : null;
+
+    /// <summary>Sin saltos de ningún tipo ni tabuladores (pasan a espacio), sin invisibles y sin espacios en los extremos.</summary>
+    private static string Linea(string valor) =>
+        PlantillaPrompt.QuitarInvisibles(PlantillaPrompt.EnUnaLinea(valor).Replace('\t', ' ')).Trim();
+
+    private static int Largo(string texto) => texto.EnumerateRunes().Count();
+
+    /// <summary>Recorta a <paramref name="maximo"/> caracteres Unicode, sin partir ninguno.</summary>
+    private static string Recortar(string texto, int maximo) => Largo(texto) <= maximo
+        ? texto
+        : string.Concat(texto.EnumerateRunes().Take(maximo - 1).Select(r => r.ToString())) + "…";
 
     private static DateOnly Fecha(string valor) =>
         valor.Length == 10 && DateOnly.TryParseExact(valor, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dia)
             ? dia
-            : throw new JsonException();
+            : throw new FilaNoValida($"La fecha «{Recortar(Linea(valor), 40)}» no es un día válido con la forma AAAA-MM-DD.");
 
-    private static T Enumerado<T>(string valor) where T : struct, Enum =>
-        Enum.GetNames<T>().Contains(valor, StringComparer.Ordinal) ? Enum.Parse<T>(valor) : throw new JsonException();
+    private static T Enumerado<T>(string valor, string campo) where T : struct, Enum =>
+        Enum.GetNames<T>().Contains(valor, StringComparer.Ordinal)
+            ? Enum.Parse<T>(valor)
+            : throw new FilaNoValida($"El campo «{campo}» no admite «{Recortar(Linea(valor), 40)}».");
 
     private static string Guardar(ResultadoExtraccionRegistro resultado) => JsonSerializer.Serialize(resultado, Guardado);
 
-    /// <summary>«Ha encontrado 34 candidaturas en el texto libre.», y cuántas dudas tiene si las hay.</summary>
+    /// <summary>«Ha encontrado 34 candidaturas en el texto libre.», y cuántas filas no se han leído y cuántas dudas hay.</summary>
     private static string Resumen(ResultadoExtraccionRegistro r)
     {
-        var encontradas = r.Candidaturas.Count switch
+        var texto = r.Candidaturas.Count switch
         {
             0 => "No ha encontrado candidaturas en el texto libre.",
             1 => "Ha encontrado 1 candidatura en el texto libre.",
             var n => $"Ha encontrado {n} candidaturas en el texto libre."
         };
-        return r.Dudas.Count switch
+        texto += r.SinLeer.Count switch
         {
-            0 => encontradas,
-            1 => $"{encontradas} Tiene 1 duda.",
-            var n => $"{encontradas} Tiene {n} dudas."
+            0 => "",
+            1 => " 1 no se ha podido leer.",
+            var n => $" {n} no se han podido leer."
+        };
+        return texto + r.Dudas.Count switch
+        {
+            0 => "",
+            1 => " Tiene 1 duda.",
+            var n => $" Tiene {n} dudas."
         };
     }
+
+    /// <summary>Una fila que cumple el esquema pero no las reglas: va a <see cref="ResultadoExtraccionRegistro.SinLeer"/>.</summary>
+    private sealed class FilaNoValida(string motivo) : Exception(motivo);
 
     // Lo que dice el esquema, con los enumerados como texto para compararlos aquí letra a letra.
     private sealed record SalidaCruda(IReadOnlyList<FilaCruda?> Candidaturas, IReadOnlyList<string?> Dudas);
