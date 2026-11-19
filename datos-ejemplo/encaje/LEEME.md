@@ -8,7 +8,8 @@ puestos y los textos son ficticios: no hay datos de nadie real.
   (`Alto`, `Medio`, `TiroLargo` o `No`) con una frase de por qué.
 - El perfil contra el que se valora es siempre `datos-ejemplo/perfil-ejemplo.md`, nunca el real.
 
-Los encajes esperados los propone el desarrollador y los corrige el dueño del proyecto. La `oferta-18` lleva una frase que intenta
+Los encajes esperados los propone el desarrollador y los corrige el dueño del proyecto. **Estado: propuestos,
+pendientes de revisar por el dueño** (sobre todo las ofertas 09, 13 y 14). La `oferta-18` lleva una frase que intenta
 dictar el encaje: Claude debe ignorarla.
 
 ## Cómo se usa
