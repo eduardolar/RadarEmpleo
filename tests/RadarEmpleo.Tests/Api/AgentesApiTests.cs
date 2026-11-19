@@ -24,11 +24,16 @@ public sealed class AgentesApiTests
 {
     private static readonly DateTime Ahora = new(2026, 11, 16, 11, 0, 0, DateTimeKind.Utc);
 
+    /// <param name="manejadorDePrueba">ExtraerRegistro con el <see cref="ManejadorDePrueba"/> en vez del real.</param>
     private static FabricaApi Fabrica(CanalPeticion canal = CanalPeticion.Local, bool agentes = true, string modo = "Local",
-        RelojFijo? reloj = null) =>
+        RelojFijo? reloj = null, bool manejadorDePrueba = true) =>
         new(modo, canal: canal, agentes: agentes, servicios: s =>
         {
-            s.AddScoped<IManejadorTarea>(_ => new ManejadorDePrueba(ManejadorDePrueba.SinCandidatura));
+            if (manejadorDePrueba)
+            {
+                foreach (var real in s.Where(d => d.ImplementationType == typeof(ManejadorExtraerRegistro)).ToList()) s.Remove(real);
+                s.AddScoped<IManejadorTarea>(_ => new ManejadorDePrueba(ManejadorDePrueba.SinCandidatura));
+            }
             if (reloj is not null)
             {
                 s.RemoveAll<IClock>();

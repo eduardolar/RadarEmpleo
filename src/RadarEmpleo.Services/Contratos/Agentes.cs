@@ -56,3 +56,17 @@ public sealed record ResultadoAnalisisEncaje(
 public sealed record AnalisisEncajeGuardado(
     EstadoOferta EstadoOferta, string MotivoOferta, bool OfertaLeida,
     Encaje? Encaje = null, string? Pega = null, string? Analisis = null, string? Resumen = null);
+
+/// <summary>
+/// Una candidatura que ExtraerRegistro ha leído en el texto libre del registro, ya validada con los límites del esquema
+/// (<c>prompts/extraer-registro.schema.json</c>). Todavía no es nada: la vista previa de la importación (PR 8 y 9 de la
+/// F7b) comprueba su <paramref name="Cita"/> contra el registro y la compara con la tabla y con la BD.
+/// </summary>
+/// <param name="Seccion">El título del apartado en el que está, sin las almohadillas.</param>
+/// <param name="Cita">La línea del registro tal cual, según Claude.</param>
+public sealed record FilaExtraida(
+    string Seccion, DateOnly Fecha, bool FechaAproximada, string Empresa, string Puesto, EstadoCandidatura Estado,
+    string? Enlace, Modalidad Modalidad, string? Ubicacion, MotivoDescarte? MotivoDescarte, string? Nota, string Cita);
+
+/// <summary>El <c>ResultadoJson</c> de ExtraerRegistro: las candidaturas leídas y lo que Claude no ha sabido leer.</summary>
+public sealed record ResultadoExtraccionRegistro(IReadOnlyList<FilaExtraida> Candidaturas, IReadOnlyList<string> Dudas);
