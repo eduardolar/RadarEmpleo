@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using RadarEmpleo.Domain;
 using RadarEmpleo.Services.Contratos;
+using RadarEmpleo.Services.Rastreos;
 
 namespace RadarEmpleo.Services.Importacion;
 
@@ -16,6 +17,20 @@ public sealed record AnalisisRegistro(
     LoteImportacion Lote,
     IReadOnlyList<FilaSinLeerDto> SinLeer,
     int EnviosEnTexto);
+
+/// <summary>Una línea del registro tal cual, con su número (desde 1).</summary>
+public sealed record LineaRegistro(int Numero, string Texto);
+
+/// <summary>Lo que el registro tiene fuera de la tabla de candidaturas y de las secciones «## Rastreo …».</summary>
+/// <param name="Lineas">Las líneas originales, sin tocar, en su orden y con su número en el registro.</param>
+public sealed record TextoLibreRegistro(IReadOnlyList<LineaRegistro> Lineas)
+{
+    /// <summary>Las líneas unidas con saltos LF, como van al prompt de ExtraerRegistro.</summary>
+    public string Texto => string.Join('\n', Lineas.Select(l => l.Texto));
+
+    /// <summary>No queda nada que leer: solo líneas en blanco, o ninguna.</summary>
+    public bool Vacio => Lineas.All(l => string.IsNullOrWhiteSpace(l.Texto));
+}
 
 /// <summary>
 /// Convierte el texto del registro en un lote (función pura: ni disco ni BD). Solo interpreta la tabla:
@@ -115,10 +130,9 @@ public static partial class AnalizadorRegistro
 
     public static AnalisisRegistro Analizar(string texto)
     {
-        var lineas = SaltoDeLinea().Split(texto.TrimStart('﻿'));
+        var lineas = Lineas(texto);
 
-        var cabecera = Array.FindIndex(lineas, EsCabecera);
-        if (cabecera < 0)
+        if (Tabla(lineas) is not var (cabecera, fin))
             return new AnalisisRegistro(false, LoteVacio(), [], ContarEnvios(lineas));
 
         var columnas = Columnas.Desde(Celdas(lineas[cabecera]));
@@ -127,13 +141,12 @@ public static partial class AnalizadorRegistro
         // Se anula si la fila no tiene una fecha legible: «la fila anterior» es la anterior de verdad.
         DateOnly? fechaAnterior = null;
 
-        var fin = cabecera + 1;
-        for (; fin < lineas.Length && EsLineaDeTabla(lineas[fin]); fin++)
+        for (var i = cabecera + 1; i < fin; i++)
         {
-            if (LineaSeparadora().IsMatch(lineas[fin].Trim())) continue;
+            if (LineaSeparadora().IsMatch(lineas[i].Trim())) continue;
 
-            var numero = fin + 1;
-            var celdas = Celdas(lineas[fin]);
+            var numero = i + 1;
+            var celdas = Celdas(lineas[i]);
             if (celdas.Count != columnas.Total)
             {
                 sinLeer.Add(new FilaSinLeerDto(numero, $"La fila tiene {celdas.Count} celdas y la cabecera {columnas.Total}."));
@@ -151,6 +164,37 @@ public static partial class AnalizadorRegistro
 
         var fuera = lineas.Take(cabecera).Concat(lineas.Skip(fin));
         return new AnalisisRegistro(true, LoteVacio() with { Filas = filas }, sinLeer, ContarEnvios(fuera));
+    }
+
+    /// <summary>
+    /// Las líneas que no son la tabla de candidaturas (la de <see cref="Analizar"/>, con su cabecera) ni están en una
+    /// sección «## Rastreo …» (<see cref="AnalizadorRastreo.SeccionesRastreo"/>): lo que ExtraerRegistro manda a Claude.
+    /// Van tal cual, con su número de línea en el registro, para poder buscar después la <c>cita</c> de cada fila.
+    /// </summary>
+    public static TextoLibreRegistro TextoLibre(string texto)
+    {
+        var lineas = Lineas(texto);
+        var fuera = new bool[lineas.Length];
+        if (Tabla(lineas) is var (cabecera, fin)) Array.Fill(fuera, true, cabecera, fin - cabecera);
+        foreach (var (titulo, finRastreo) in AnalizadorRastreo.SeccionesRastreo(lineas))
+            Array.Fill(fuera, true, titulo, finRastreo - titulo);
+
+        return new TextoLibreRegistro(lineas.Select((linea, i) => (linea, i))
+            .Where(l => !fuera[l.i])
+            .Select(l => new LineaRegistro(l.i + 1, l.linea))
+            .ToList());
+    }
+
+    private static string[] Lineas(string texto) => SaltoDeLinea().Split(texto.TrimStart('﻿'));
+
+    /// <summary>La primera tabla con las columnas obligatorias: el índice de su cabecera y el de la línea siguiente a la última fila.</summary>
+    private static (int Cabecera, int Fin)? Tabla(string[] lineas)
+    {
+        var cabecera = Array.FindIndex(lineas, EsCabecera);
+        if (cabecera < 0) return null;
+        var fin = cabecera + 1;
+        while (fin < lineas.Length && EsLineaDeTabla(lineas[fin])) fin++;
+        return (cabecera, fin);
     }
 
     private static LoteImportacion LoteVacio() => new(LimitesLote.VersionActual, OrigenLote.Tabla, []);

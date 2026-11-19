@@ -152,16 +152,9 @@ public static partial class AnalizadorRastreo
         var claves = new HashSet<string>(StringComparer.Ordinal);
         var clavesAnteriores = new HashSet<string>(StringComparer.Ordinal);
 
-        for (var i = 0; i < lineas.Length; i++)
+        foreach (var (i, fin) in SeccionesRastreo(lineas))
         {
-            var encabezado = TituloSeccion().Match(lineas[i]);
-            if (!encabezado.Success) continue;
-            var titulo = Recortar(encabezado.Groups[1].Value.Trim(), Rastreo.LargoTitulo);
-            if (!EmpiezaPorRastreo().IsMatch(TextoComparable.Normalizar(titulo))) continue;
-
-            var fin = i + 1;
-            while (fin < lineas.Length && !Encabezado().IsMatch(lineas[fin])) fin++;
-
+            var titulo = Recortar(TituloSeccion().Match(lineas[i]).Groups[1].Value.Trim(), Rastreo.LargoTitulo);
             if (FechaDeTitulo(titulo, referencia) is { } fecha)
             {
                 // Con la fecha: una sección del año siguiente con el mismo título es otro rastreo.
@@ -175,9 +168,30 @@ public static partial class AnalizadorRastreo
             {
                 avisos.Add($"No entiendo la fecha del rastreo «{titulo}»: no lo he leído.");
             }
-            i = fin - 1;
         }
         return new AnalisisRastreos(rastreos, avisos);
+    }
+
+    /// <summary>
+    /// Dónde están las secciones «## Rastreo …» del registro, tengan o no fecha legible: el índice (desde 0) de la línea
+    /// del título y el de la siguiente a la última (la del siguiente encabezado de nivel 1 o 2, o el total). Los «###» son
+    /// parte de la sección. Las usan <see cref="AnalizarRegistro"/> y <see cref="Importacion.AnalizadorRegistro.TextoLibre"/>.
+    /// </summary>
+    public static IReadOnlyList<(int Titulo, int Fin)> SeccionesRastreo(IReadOnlyList<string> lineas)
+    {
+        var secciones = new List<(int, int)>();
+        for (var i = 0; i < lineas.Count; i++)
+        {
+            var encabezado = TituloSeccion().Match(lineas[i]);
+            if (!encabezado.Success || !EmpiezaPorRastreo().IsMatch(TextoComparable.Normalizar(encabezado.Groups[1].Value.Trim())))
+                continue;
+
+            var fin = i + 1;
+            while (fin < lineas.Count && !Encabezado().IsMatch(lineas[fin])) fin++;
+            secciones.Add((i, fin));
+            i = fin - 1;
+        }
+        return secciones;
     }
 
     /// <summary>
