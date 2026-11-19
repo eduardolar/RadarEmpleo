@@ -1050,3 +1050,12 @@ Encontrados por el revisor .NET, el auditor de seguridad y el tester en el PR 4.
 - El `resumen` de Claude no se usa (gasta tokens) y, con el aviso, deja poco sitio a la pega.
 - La firma de `AplicarAnalisisAgenteAsync` va sin `ejecucionId`: ajustar el apartado 6 de este plan.
 - Tests que faltan: el borde exacto de los largos, que el manejador regenera el radar, inyección en el perfil y el aviso de NoSeSabe pasando por el manejador.
+
+## Pendientes menores de la F7b (PR 5)
+
+- Un cuerpo de más de 30 MB da 500 con la traza en el log en vez de 413 (ya pasaba antes, también en `POST /api/candidaturas`): traducir `BadHttpRequestException` a su código en `ManejadorExcepciones` y poner un `[RequestSizeLimit]` pequeño en los POST con `PeticionVacia`.
+- El comentario de `Analizar_Da202ConLocation_…` dice que comprueba el origen y no lo hace: ajustarlo o comprobar `Origen.Agente` en el test del manejador con la oferta abierta.
+- Tests de API de los otros 409 de analizar (sin carpeta Curriculum y tope del día); hoy los cubren los de servicio y cola.
+- `EstadoOfertaDe` parsea cada `ResultadoJson` de AnalizarEncaje en el listado (como mucho unos 2 MB con 200): si crece, proyectar solo el campo o leer con `Utf8JsonReader`.
+- En Development, cualquier app en `localhost:4200` pasa el filtro de `Sec-Fetch-Site`; hoy lo paran el 415 y la falta de CORS. Revisarlo si algún día se añade CORS para el front de desarrollo.
+- Sin probar todavía (en la aceptación real con el OK de Eduardo): procesos vivos al cancelar o cerrar la API con el ejecutor Cli e inyección con un `claude` real; `X-Radar-Token` no está implementado aún.

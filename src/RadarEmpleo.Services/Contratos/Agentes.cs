@@ -8,6 +8,7 @@ namespace RadarEmpleo.Services.Contratos;
 /// <param name="RegistroCambiado">Aviso rojo: <c>ofertas-enviadas.md</c> cambió mientras trabajaba.</param>
 /// <param name="PerfilCambiado">Aviso rojo: <c>perfil-busqueda.md</c> cambió mientras trabajaba.</param>
 /// <param name="RastreoId">El rastreo que generó (tarea Rastreo), si lo hay.</param>
+/// <param name="EstadoOferta">Si la oferta seguía publicada, según AnalizarEncaje (de su <c>ResultadoJson</c>); null en otras tareas o si no se llegó a comprobar.</param>
 /// <param name="PuedeCancelar">En cola, o en curso sin la cancelación pedida todavía.</param>
 /// <param name="PuedeReintentar">Ha terminado en Error o Cancelada y su tarea se puede volver a lanzar.</param>
 public sealed record EjecucionAgenteDto(
@@ -15,7 +16,7 @@ public sealed record EjecucionAgenteDto(
     DateTime FechaAlta, DateTime? Inicio, DateTime? Fin,
     decimal PresupuestoUsd, int TiempoMaximoSegundos, decimal? CosteUsd, bool CosteEstimado,
     string? Resumen, string? Error, bool RegistroCambiado, bool PerfilCambiado,
-    int? CandidaturaId, CandidaturaBreveDto? Candidatura, int? RastreoId,
+    int? CandidaturaId, CandidaturaBreveDto? Candidatura, int? RastreoId, EstadoOferta? EstadoOferta,
     bool PuedeCancelar, bool PuedeReintentar);
 
 /// <summary>Lo gastado hoy (día de Madrid) con los agentes.</summary>

@@ -15,8 +15,9 @@ using RadarEmpleo.Services.Agentes;
 namespace RadarEmpleo.Tests.Api;
 
 /// <summary>
-/// <c>/api/agentes</c> con el ejecutor falso y el <see cref="ManejadorDePrueba"/> (las tareas reales llegan en la F7b):
-/// el filtro <c>[SoloPcConAgentes]</c>, la lista, el detalle, cancelar, reintentar y el estado con el gasto de hoy.
+/// <c>/api/agentes</c> con el ejecutor y el descargador falsos, el <see cref="ManejadorDePrueba"/> en ExtraerRegistro y el
+/// manejador real de AnalizarEncaje: el filtro <c>[SoloPcConAgentes]</c>, analizar, la lista, el detalle, cancelar,
+/// reintentar y el estado con el gasto de hoy.
 /// </summary>
 [Collection(nameof(ColeccionManejadorDePrueba))]
 public sealed class AgentesApiTests
@@ -68,6 +69,7 @@ public sealed class AgentesApiTests
         { "GET", "/api/agentes/ejecuciones/1" },
         { "POST", "/api/agentes/ejecuciones/1/cancelar" },
         { "POST", "/api/agentes/ejecuciones/1/reintentar" },
+        { "POST", "/api/agentes/analizar/1" },
     };
 
     private static Task<HttpResponseMessage> Enviar(HttpClient http, string metodo, string url, string tipo = "application/json") =>
@@ -96,12 +98,14 @@ public sealed class AgentesApiTests
         Assert.Equal(HttpStatusCode.Forbidden, (await Enviar(http, metodo, url)).StatusCode);
     }
 
-    [Fact]
-    public async Task PorElRemotoConTextPlain_Da403Antes415()
+    [Theory]
+    [InlineData("/api/agentes/ejecuciones/1/cancelar")]
+    [InlineData("/api/agentes/analizar/1")]
+    public async Task PorElRemotoConTextPlain_Da403Antes415(string url)
     {
         using var fabrica = Fabrica(CanalPeticion.Remoto);
         using var http = fabrica.CreateClient();
-        Assert.Equal(HttpStatusCode.Forbidden, (await Enviar(http, "POST", "/api/agentes/ejecuciones/1/cancelar", "text/plain")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Enviar(http, "POST", url, "text/plain")).StatusCode);
     }
 
     [Theory]
@@ -149,6 +153,11 @@ public sealed class AgentesApiTests
         using var http = fabrica.CreateClient();
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await Enviar(http, "POST", "/api/agentes/ejecuciones/1/cancelar", tipo)).StatusCode);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await Enviar(http, "POST", "/api/agentes/ejecuciones/1/reintentar", tipo)).StatusCode);
+        var id = await SembrarCandidaturaAsync(fabrica);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await Enviar(http, "POST", $"/api/agentes/analizar/{id}", tipo)).StatusCode);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await http.PostAsync($"/api/agentes/analizar/{id}", null)).StatusCode);
+        await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
+        Assert.Empty(db.EjecucionesAgente);
     }
 
     [Fact]
@@ -171,6 +180,99 @@ public sealed class AgentesApiTests
         Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync("/api/agentes/ejecuciones/999")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await PostJson(http, "/api/agentes/ejecuciones/999/cancelar")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await PostJson(http, "/api/agentes/ejecuciones/999/reintentar")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await PostJson(http, "/api/agentes/analizar/999")).StatusCode);
+    }
+
+    /// <summary>Oferta inventada de <c>descargas.json</c> que sigue publicada.</summary>
+    private const string OfertaAbierta = "https://empleo.ejemplo.es/ofertas/analista-datos-1234";
+
+    /// <summary>Oferta inventada de <c>descargas.json</c> que ya no está publicada (Lever responde 404).</summary>
+    private const string OfertaCerrada = "https://jobs.lever.co/empresa-ficticia/00000000-0000-4000-8000-000000000001";
+
+    private static async Task<int> SembrarCandidaturaAsync(FabricaApi fabrica, string enlace = OfertaAbierta,
+        EstadoCandidatura estado = EstadoCandidatura.Detectada)
+    {
+        await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
+        var nombre = $"Empresa Ficticia {Guid.NewGuid():N}";
+        var candidatura = Candidatura.Nueva(new Empresa { Nombre = nombre, NombreNormalizado = nombre.ToLowerInvariant() },
+            "Analista de datos", DateTime.UtcNow, Origen.Manual);
+        candidatura.Enlace = enlace;
+        if (estado != EstadoCandidatura.Detectada)
+            candidatura.CambiarEstado(estado, DateTime.UtcNow, Origen.Manual,
+                estado == EstadoCandidatura.Descartada ? MotivoDescarte.Experiencia : null);
+        db.Candidaturas.Add(candidatura);
+        await db.SaveChangesAsync();
+        return candidatura.Id;
+    }
+
+    [Fact]
+    public async Task Analizar_Da202ConLocation_YRepetirMientrasSigueActivaDa200ConLaMisma()
+    {
+        using var fabrica = Fabrica();
+        using var http = fabrica.CreateClient();
+        Falso(fabrica).Programar(TareaAgente.AnalizarEncaje, new RespuestaFalsa(ModoFalso.NoResponde));
+        var id = await SembrarCandidaturaAsync(fabrica);
+        var otra = await SembrarCandidaturaAsync(fabrica);
+
+        // Lo que llega en el cuerpo no cuenta: la candidatura es la de la ruta y el origen lo pone el servidor.
+        var respuesta = await PostJson(http, $"/api/agentes/analizar/{id}", $$"""{"candidaturaId":{{otra}},"origen":"Manual","prompt":"x"}""");
+        var nueva = await LeerAsync(respuesta, HttpStatusCode.Accepted);
+        var ejecucionId = nueva.GetProperty("id").GetInt32();
+        Assert.EndsWith($"/api/agentes/ejecuciones/{ejecucionId}", respuesta.Headers.Location!.ToString());
+        Assert.Equal("AnalizarEncaje", nueva.GetProperty("tarea").GetString());
+        Assert.Equal(id, nueva.GetProperty("candidaturaId").GetInt32());
+        Assert.Equal(id, nueva.GetProperty("candidatura").GetProperty("id").GetInt32());
+        Assert.Equal(0.50m, nueva.GetProperty("presupuestoUsd").GetDecimal());
+
+        var repetida = await LeerAsync(await PostJson(http, $"/api/agentes/analizar/{id}"), HttpStatusCode.OK);
+        Assert.Equal(ejecucionId, repetida.GetProperty("id").GetInt32());
+
+        await EsperarAsync(http, ejecucionId, "EnCurso");
+        var enCurso = await LeerAsync(await PostJson(http, $"/api/agentes/analizar/{id}"), HttpStatusCode.OK);
+        Assert.Equal(ejecucionId, enCurso.GetProperty("id").GetInt32());
+
+        await PostJson(http, $"/api/agentes/ejecuciones/{ejecucionId}/cancelar");
+        await EsperarAsync(http, ejecucionId, "Cancelada");
+        await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
+        Assert.Equal(1, await db.EjecucionesAgente.CountAsync());
+    }
+
+    [Theory]
+    [InlineData(EstadoCandidatura.Descartada)]
+    [InlineData(EstadoCandidatura.Cerrada)]
+    public async Task Analizar_UnaDescartadaOCerrada_Da409YNoCreaNada(EstadoCandidatura estado)
+    {
+        using var fabrica = Fabrica();
+        using var http = fabrica.CreateClient();
+        var id = await SembrarCandidaturaAsync(fabrica, estado: estado);
+
+        var problema = await LeerAsync(await PostJson(http, $"/api/agentes/analizar/{id}"), HttpStatusCode.Conflict);
+
+        Assert.Equal(ManejadorAnalizarEncaje.MensajeCandidaturaFinal, problema.GetProperty("detail").GetString());
+        await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
+        Assert.Empty(db.EjecucionesAgente);
+    }
+
+    [Fact]
+    public async Task Analizar_UnaOfertaCerrada_TerminaEnOkSinClaudeYConCoste0()
+    {
+        using var fabrica = Fabrica();
+        using var http = fabrica.CreateClient();
+        var id = await SembrarCandidaturaAsync(fabrica, OfertaCerrada);
+
+        var nueva = await LeerAsync(await PostJson(http, $"/api/agentes/analizar/{id}"), HttpStatusCode.Accepted);
+        var ok = await EsperarAsync(http, nueva.GetProperty("id").GetInt32(), "Ok");
+
+        Assert.Equal(0m, ok.GetProperty("costeUsd").GetDecimal());
+        Assert.False(ok.GetProperty("costeEstimado").GetBoolean());
+        Assert.Equal("Cerrada", ok.GetProperty("estadoOferta").GetString());
+        Assert.Equal(ManejadorAnalizarEncaje.MensajeOfertaCerrada, ok.GetProperty("resumen").GetString());
+        Assert.Empty(Falso(fabrica).Peticiones);
+        var estado = await http.GetFromJsonAsync<JsonElement>("/api/agentes/estado");
+        Assert.Equal(0m, estado.GetProperty("gasto").GetProperty("gastadoUsd").GetDecimal());
+        // Nunca se descarta sola: la ficha lo propone.
+        var ficha = await http.GetFromJsonAsync<JsonElement>($"/api/candidaturas/{id}");
+        Assert.Equal("Detectada", ficha.GetProperty("estado").GetString());
     }
 
     [Theory]
@@ -295,6 +397,41 @@ public sealed class AgentesApiTests
 
         await PostJson(http, $"/api/agentes/ejecuciones/{id}/cancelar");
         await EsperarAsync(http, id, "Cancelada");
+    }
+
+    [Fact]
+    public async Task EstadoOferta_SoloEnAnalizarEncajeYSiLoDejoEnSuResultado()
+    {
+        var reloj = new RelojFijo(Ahora);
+        using var fabrica = Fabrica(reloj: reloj);
+        using var http = fabrica.CreateClient();
+        var resultados = new (TareaAgente Tarea, string? Json)[]
+        {
+            (TareaAgente.AnalizarEncaje, """{"estadoOferta":"Cerrada","motivoOferta":"x","ofertaLeida":false}"""),
+            (TareaAgente.AnalizarEncaje, """{"estadoOferta":"NoSeSabe","motivoOferta":"x","ofertaLeida":true,"encaje":"Medio"}"""),
+            (TareaAgente.AnalizarEncaje, null),
+            (TareaAgente.AnalizarEncaje, "no es json"),
+            (TareaAgente.AnalizarEncaje, """{"estadoOferta":1}"""),
+            (TareaAgente.AnalizarEncaje, """{"estadoOferta":"Cerrada, Abierta"}"""),
+            (TareaAgente.ExtraerRegistro, """{"estadoOferta":"Cerrada"}"""),
+        };
+        await using (var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync())
+        {
+            foreach (var (tarea, json) in resultados)
+            {
+                var ejecucion = EjecucionAgente.Nueva(tarea, "{}", 0.50m, 300, null, Ahora);
+                ejecucion.Empezar(Ahora, null, null);
+                ejecucion.Terminar(Ahora, 0m, null, null, "x", json, null, null);
+                db.EjecucionesAgente.Add(ejecucion);
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var lista = await http.GetFromJsonAsync<JsonElement>("/api/agentes/ejecuciones");
+        var estados = lista.EnumerateArray().Reverse()
+            .Select(e => e.GetProperty("estadoOferta") is { ValueKind: JsonValueKind.String } s ? s.GetString() : null).ToList();
+
+        Assert.Equal(["Cerrada", "NoSeSabe", null, null, null, null, null], estados);
     }
 
     [Theory]

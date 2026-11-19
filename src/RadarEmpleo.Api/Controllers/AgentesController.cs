@@ -7,12 +7,11 @@ using RadarEmpleo.Services.Contratos;
 namespace RadarEmpleo.Api.Controllers;
 
 /// <summary>
-/// Agentes de Claude: estado y gasto de hoy, lista y detalle de las ejecuciones, cancelar y reintentar. Solo desde el
-/// PC (endpoint «Local»), con <c>Agentes:Habilitado</c> y en modo Local: si no, 403. Los POST solo admiten <c>{}</c>
-/// (415 con un formulario o <c>text/plain</c>) y nada de lo que llega va al prompt. Sin <c>[Consumes]</c> a propósito:
-/// es una restricción de enrutado y daría el 415 antes que el 403; el 415 lo da el enlace de <see cref="PeticionVacia"/>,
-/// que ya va después del filtro. Lanzar cada tarea (analizar,
-/// extraer el registro, rastreo) llega en la F7b y la F7c.
+/// Agentes de Claude: analizar el encaje de una candidatura, estado y gasto de hoy, lista y detalle de las ejecuciones,
+/// cancelar y reintentar. Solo desde el PC (endpoint «Local»), con <c>Agentes:Habilitado</c> y en modo Local: si no, 403.
+/// Los POST solo admiten <c>{}</c> (415 con un formulario o <c>text/plain</c>) y nada de lo que llega va al prompt. Sin
+/// <c>[Consumes]</c> a propósito: es una restricción de enrutado y daría el 415 antes que el 403; el 415 lo da el enlace
+/// de <see cref="PeticionVacia"/>, que ya va después del filtro. Extraer el registro llega en la F7b y el rastreo en la F7c.
 /// </summary>
 [ApiController]
 [Route("api/agentes")]
@@ -31,6 +30,21 @@ public class AgentesController(AgentesService agentes, DisponibilidadAgentes dis
         var motivo = disponibilidad.Motivo(HttpContext);
         return await agentes.EstadoAsync(motivo is null, motivo, cancelacion);
     }
+
+    /// <summary>
+    /// Analiza con Claude el encaje de una candidatura: 202 con la ejecución y su <c>Location</c>, o 200 con la que ya
+    /// estaba en cola o en curso para ella. 404 si no existe; 409 si está descartada o cerrada, sin carpeta Curriculum o
+    /// con el tope de hoy. Lo que va al prompt sale de la BD al prepararla, nunca de la petición.
+    /// </summary>
+    [HttpPost("analizar/{candidaturaId:int}")]
+    [ProducesResponseType<EjecucionAgenteDto>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<EjecucionAgenteDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
+    public async Task<ActionResult<EjecucionAgenteDto>> Analizar(int candidaturaId, PeticionVacia cuerpo, CancellationToken cancelacion) =>
+        Encolada(await agentes.EncolarAsync(TareaAgente.AnalizarEncaje, candidaturaId, cancelacion));
 
     /// <summary>Las últimas ejecuciones, de la más reciente a la más antigua. <paramref name="limite"/> va de 1 a 200 (si no, 400).</summary>
     [HttpGet("ejecuciones")]

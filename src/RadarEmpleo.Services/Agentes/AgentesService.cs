@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using RadarEmpleo.Data;
 using RadarEmpleo.Domain;
@@ -109,6 +110,28 @@ public sealed class AgentesService
     private static IQueryable<EjecucionAgente> Consulta(AppDbContext db) =>
         db.EjecucionesAgente.AsNoTracking().Include(e => e.Candidatura).ThenInclude(c => c!.Empresa);
 
+    /// <summary>
+    /// El <c>estadoOferta</c> que AnalizarEncaje deja en su <c>ResultadoJson</c> (<see cref="AnalisisEncajeGuardado"/>);
+    /// null en otras tareas, si no lo hay o si no se entiende.
+    /// </summary>
+    private static EstadoOferta? EstadoOfertaDe(EjecucionAgente e)
+    {
+        if (e.Tarea != TareaAgente.AnalizarEncaje || string.IsNullOrWhiteSpace(e.ResultadoJson)) return null;
+        try
+        {
+            using var json = JsonDocument.Parse(e.ResultadoJson);
+            if (json.RootElement.ValueKind != JsonValueKind.Object
+                || !json.RootElement.TryGetProperty("estadoOferta", out var estado) || estado.ValueKind != JsonValueKind.String)
+                return null;
+            var texto = estado.GetString();
+            return Enum.GetValues<EstadoOferta>().Where(v => v.ToString() == texto).Cast<EstadoOferta?>().FirstOrDefault();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private async Task<List<EjecucionAgenteDto>> ADtosAsync(AppDbContext db, List<EjecucionAgente> ejecuciones, CancellationToken cancelacion)
     {
         var ids = ejecuciones.Select(e => (int?)e.Id).ToList();
@@ -128,6 +151,7 @@ public sealed class AgentesService
             e.CandidaturaId,
             e.Candidatura is { } c ? new CandidaturaBreveDto(c.Id, c.Empresa.Nombre, c.Puesto, c.Estado, c.Enlace) : null,
             rastreoDe.TryGetValue(e.Id, out var rastreo) ? rastreo : null,
+            EstadoOfertaDe(e),
             PuedeCancelar: e.Estado == EstadoEjecucion.EnCola || (e.Estado == EstadoEjecucion.EnCurso && !e.CancelacionPedida),
             PuedeReintentar: e.Estado is EstadoEjecucion.Error or EstadoEjecucion.Cancelada && conManejador[e.Tarea])).ToList();
     }
