@@ -1059,3 +1059,14 @@ Encontrados por el revisor .NET, el auditor de seguridad y el tester en el PR 4.
 - `EstadoOfertaDe` parsea cada `ResultadoJson` de AnalizarEncaje en el listado (como mucho unos 2 MB con 200): si crece, proyectar solo el campo o leer con `Utf8JsonReader`.
 - En Development, cualquier app en `localhost:4200` pasa el filtro de `Sec-Fetch-Site`; hoy lo paran el 415 y la falta de CORS. Revisarlo si algún día se añade CORS para el front de desarrollo.
 - Sin probar todavía (en la aceptación real con el OK de Eduardo): procesos vivos al cancelar o cerrar la API con el ejecutor Cli e inyección con un `claude` real; `X-Radar-Token` no está implementado aún.
+
+## Pendientes menores de la F7b (PR 6)
+
+- El tope del evaluador se puede pasar unos céntimos en la última oferta (Claude se pasa de `--max-budget-usd` en un turno): reservar margen (×1,3) o avisarlo en el resumen.
+- Si algo lanza una excepción a mitad, no se escribe `resumen.md` con lo ya gastado: validar `esperado.json` antes del bucle y escribir el resumen en un `finally`.
+- El hash del prompt cambia con CRLF/LF: calcularlo con `ReplaceLineEndings("\n")` (y valorar un `.gitattributes`).
+- `--salida` puede sobrescribir y mezclar logs: crear siempre una subcarpeta con la fecha.
+- La ruta por defecto de `claude.exe` está copiada de `OpcionesRadar.RutaClaudeEfectiva`: moverla a Services y compartirla.
+- El id de oferta con `[0-9]{2}` en vez de `\d{2}` (que acepta dígitos Unicode).
+- Las opciones de la consola no tienen tests: sacarlas a una función pura (`OpcionesEvaluacion.Leer`) y probarlas.
+- Algunos encajes esperados dependen de cosas que `perfil-ejemplo.md` no dice (titulación, inglés en reuniones, «C# moderno»): revisarlo si la prueba A falla justo ahí.
