@@ -646,6 +646,7 @@ public class AnalizadorRegistroTests
     [Theory]
     [InlineData("")]
     [InlineData("\n  \n")]
+    [InlineData("​\n‮ ﻿\n")]
     [InlineData("| Fecha | Empresa | Puesto | Estado |\n|---|---|---|---|\n| 2026-09-01 | Acme | Uno | Enviada |\n## Rastreo 03/11\n- Algo\n")]
     public void TextoLibre_SoloTablaRastreosOBlancos_EstaVacio(string texto) =>
         Assert.True(AnalizadorRegistro.TextoLibre(texto).Vacio);

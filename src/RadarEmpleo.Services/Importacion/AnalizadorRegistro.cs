@@ -28,8 +28,8 @@ public sealed record TextoLibreRegistro(IReadOnlyList<LineaRegistro> Lineas)
     /// <summary>Las líneas unidas con saltos LF, como van al prompt de ExtraerRegistro.</summary>
     public string Texto => string.Join('\n', Lineas.Select(l => l.Texto));
 
-    /// <summary>No queda nada que leer: solo líneas en blanco, o ninguna.</summary>
-    public bool Vacio => Lineas.All(l => string.IsNullOrWhiteSpace(l.Texto));
+    /// <summary>No queda nada que leer: ninguna línea, o solo en blanco o con caracteres invisibles.</summary>
+    public bool Vacio => Lineas.All(l => string.IsNullOrWhiteSpace(Agentes.PlantillaPrompt.QuitarInvisibles(l.Texto)));
 }
 
 /// <summary>

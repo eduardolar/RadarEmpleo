@@ -209,15 +209,43 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     [Fact]
-    public async Task TextoLibreDemasiadoLargo_DaErrorSinClaudeNiGasto()
+    public async Task TextoLibreEnElTopeExacto_VaEnteroAClaude()
     {
-        AntesDelRegistro(new string('x', ManejadorExtraerRegistro.LargoRegistro));
+        var texto = new string('x', ManejadorExtraerRegistro.LargoRegistro);
+        File.WriteAllText(_rutas.Registro!, texto);
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([])));
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
+        Assert.Contains(texto + "\n", Assert.Single(_claude.Peticiones).EntradaEstandar);
+    }
+
+    [Theory]
+    [InlineData(ManejadorExtraerRegistro.LargoRegistro + 1, "x")]
+    // «ﬀ» es un carácter que NFKC convierte en «ff»: 125.001 pasan a 250.002 al limpiarlo, y se mide lo limpio.
+    [InlineData(ManejadorExtraerRegistro.LargoRegistro / 2 + 1, "ﬀ")]
+    public async Task TextoLibreQueYaLimpioPasaDelTope_DaErrorSinClaudeNiGasto(int veces, string caracter)
+    {
+        File.WriteAllText(_rutas.Registro!, string.Concat(Enumerable.Repeat(caracter, veces)));
 
         var ejecucion = await ExtraerAsync();
 
         Assert.Equal(EstadoEjecucion.Error, ejecucion.Estado);
         Assert.Equal(ManejadorExtraerRegistro.MensajeDemasiadoLargo, ejecucion.Error);
         Assert.Equal(0m, ejecucion.CosteUsd);
+        Assert.Empty(_claude.Peticiones);
+    }
+
+    [Fact]
+    public async Task RegistroConSoloInvisiblesFueraDeLaTabla_TerminaEnOkSinClaude()
+    {
+        File.WriteAllText(_rutas.Registro!, "​‮\n﻿ ⁦\n| Fecha | Empresa | Puesto | Estado |\n|---|---|---|---|\n| 2026-09-01 | Acme | Uno | Enviada |\n");
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
+        Assert.Equal(ManejadorExtraerRegistro.MensajeSinTextoLibre, ejecucion.Resumen);
         Assert.Empty(_claude.Peticiones);
     }
 

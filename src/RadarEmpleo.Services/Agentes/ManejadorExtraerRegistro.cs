@@ -53,11 +53,13 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
 
     public async Task<PreparacionTarea> ConstruirAsync(EjecucionAgente ejecucion, ContextoTarea contexto, CancellationToken cancelacion)
     {
-        var libre = AnalizadorRegistro.TextoLibre(await lector.LeerRegistroAsync(cancelacion));
-        if (libre.Vacio)
+        var texto = AnalizadorRegistro.TextoLibre(await lector.LeerRegistroAsync(cancelacion)).Texto;
+        // Se mide lo que de verdad iría al prompt (sin invisibles y con NFKC, que puede alargarlo): así Rellenar nunca
+        // recorta en silencio, y un texto que solo tiene invisibles cuenta como vacío.
+        var limpio = PlantillaPrompt.Normalizar(texto, unaLinea: false);
+        if (string.IsNullOrWhiteSpace(limpio))
             return PreparacionTarea.Terminada(new ResultadoTarea(MensajeSinTextoLibre, Guardar(new ResultadoExtraccionRegistro([], [], []))));
-        var texto = libre.Texto;
-        if (texto.Length > LargoRegistro) throw new ReglaNegocioException(MensajeDemasiadoLargo);
+        if (limpio.Length > LargoRegistro) throw new ReglaNegocioException(MensajeDemasiadoLargo);
 
         var prompt = PlantillaPrompt.Rellenar(Prompts.Plantilla(Definicion), new Dictionary<string, DatoPrompt>
         {
