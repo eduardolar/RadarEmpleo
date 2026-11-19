@@ -297,6 +297,41 @@ public sealed class AgentesApiTests
         await EsperarAsync(http, id, "Cancelada");
     }
 
+    [Fact]
+    public async Task EstadoOferta_SoloEnAnalizarEncajeYSiLoDejoEnSuResultado()
+    {
+        var reloj = new RelojFijo(Ahora);
+        using var fabrica = Fabrica(reloj: reloj);
+        using var http = fabrica.CreateClient();
+        var resultados = new (TareaAgente Tarea, string? Json)[]
+        {
+            (TareaAgente.AnalizarEncaje, """{"estadoOferta":"Cerrada","motivoOferta":"x","ofertaLeida":false}"""),
+            (TareaAgente.AnalizarEncaje, """{"estadoOferta":"NoSeSabe","motivoOferta":"x","ofertaLeida":true,"encaje":"Medio"}"""),
+            (TareaAgente.AnalizarEncaje, null),
+            (TareaAgente.AnalizarEncaje, "no es json"),
+            (TareaAgente.AnalizarEncaje, """{"estadoOferta":1}"""),
+            (TareaAgente.AnalizarEncaje, """{"estadoOferta":"Cerrada, Abierta"}"""),
+            (TareaAgente.ExtraerRegistro, """{"estadoOferta":"Cerrada"}"""),
+        };
+        await using (var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync())
+        {
+            foreach (var (tarea, json) in resultados)
+            {
+                var ejecucion = EjecucionAgente.Nueva(tarea, "{}", 0.50m, 300, null, Ahora);
+                ejecucion.Empezar(Ahora, null, null);
+                ejecucion.Terminar(Ahora, 0m, null, null, "x", json, null, null);
+                db.EjecucionesAgente.Add(ejecucion);
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var lista = await http.GetFromJsonAsync<JsonElement>("/api/agentes/ejecuciones");
+        var estados = lista.EnumerateArray().Reverse()
+            .Select(e => e.GetProperty("estadoOferta") is { ValueKind: JsonValueKind.String } s ? s.GetString() : null).ToList();
+
+        Assert.Equal(["Cerrada", "NoSeSabe", null, null, null, null, null], estados);
+    }
+
     [Theory]
     [InlineData(CanalPeticion.Local, true, true)]
     [InlineData(CanalPeticion.Remoto, true, false)]
