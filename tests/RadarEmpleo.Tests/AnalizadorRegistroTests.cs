@@ -600,4 +600,54 @@ public class AnalizadorRegistroTests
 
         Assert.Equal("Uno", UnicaFila(AnalizadorRegistro.Analizar(texto.ReplaceLineEndings("\r\n"))).Puesto);
     }
+
+    [Fact]
+    public void TextoLibre_RegistroDeEjemplo_QuitaLaTablaYLosRastreosYDejaLoDemasTalCualConSuNumero()
+    {
+        var lineas = Ejemplo().ReplaceLineEndings("\n").Split('\n');
+
+        var libre = AnalizadorRegistro.TextoLibre(Ejemplo().ReplaceLineEndings("\r\n"));
+
+        Assert.False(libre.Vacio);
+        Assert.All(libre.Lineas, l => Assert.Equal(lineas[l.Numero - 1], l.Texto));
+        Assert.Contains(libre.Lineas, l => l.Texto == "- Empresa Texto Uno S.L.: ENVIADA por correo el 2026-09-10, sin respuesta.");
+        Assert.Contains(libre.Lineas, l => l.Texto == "ENVIADA el 2026-08-30. Pedían disponibilidad inmediata.");
+        // La otra tabla (sin las columnas de candidaturas) es texto libre; la de candidaturas no, aunque sí el título de su sección.
+        Assert.Contains(libre.Lineas, l => l.Texto == "| Portfolio | Añadir capturas |");
+        Assert.Contains(libre.Lineas, l => l.Texto == "## Tabla de candidaturas");
+        Assert.DoesNotContain(libre.Lineas, l => l.Texto.Contains("Talleres Ficticios", StringComparison.Ordinal));
+        Assert.DoesNotContain(libre.Lineas, l => l.Texto.Contains("Rastreo", StringComparison.Ordinal));
+        Assert.DoesNotContain(libre.Lineas, l => l.Texto.Contains("lista numerada", StringComparison.Ordinal));
+        Assert.DoesNotContain('\r', libre.Texto);
+        Assert.Equal(string.Join('\n', libre.Lineas.Select(l => l.Texto)), libre.Texto);
+    }
+
+    [Fact]
+    public void TextoLibre_RastreoSinFechaYConSubapartados_SaleEnteroHastaElSiguienteEncabezadoDeNivelDos()
+    {
+        const string texto = "# Registro\n## Rastreo sin fecha\n- Oferta rastreada\n### Detalle\n- Más del rastreo\n## Septiembre\n- Empresa Libre: ENVIADA\n# Otro\n";
+
+        var libre = AnalizadorRegistro.TextoLibre(texto);
+
+        Assert.Equal(
+            [new LineaRegistro(1, "# Registro"), new LineaRegistro(6, "## Septiembre"), new LineaRegistro(7, "- Empresa Libre: ENVIADA"),
+             new LineaRegistro(8, "# Otro"), new LineaRegistro(9, "")],
+            libre.Lineas);
+    }
+
+    [Fact]
+    public void TextoLibre_ConMarcaBomYSinTabla_LaQuitaYNoPierdeNada()
+    {
+        var libre = AnalizadorRegistro.TextoLibre("﻿- Primera\r\n- Segunda");
+
+        Assert.Equal([new LineaRegistro(1, "- Primera"), new LineaRegistro(2, "- Segunda")], libre.Lineas);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("\n  \n")]
+    [InlineData("​\n‮ ﻿\n")]
+    [InlineData("| Fecha | Empresa | Puesto | Estado |\n|---|---|---|---|\n| 2026-09-01 | Acme | Uno | Enviada |\n## Rastreo 03/11\n- Algo\n")]
+    public void TextoLibre_SoloTablaRastreosOBlancos_EstaVacio(string texto) =>
+        Assert.True(AnalizadorRegistro.TextoLibre(texto).Vacio);
 }

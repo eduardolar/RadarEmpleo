@@ -8,9 +8,9 @@ namespace RadarEmpleo.Services.Agentes;
 /// <param name="CarpetaDatos">Carpeta de datos de la app, que la tarea nunca puede leer (<see cref="ValoresArgumentos"/>).</param>
 public sealed record ContextoTarea(string CarpetaTrabajo, string RutaLog, string CarpetaDatos)
 {
-    /// <summary>La petición con lo fijo de la definición (tiempo máximo) y lo que pone el manejador.</summary>
+    /// <summary>La petición con lo fijo de la definición (tiempo máximo, salida privada) y lo que pone el manejador.</summary>
     public PeticionClaude Peticion(DefinicionTarea definicion, IReadOnlyList<string> argumentos, string entrada) =>
-        new(definicion.Tarea, argumentos, CarpetaTrabajo, entrada, definicion.TiempoMaximo, RutaLog);
+        new(definicion.Tarea, argumentos, CarpetaTrabajo, entrada, definicion.TiempoMaximo, RutaLog, definicion.SalidaConDatosPersonales);
 }
 
 /// <summary>Lo que deja una tarea al terminar bien: la frase para enseñar y la salida ya validada.</summary>

@@ -207,6 +207,24 @@ public sealed class EjecutorClaudeCliTests : IDisposable
     }
 
     [Fact]
+    public async Task ConLaSalidaPrivada_ElLogNoGuardaResultNiStructuredOutputSoloSuResumen()
+    {
+        const string Centinela = "EMPRESA-CENTINELA-DEL-REGISTRO";
+        var salida = $$$"""{"type":"result","subtype":"success","is_error":false,"num_turns":3,"total_cost_usd":0.42,"result":"{{{Centinela}}}","structured_output":{"cita":"{{{Centinela}}}"}}""";
+        File.WriteAllText(Ruta("respuesta.json"), salida);
+
+        var respuesta = await Ejecutar(Ejecutor("--sim:modo=respuesta", $"--sim:respuesta={Ruta("respuesta.json")}"),
+            Peticion() with { SalidaPrivada = true });
+
+        Assert.True(respuesta.Correcta);
+        Assert.Equal(Centinela, respuesta.SalidaEstructurada!.Value.GetProperty("cita").GetString());
+        var log = await File.ReadAllTextAsync(Ruta("logs/ejecucion-1.log"));
+        Assert.DoesNotContain(Centinela, log);
+        Assert.Contains("subtype success, coste 0.42, turnos 3.", log);
+        Assert.Contains($"{Encoding.UTF8.GetByteCount(salida)} bytes, sha256 ", log);
+    }
+
+    [Fact]
     public async Task Version_LaLeeYLaGuarda()
     {
         var ejecutor = Ejecutor();

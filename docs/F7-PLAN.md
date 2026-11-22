@@ -1070,3 +1070,19 @@ Encontrados por el revisor .NET, el auditor de seguridad y el tester en el PR 4.
 - El id de oferta con `[0-9]{2}` en vez de `\d{2}` (que acepta dígitos Unicode).
 - Las opciones de la consola no tienen tests: sacarlas a una función pura (`OpcionesEvaluacion.Leer`) y probarlas.
 - Algunos encajes esperados dependen de cosas que `perfil-ejemplo.md` no dice (titulación, inglés en reuniones, «C# moderno»): revisarlo si la prueba A falla justo ahí.
+
+## Pendientes menores de la F7b (PR 7)
+
+Encontrados por el revisor .NET y el auditor de seguridad en el PR 7. No bloquean; se arreglan en un PR posterior de la F7b.
+
+- `PlantillaPrompt.QuitarInvisibles` (compartida) no quita los selectores de variación suplementarios U+E0100–E01EF.
+- ExtraerRegistro admite un `enlace` `javascript:` o `file:` y fechas absurdas (0001, 9999). En la vista previa del PR 9, el enlace solo va como `href` si es https (`EnlaceSeguro`) y las dudas se pintan siempre como texto.
+- Se guarda `motivoDescarte` aunque el estado no sea Descartada.
+- TOCTOU entre el hash «antes» y el texto leído para el prompt: usar `LeerRegistroConFechaAsync` y su `Hash`.
+- La `cita` sale del texto limpiado (NFKC, `‹‹‹`): el PR 8 tiene que compararla con la misma limpieza.
+- Una tabla con columnas parecidas dentro de un rastreo tapa la buena, en los dos analizadores.
+- Casos raros de las secciones de rastreo: «#» dentro de un bloque de código, «##Otra» sin espacio y U+2028.
+- El enlace queda sin normalizar hasta que pasa por `ReglasImportacion`.
+- La salida teórica (1000 filas con todos los campos al máximo) ronda los 10 MB, frente a `MaximoSalida` de 4 MB.
+- `LeerBytesAsync` carga el registro entero en memoria, sin tope.
+- Añadir `extraer-registro` a `CanalKestrelTests`.

@@ -58,7 +58,7 @@ builder.Services.AddSingleton<ILectorCurriculum, LectorCurriculum>();
 builder.Services.AddSingleton<IExportadorRadar, ExportadorRadarMd>();
 
 // --- Agentes de Claude: una ejecución a la vez, con la BD como fuente de verdad ---
-// Un manejador por tarea (IManejadorTarea): sin manejador, la tarea no se encola. ExtraerRegistro llega en la F7b y Rastreo en la F7c.
+// Un manejador por tarea (IManejadorTarea): sin manejador, la tarea no se encola. Rastreo llega en la F7c.
 builder.Services.AddSingleton(sp => ConfiguracionAgentes.Opciones(
     sp.GetRequiredService<IOptions<OpcionesAgentes>>().Value, sp.GetRequiredService<IOptions<OpcionesRadar>>().Value));
 builder.Services.AddSingleton(sp => ConfiguracionAgentes.Ejecutor(sp,
@@ -66,6 +66,7 @@ builder.Services.AddSingleton(sp => ConfiguracionAgentes.Ejecutor(sp,
 builder.Services.AddSingleton(sp => ConfiguracionAgentes.Descargador(sp.GetRequiredService<IOptions<OpcionesAgentes>>().Value));
 builder.Services.AddSingleton<ComprobadorOfertaAbierta>();
 builder.Services.AddScoped<IManejadorTarea, ManejadorAnalizarEncaje>();
+builder.Services.AddScoped<IManejadorTarea, ManejadorExtraerRegistro>();
 builder.Services.AddSingleton<BloqueoCompartido>();
 builder.Services.AddSingleton<GuardiaCola>();
 builder.Services.AddSingleton<ColaEjecuciones>();

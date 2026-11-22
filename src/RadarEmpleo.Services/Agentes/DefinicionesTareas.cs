@@ -20,6 +20,8 @@ public enum CarpetaTrabajo
 /// <param name="Permitidas">El de <c>--allowedTools</c>, o null para no pasarlo.</param>
 /// <param name="Denegadas">El de <c>--disallowedTools</c>, o null para no pasarlo.</param>
 /// <param name="Modelo">El de <c>--model</c>, o null para el de por defecto.</param>
+/// <param name="SalidaConDatosPersonales">Lo que responde son datos de Eduardo (las líneas de su registro): el log no guarda
+/// la salida, solo su tamaño, su hash, el subtype, el coste y los turnos.</param>
 public sealed record DefinicionTarea(
     TareaAgente Tarea,
     decimal PresupuestoUsd,
@@ -29,7 +31,8 @@ public sealed record DefinicionTarea(
     string? Permitidas,
     string? Denegadas,
     string? Modelo,
-    string NombrePrompt);
+    string NombrePrompt,
+    bool SalidaConDatosPersonales = false);
 
 /// <summary>
 /// Las tres tareas de la F7 (apartado 4.4 del plan, con lo que fijó el paso 0). AnalizarEncaje y ExtraerRegistro van
@@ -68,7 +71,8 @@ public static class DefinicionesTareas
         Permitidas: null,
         Denegadas: null,
         Modelo: "sonnet",
-        NombrePrompt: "extraer-registro");
+        NombrePrompt: "extraer-registro",
+        SalidaConDatosPersonales: true);
 
     // F7c: el alcance web del rastreo (WebFetch y WebSearch sin límite de dominio) se decide al llegar a la F7c.
     public static readonly DefinicionTarea Rastreo = new(

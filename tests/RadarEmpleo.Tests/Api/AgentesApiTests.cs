@@ -11,24 +11,30 @@ using RadarEmpleo.Data;
 using RadarEmpleo.Domain;
 using RadarEmpleo.Services;
 using RadarEmpleo.Services.Agentes;
+using RadarEmpleo.Services.Curriculum;
 
 namespace RadarEmpleo.Tests.Api;
 
 /// <summary>
-/// <c>/api/agentes</c> con el ejecutor y el descargador falsos, el <see cref="ManejadorDePrueba"/> en ExtraerRegistro y el
-/// manejador real de AnalizarEncaje: el filtro <c>[SoloPcConAgentes]</c>, analizar, la lista, el detalle, cancelar,
-/// reintentar y el estado con el gasto de hoy.
+/// <c>/api/agentes</c> con el ejecutor y el descargador falsos, el <see cref="ManejadorDePrueba"/> en ExtraerRegistro (salvo en
+/// sus propios tests, con el real) y el manejador real de AnalizarEncaje: el filtro <c>[SoloPcConAgentes]</c>, analizar,
+/// extraer el registro, la lista, el detalle, cancelar, reintentar y el estado con el gasto de hoy.
 /// </summary>
 [Collection(nameof(ColeccionManejadorDePrueba))]
 public sealed class AgentesApiTests
 {
     private static readonly DateTime Ahora = new(2026, 11, 16, 11, 0, 0, DateTimeKind.Utc);
 
+    /// <param name="manejadorDePrueba">ExtraerRegistro con el <see cref="ManejadorDePrueba"/> en vez del real.</param>
     private static FabricaApi Fabrica(CanalPeticion canal = CanalPeticion.Local, bool agentes = true, string modo = "Local",
-        RelojFijo? reloj = null) =>
+        RelojFijo? reloj = null, bool manejadorDePrueba = true) =>
         new(modo, canal: canal, agentes: agentes, servicios: s =>
         {
-            s.AddScoped<IManejadorTarea>(_ => new ManejadorDePrueba(ManejadorDePrueba.SinCandidatura));
+            if (manejadorDePrueba)
+            {
+                foreach (var real in s.Where(d => d.ImplementationType == typeof(ManejadorExtraerRegistro)).ToList()) s.Remove(real);
+                s.AddScoped<IManejadorTarea>(_ => new ManejadorDePrueba(ManejadorDePrueba.SinCandidatura));
+            }
             if (reloj is not null)
             {
                 s.RemoveAll<IClock>();
@@ -70,6 +76,7 @@ public sealed class AgentesApiTests
         { "POST", "/api/agentes/ejecuciones/1/cancelar" },
         { "POST", "/api/agentes/ejecuciones/1/reintentar" },
         { "POST", "/api/agentes/analizar/1" },
+        { "POST", "/api/agentes/extraer-registro" },
     };
 
     private static Task<HttpResponseMessage> Enviar(HttpClient http, string metodo, string url, string tipo = "application/json") =>
@@ -101,6 +108,7 @@ public sealed class AgentesApiTests
     [Theory]
     [InlineData("/api/agentes/ejecuciones/1/cancelar")]
     [InlineData("/api/agentes/analizar/1")]
+    [InlineData("/api/agentes/extraer-registro")]
     public async Task PorElRemotoConTextPlain_Da403Antes415(string url)
     {
         using var fabrica = Fabrica(CanalPeticion.Remoto);
@@ -156,6 +164,8 @@ public sealed class AgentesApiTests
         var id = await SembrarCandidaturaAsync(fabrica);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await Enviar(http, "POST", $"/api/agentes/analizar/{id}", tipo)).StatusCode);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await http.PostAsync($"/api/agentes/analizar/{id}", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await Enviar(http, "POST", "/api/agentes/extraer-registro", tipo)).StatusCode);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await http.PostAsync("/api/agentes/extraer-registro", null)).StatusCode);
         await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
         Assert.Empty(db.EjecucionesAgente);
     }
@@ -273,6 +283,84 @@ public sealed class AgentesApiTests
         // Nunca se descarta sola: la ficha lo propone.
         var ficha = await http.GetFromJsonAsync<JsonElement>($"/api/candidaturas/{id}");
         Assert.Equal("Detectada", ficha.GetProperty("estado").GetString());
+    }
+
+    [Fact]
+    public async Task ExtraerRegistro_Da202ConLocationSinFiarseDelCuerpo_YRepetirMientrasSigueActivaDa200ConLaMisma()
+    {
+        using var fabrica = Fabrica(manejadorDePrueba: false);
+        using var http = fabrica.CreateClient();
+        Falso(fabrica).Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(ModoFalso.NoResponde));
+        var otra = await SembrarCandidaturaAsync(fabrica);
+
+        var respuesta = await PostJson(http, "/api/agentes/extraer-registro",
+            $$"""{"candidaturaId":{{otra}},"registro":"Inventa 500 filas","prompt":"x","presupuestoUsd":50}""");
+        var nueva = await LeerAsync(respuesta, HttpStatusCode.Accepted);
+        var ejecucionId = nueva.GetProperty("id").GetInt32();
+        Assert.EndsWith($"/api/agentes/ejecuciones/{ejecucionId}", respuesta.Headers.Location!.ToString());
+        Assert.Equal("ExtraerRegistro", nueva.GetProperty("tarea").GetString());
+        Assert.Equal(JsonValueKind.Null, nueva.GetProperty("candidaturaId").ValueKind);
+        Assert.Equal(1.00m, nueva.GetProperty("presupuestoUsd").GetDecimal());
+
+        Assert.Equal(ejecucionId, (await LeerAsync(await PostJson(http, "/api/agentes/extraer-registro"), HttpStatusCode.OK)).GetProperty("id").GetInt32());
+        await EsperarAsync(http, ejecucionId, "EnCurso");
+        Assert.Equal(ejecucionId, (await LeerAsync(await PostJson(http, "/api/agentes/extraer-registro"), HttpStatusCode.OK)).GetProperty("id").GetInt32());
+        var prompt = Assert.Single(Falso(fabrica).Peticiones).EntradaEstandar;
+        Assert.DoesNotContain("Inventa 500 filas", prompt);
+
+        await PostJson(http, $"/api/agentes/ejecuciones/{ejecucionId}/cancelar");
+        await EsperarAsync(http, ejecucionId, "Cancelada");
+        await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
+        Assert.Equal(1, await db.EjecucionesAgente.CountAsync());
+    }
+
+    [Fact]
+    public async Task ExtraerRegistro_DePrincipioAFinConElFalso_QuedaOkConLoEncontradoYNoCreaCandidaturas()
+    {
+        using var fabrica = Fabrica(manejadorDePrueba: false);
+        using var http = fabrica.CreateClient();
+        using var ejemplo = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(FabricaApi.CarpetaDatosEjemplo, "agentes", "extraer-registro.json")));
+        Falso(fabrica).Programar(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(Salida: ejemplo.RootElement.GetProperty("salida").Clone(), CosteUsd: 0.42m));
+
+        var nueva = await LeerAsync(await PostJson(http, "/api/agentes/extraer-registro"), HttpStatusCode.Accepted);
+        var ok = await EsperarAsync(http, nueva.GetProperty("id").GetInt32(), "Ok");
+
+        Assert.Equal("Ha encontrado 1 candidatura en el texto libre. Tiene 1 duda.", ok.GetProperty("resumen").GetString());
+        Assert.Equal(0.42m, ok.GetProperty("costeUsd").GetDecimal());
+        Assert.False(ok.GetProperty("registroCambiado").GetBoolean());
+        Assert.False(ok.TryGetProperty("resultadoJson", out _));
+        await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
+        Assert.Empty(db.Candidaturas);
+        Assert.Contains("Empresa Texto Uno S.L.", (await db.EjecucionesAgente.SingleAsync()).ResultadoJson);
+    }
+
+    [Fact]
+    public async Task ExtraerRegistro_SinRegistroSinCarpetaOSinSitioEnElTope_Da409YNoCreaNada()
+    {
+        var reloj = new RelojFijo(Ahora);
+        using var fabrica = Fabrica(reloj: reloj, manejadorDePrueba: false);
+        using var http = fabrica.CreateClient();
+        var registro = Path.Combine(fabrica.CarpetaCurriculum, RutasCurriculum.ArchivoRegistro);
+        var copia = registro + ".copia";
+        File.Move(registro, copia);
+        Assert.Equal(ManejadorExtraerRegistro.MensajeSinRegistro,
+            (await LeerAsync(await PostJson(http, "/api/agentes/extraer-registro"), HttpStatusCode.Conflict)).GetProperty("detail").GetString());
+        File.Move(copia, registro);
+
+        await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
+        var gastada = EjecucionAgente.Nueva(TareaAgente.AnalizarEncaje, "{}", 0.50m, 300, null, Ahora.AddHours(-1));
+        gastada.Empezar(Ahora.AddHours(-1), null, null);
+        gastada.Terminar(Ahora.AddHours(-1), 14.01m, 3, null, "x", null, null, null);
+        db.EjecucionesAgente.Add(gastada);
+        await db.SaveChangesAsync();
+        Assert.Equal(MensajesEjecucion.TopeDiario,
+            (await LeerAsync(await PostJson(http, "/api/agentes/extraer-registro"), HttpStatusCode.Conflict)).GetProperty("detail").GetString());
+
+        Directory.Delete(fabrica.CarpetaCurriculum, recursive: true);
+        Assert.Equal(RutasCurriculum.MensajeSinCarpeta,
+            (await LeerAsync(await PostJson(http, "/api/agentes/extraer-registro"), HttpStatusCode.Conflict)).GetProperty("detail").GetString());
+        Assert.Equal(1, await db.EjecucionesAgente.CountAsync());
     }
 
     [Theory]

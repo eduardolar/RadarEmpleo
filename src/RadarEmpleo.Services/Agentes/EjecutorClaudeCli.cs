@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -14,7 +15,8 @@ namespace RadarEmpleo.Services.Agentes;
 /// el error se leen a la vez (para que el proceso no se quede bloqueado con la salida llena). Al cortar por tiempo
 /// o cancelación mata el árbol entero; en Windows, además, el proceso entra en un <see cref="TrabajoWindows"/> que
 /// lo mata con sus hijos si la API muere. El log (<c>logs\ejecucion-&lt;id&gt;.log</c>) guarda los argumentos, el
-/// error y la salida, pero nunca el prompt.
+/// error y la salida (de una <see cref="PeticionClaude.SalidaPrivada"/>, solo su tamaño, hash, subtype, coste y turnos),
+/// pero nunca el prompt.
 /// </summary>
 public sealed partial class EjecutorClaudeCli : IEjecutorClaude
 {
@@ -98,11 +100,19 @@ public sealed partial class EjecutorClaudeCli : IEjecutorClaude
         await log.WriteLineAsync($"[{_reloj.AhoraUtc:O}] Fin: código {codigo?.ToString(CultureInfo.InvariantCulture) ?? "?"}{(corte is { } c ? $", cortada ({c})" : "")}");
         await log.WriteLineAsync("--- stderr ---");
         await log.WriteLineAsync(textoError);
+        var respuesta = corte is { } motivo ? RespuestaClaude.Fallida(motivo) : Interpretar(textoSalida, codigo ?? -1);
         await log.WriteLineAsync("--- stdout ---");
-        await log.WriteLineAsync(textoSalida);
+        await log.WriteLineAsync(peticion.SalidaPrivada ? ResumenSalida(textoSalida, respuesta) : textoSalida);
+        return respuesta;
+    }
 
-        if (corte is { } motivo) return RespuestaClaude.Fallida(motivo);
-        return Interpretar(textoSalida, codigo ?? -1);
+    /// <summary>Lo que el log guarda de una salida con datos personales: nada de su contenido.</summary>
+    private static string ResumenSalida(string salida, RespuestaClaude respuesta)
+    {
+        var bytes = Utf8SinBom.GetBytes(salida);
+        return $"(no se guarda: son datos personales) {bytes.Length} bytes, sha256 {Convert.ToHexStringLower(SHA256.HashData(bytes))}, " +
+            $"subtype {respuesta.Subtipo ?? "?"}, coste {respuesta.CosteUsd?.ToString(CultureInfo.InvariantCulture) ?? "?"}, " +
+            $"turnos {respuesta.Turnos?.ToString(CultureInfo.InvariantCulture) ?? "?"}.";
     }
 
     public async Task<string?> VersionAsync(CancellationToken cancelacion)
