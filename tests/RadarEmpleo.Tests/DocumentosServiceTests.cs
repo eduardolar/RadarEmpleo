@@ -496,10 +496,9 @@ public sealed class DocumentosServiceTests : ArnesSqliteTests, IDisposable
         Assert.Equal(3, await db.SaveChangesAsync());
     }
 
-    [Fact]
+    [FactSoloWindows("en Linux las mayúsculas cuentan y es otro archivo")]
     public async Task Vincular_ConOtrasMayusculas_GuardaLasDelDiscoYNoSePuedeDuplicar()
     {
-        if (!OperatingSystem.IsWindows()) return; // en Linux las mayúsculas cuentan: es otro archivo
         Crear($"{SemanaMarcoTalento}/{CvMarcoTalento}.pdf");
         var id = await CandidaturaAsync();
 
@@ -513,10 +512,9 @@ public sealed class DocumentosServiceTests : ArnesSqliteTests, IDisposable
         Assert.Equal("Ese documento ya está en la ficha.", ex.Message);
     }
 
-    [Fact]
+    [FactSoloWindows("los enlaces duros se crean con mklink y se detectan con la API de Windows")]
     public async Task Vincular_EnlaceDuroHaciaDocumentosPersonales_LanzaValidacion()
     {
-        if (!OperatingSystem.IsWindows()) return;
         var dni = Crear("Documentos personales/DNI.pdf", "dni");
         var falso = Path.Combine(_carpeta, SemanaMarcoTalento, $"{CvMarcoTalento}.pdf");
         Directory.CreateDirectory(Path.GetDirectoryName(falso)!);
@@ -528,10 +526,9 @@ public sealed class DocumentosServiceTests : ArnesSqliteTests, IDisposable
         Assert.Equal("rutaRelativa", ex.Campo);
     }
 
-    [Fact]
+    [FactSoloWindows("los enlaces duros se crean con mklink y se detectan con la API de Windows")]
     public async Task AbrirArchivo_SustituidoPorUnEnlaceDuroDespuesDeVincular_Null()
     {
-        if (!OperatingSystem.IsWindows()) return;
         var ruta = Crear($"{SemanaMarcoTalento}/{CvMarcoTalento}.pdf");
         var dni = Crear("Documentos personales/DNI.pdf", "dni");
         var documento = await _documentos.VincularAsync(await CandidaturaAsync(), new VincularDocumentoRequest($"{SemanaMarcoTalento}/{CvMarcoTalento}.pdf"));
@@ -541,10 +538,9 @@ public sealed class DocumentosServiceTests : ArnesSqliteTests, IDisposable
         Assert.Null(await _documentos.AbrirArchivoAsync(documento!.Id));
     }
 
-    [Fact]
+    [FactSoloWindows("los enlaces duros se crean con mklink y se detectan con la API de Windows")]
     public async Task Ficha_DocumentoQueSeConvierteEnEnlaceDuro_SaleComoNoEncontrado()
     {
-        if (!OperatingSystem.IsWindows()) return;
         var ruta = Crear($"{SemanaMarcoTalento}/{CvMarcoTalento}.pdf");
         var dni = Crear("Documentos personales/DNI.pdf", "dni");
         var id = await CandidaturaAsync();

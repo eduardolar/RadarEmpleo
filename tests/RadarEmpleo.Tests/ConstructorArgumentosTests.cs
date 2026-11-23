@@ -78,7 +78,21 @@ public class ConstructorArgumentosTests
         Assert.Throws<ArgumentException>(() => ConstructorArgumentos.Construir(DefinicionesTareas.AnalizarEncaje, "{no", Valores()));
     }
 
-    public static TheoryData<TareaAgente> Tareas => [TareaAgente.AnalizarEncaje, TareaAgente.ExtraerRegistro, TareaAgente.Rastreo];
+    private static readonly TareaAgente[] TodasLasTareas = [TareaAgente.AnalizarEncaje, TareaAgente.ExtraerRegistro, TareaAgente.Rastreo];
+
+    public static TheoryData<TareaAgente> Tareas => new(TodasLasTareas);
+
+    /// <summary>Las tareas que tienen <c>Read</c>: las que necesitan las denegaciones de lectura.</summary>
+    public static TheoryData<TareaAgente> TareasQueLeen => new(TodasLasTareas.Where(Lee));
+
+    private static bool Lee(TareaAgente tarea) =>
+        (Valor(Construir(DefinicionesTareas.De(tarea)!), "--tools") ?? "").Contains("Read", StringComparison.Ordinal);
+
+    [Fact]
+    public void AlMenosUnaTareaLee_ParaQueSeCompruebenLasDenegaciones()
+    {
+        Assert.Contains(TodasLasTareas, Lee);
+    }
 
     [Theory]
     [MemberData(nameof(Tareas))]
@@ -111,11 +125,10 @@ public class ConstructorArgumentosTests
     }
 
     [Theory]
-    [MemberData(nameof(Tareas))]
+    [MemberData(nameof(TareasQueLeen))]
     public void LasQueLeenDeniegaLaConfiguracionDeClaudeLaCarpetaDeDatosYAppsettings(TareaAgente tarea)
     {
         var argumentos = Construir(DefinicionesTareas.De(tarea)!);
-        if (!(Valor(argumentos, "--tools") ?? "").Contains("Read", StringComparison.Ordinal)) return;
         var denegadas = Valor(argumentos, "--disallowedTools")!.Split(',');
 
         Assert.Contains("Read(~/.claude/**)", denegadas);
@@ -151,22 +164,20 @@ public class ConstructorArgumentosTests
         Assert.Throws<ArgumentException>(() => ConstructorArgumentos.Construir(DefinicionesTareas.Rastreo, Esquema, Valores(informe: nombre)));
     }
 
-    [Theory]
+    [TheorySoloWindows("las carpetas con unidad (C:\\, D:\\) solo son rutas absolutas en Windows")]
     [InlineData(@"C:\Users\x\AppData\Local\RadarEmpleo", "//c/Users/x/AppData/Local/RadarEmpleo")]
     [InlineData(@"D:\datos\", "//d/datos")]
     public void RutaRegla_DaLaFormaQueEntiendeClaude(string carpeta, string regla)
     {
-        if (!OperatingSystem.IsWindows()) return;
         Assert.Equal(regla, ConstructorArgumentos.RutaRegla(carpeta));
     }
 
-    [Theory]
+    [TheorySoloWindows("las carpetas con unidad (C:\\) y las UNC solo son rutas absolutas en Windows")]
     [InlineData(@"C:\datos,Bash(x)")]
     [InlineData(@"C:\da(tos)")]
     [InlineData(@"\\servidor\recurso\datos")]
     public void RutaRegla_ConAlgoQueRomperiaLaLista_Lanza(string carpeta)
     {
-        if (!OperatingSystem.IsWindows()) return;
         Assert.Throws<ArgumentException>(() => ConstructorArgumentos.RutaRegla(carpeta));
     }
 

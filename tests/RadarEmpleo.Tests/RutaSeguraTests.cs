@@ -132,11 +132,9 @@ public sealed class RutaSeguraTests : IDisposable
     public void Resolver_RutaDemasiadoLarga_LaRechaza() =>
         AssertNoValida(_raiz, "Candidaturas/" + new string('a', 500) + ".pdf");
 
-    [Fact]
+    [FactSoloWindows("en Linux las mayúsculas cuentan y es otra carpeta")]
     public void Resolver_CarpetaPermitidaConOtrasMayusculasEnWindows_LaAcepta()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         Assert.StartsWith(_raiz, RutaSegura.Resolver(_raiz, "candidaturas/" + Semana + "/CV_MarcoTalento.pdf"));
     }
 
@@ -160,22 +158,11 @@ public sealed class RutaSeguraTests : IDisposable
         AssertNoValida(_raiz, "Archivo/DNI.pdf");
     }
 
-    [Fact]
+    [FactConEnlacesSimbolicos]
     public void Resolver_ArchivoQueEsUnEnlaceSimbolico_LoRechaza()
     {
         var enlace = Path.Combine(_raiz, "Candidaturas", Semana, "CV_enlace.pdf");
-        try
-        {
-            File.CreateSymbolicLink(enlace, Path.Combine(_fuera, "secreto.pdf"));
-        }
-        catch (IOException)
-        {
-            return; // Windows sin modo de desarrollador no deja crear enlaces simbólicos: lo cubre la unión.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return;
-        }
+        File.CreateSymbolicLink(enlace, Path.Combine(_fuera, "secreto.pdf"));
 
         AssertNoValida(_raiz, "Candidaturas/" + Semana + "/CV_enlace.pdf");
     }
@@ -255,32 +242,26 @@ public sealed class RutaSeguraTests : IDisposable
         Assert.Equal("Candidaturas/" + Semana + "/CV_MarcoTalento.pdf", RutaSegura.ComprobarAbierto(_raiz, abierto));
     }
 
-    [Fact]
+    [FactSoloWindows("la comprobación del archivo abierto es solo de Windows (la app solo corre en Windows)")]
     public void ComprobarAbierto_AbiertoAtravesDeUnaUnionHaciaFuera_LoRechaza()
     {
-        if (!OperatingSystem.IsWindows()) return; // la comprobación del archivo abierto es solo de Windows (la app solo corre en Windows)
-
         // Lo que pasaría si cambian la carpeta por una unión justo entre Resolver y abrir el archivo.
         CrearUnion(Path.Combine(_raiz, "Candidaturas", "Semana trampa"), _fuera);
 
         AssertAbiertoNoValido(Path.Combine(_raiz, "Candidaturas", "Semana trampa", "secreto.pdf"));
     }
 
-    [Fact]
+    [FactSoloWindows("la comprobación del archivo abierto es solo de Windows (la app solo corre en Windows)")]
     public void ComprobarAbierto_AbiertoAtravesDeUnaUnionHaciaDocumentosPersonales_LoRechaza()
     {
-        if (!OperatingSystem.IsWindows()) return; // la comprobación del archivo abierto es solo de Windows (la app solo corre en Windows)
-
         CrearUnion(Path.Combine(_raiz, "Candidaturas", "Semana trampa"), Path.Combine(_raiz, "Documentos personales"));
 
         AssertAbiertoNoValido(Path.Combine(_raiz, "Candidaturas", "Semana trampa", "DNI.pdf"));
     }
 
-    [Fact]
+    [FactSoloWindows("la comprobación de enlaces duros es solo de Windows")]
     public void ComprobarAbierto_ArchivoConUnEnlaceDuro_LoRechazaAunqueLaRutaSeaBuena()
     {
-        if (!OperatingSystem.IsWindows()) return; // la comprobación de enlaces duros es solo de Windows
-
         // «CV_falso.pdf» es otro nombre del mismo archivo que «Documentos personales\DNI.pdf».
         var falso = Path.Combine(_raiz, "Candidaturas", Semana, "CV_falso.pdf");
         Mklink("/H", falso, Path.Combine(_raiz, "Documentos personales", "DNI.pdf"));
@@ -289,17 +270,13 @@ public sealed class RutaSeguraTests : IDisposable
         AssertAbiertoNoValido(resuelta);
     }
 
-    [Fact]
+    [FactConNombresCortos]
     public void ComprobarAbierto_NombreCortoQueEscondeOtraExtension_LoRechaza()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         // «notas.pdfx» tiene el nombre corto «NOTAS~1.PDF»: pasa Resolver, pero lo que se abre no es un PDF.
         var real = Path.Combine(_raiz, "Candidaturas", Semana, "notas.pdfx");
         File.WriteAllText(real, "no es un pdf");
         var corto = Path.GetFileName(NombreCorto(real));
-        if (string.Equals(corto, "notas.pdfx", StringComparison.OrdinalIgnoreCase))
-            return; // este disco no genera nombres cortos (8.3): el caso no se puede dar
         Assert.EndsWith(".PDF", corto, StringComparison.OrdinalIgnoreCase);
 
         // Primera barrera: GetFullPath expande el nombre corto y la ruta final ya no es un PDF.
@@ -308,30 +285,23 @@ public sealed class RutaSeguraTests : IDisposable
         AssertAbiertoNoValido(Path.Combine(_raiz, "Candidaturas", Semana, corto));
     }
 
-    [Fact]
+    [FactConNombresCortos]
     public void ComprobarAbierto_NombreCortoDeUnPdfDeVerdad_DevuelveElNombreLargo()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         var real = Path.Combine(_raiz, "Candidaturas", Semana, "CV_Nombre_Largo_MarcoTalento.pdf");
         File.WriteAllText(real, "pdf");
         var corto = Path.GetFileName(NombreCorto(real));
-        if (string.Equals(corto, "CV_Nombre_Largo_MarcoTalento.pdf", StringComparison.OrdinalIgnoreCase)) return;
+        Assert.False(string.Equals(corto, "CV_Nombre_Largo_MarcoTalento.pdf", StringComparison.OrdinalIgnoreCase), "No ha dado nombre corto.");
         using var abierto = Abrir(RutaSegura.Resolver(_raiz, "Candidaturas/" + Semana + "/" + corto));
 
         Assert.Equal("Candidaturas/" + Semana + "/CV_Nombre_Largo_MarcoTalento.pdf", RutaSegura.ComprobarAbierto(_raiz, abierto));
     }
 
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "GetShortPathNameW",
-        CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-    private static extern uint GetShortPathName(string larga, char[] corta, uint largo);
-
     private static string NombreCorto(string ruta)
     {
-        var bufer = new char[1024];
-        var largo = GetShortPathName(ruta, bufer, (uint)bufer.Length);
-        Assert.NotEqual(0u, largo);
-        return new string(bufer, 0, (int)largo);
+        var corto = RequisitosSistema.NombreCorto(ruta);
+        Assert.NotNull(corto);
+        return corto;
     }
 
     /// <summary>
@@ -365,7 +335,7 @@ public sealed class RutaSeguraTests : IDisposable
         using var proceso = Process.Start(inicio)!;
         proceso.StandardOutput.ReadToEnd();
         proceso.StandardError.ReadToEnd();
-        proceso.WaitForExit();
+        Assert.True(proceso.WaitForExit(10_000), "mklink no ha terminado en 10 s.");
         Assert.Equal(0, proceso.ExitCode);
     }
 }

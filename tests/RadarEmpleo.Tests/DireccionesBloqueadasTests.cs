@@ -112,12 +112,9 @@ public class DireccionesBloqueadasTests
         Assert.Equal(bloqueada, DireccionesBloqueadas.EstaBloqueada(IPAddress.Parse(direccion), redes));
     }
 
-    [Fact]
+    [FactSoloWindows("las interfaces de red de un contenedor Linux (el CI) dependen del contenedor")]
     public void DeEstePc_TraeLoopbackYTodasQuedanBloqueadas()
     {
-        // Las interfaces de este PC: en el CI (Linux) dependen del contenedor, así que solo se mira en Windows.
-        if (!OperatingSystem.IsWindows()) return;
-
         var redes = DireccionesBloqueadas.DeEstePc();
 
         Assert.Contains(redes, r => IPAddress.IsLoopback(r.Direccion));

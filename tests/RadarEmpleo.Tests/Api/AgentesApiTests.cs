@@ -625,11 +625,10 @@ public sealed class AgentesApiTests
         }
     }
 
-    [Theory]
+    [TheorySoloWindows(@"las rutas trampa (\\?\, \\.\, \\localhost\C$, ::$DATA) son de Windows")]
     [MemberData(nameof(RutasTrampa))]
     public void EstaBajoTemporal_LasRutasTrampaNo(string ruta)
     {
-        if (!OperatingSystem.IsWindows()) return;
         Assert.False(ConfiguracionAgentes.EstaBajoTemporal(ruta, Path.GetTempPath()));
     }
 
@@ -639,34 +638,20 @@ public sealed class AgentesApiTests
         Assert.True(ConfiguracionAgentes.EstaBajoTemporal(Path.Combine(Path.GetTempPath(), "radar-x", "radar.db"), Path.GetTempPath()));
     }
 
-    [Fact]
+    [FactConEnlacesSimbolicos(soloWindows: "la carpeta temporal y la BD se comprueban como al arrancar en Windows")]
     public void EstaBajoTemporal_ConUnaJunctionEnElCamino_No()
     {
-        if (!OperatingSystem.IsWindows()) return;
         var base_ = Path.Combine(Path.GetTempPath(), $"radar-junction-{Guid.NewGuid():N}");
         var destino = Directory.CreateDirectory(Path.Combine(base_, "destino")).FullName;
         var enlace = Path.Combine(base_, "enlace");
         try
         {
             Directory.CreateSymbolicLink(enlace, destino);
-        }
-        catch (IOException)
-        {
-            Directory.Delete(base_, recursive: true);
-            return; // Sin permiso para crear enlaces simbólicos en este PC: no se puede probar aquí.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            Directory.Delete(base_, recursive: true);
-            return;
-        }
-        try
-        {
             Assert.False(ConfiguracionAgentes.EstaBajoTemporal(Path.Combine(enlace, "radar.db"), Path.GetTempPath()));
         }
         finally
         {
-            Directory.Delete(enlace);
+            if (Directory.Exists(enlace)) Directory.Delete(enlace);
             Directory.Delete(base_, recursive: true);
         }
     }
