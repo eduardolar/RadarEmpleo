@@ -285,13 +285,11 @@ public sealed class ApiTests : IDisposable
             problema.GetProperty("errors").GetProperty("puesto")[0].GetString());
     }
 
-    [Theory]
-    [InlineData(", S.L.")]
-    [InlineData("...")]
-    [InlineData("¿?")]
-    public async Task CrearCandidatura_EmpresaSinLetrasNiNumeros_Devuelve400(string empresa)
+    /// <summary>Las demás empresas sin letras ni números se prueban en <see cref="CandidaturasServiceTests"/>.</summary>
+    [Fact]
+    public async Task CrearCandidatura_EmpresaSinLetrasNiNumeros_Devuelve400()
     {
-        var respuesta = await _http.PostAsJsonAsync("/api/candidaturas", new { empresa, puesto = "Backend" });
+        var respuesta = await _http.PostAsJsonAsync("/api/candidaturas", new { empresa = ", S.L.", puesto = "Backend" });
 
         var problema = await AssertBadRequestEnEspanolAsync(respuesta);
         Assert.StartsWith("El nombre de la empresa no es válido", problema.GetProperty("detail").GetString());
@@ -369,6 +367,8 @@ public sealed class ApiTests : IDisposable
         Assert.StartsWith("Ya existe un registro con esos mismos datos", problema.RootElement.GetProperty("detail").GetString());
     }
 
+    /// <summary>El 409 de una regla del cambio de estado por HTTP. Las reglas (también descartar sin motivo) se prueban en
+    /// <c>CandidaturasServiceTests</c> y <c>ReglasEstadoTests</c>.</summary>
     [Fact]
     public async Task CambiarEstado_TransicionProhibida_Devuelve409ConProblemDetailsEnEspanol()
     {
@@ -383,16 +383,6 @@ public sealed class ApiTests : IDisposable
         Assert.Equal(409, problema.GetProperty("status").GetInt32());
         Assert.Equal("No se puede volver de «Entrevista» a «Detectada»: los estados solo avanzan.",
             problema.GetProperty("detail").GetString());
-    }
-
-    [Fact]
-    public async Task CambiarEstado_DescartarSinMotivo_Devuelve409()
-    {
-        var creada = await CrearAsync();
-
-        var respuesta = await CambiarEstadoAsync(creada.Id, new { estado = "Descartada" });
-
-        Assert.Equal(HttpStatusCode.Conflict, respuesta.StatusCode);
     }
 
     [Fact]

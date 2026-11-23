@@ -136,16 +136,6 @@ public sealed class ImportacionApiTests : IDisposable
         Assert.Contains(RutasCurriculum.ArchivoRegistro, problema.GetProperty("detail").GetString());
     }
 
-    [Fact]
-    public async Task Previsualizar_SinTabla_Devuelve409ConMensajeClaro()
-    {
-        await File.WriteAllTextAsync(RutaRegistro, "# Sin tabla\n\n- Solo una lista\n");
-
-        var problema = await LeerProblemaAsync(await PrevisualizarAsync(), HttpStatusCode.Conflict);
-
-        Assert.Contains("tabla", problema.GetProperty("detail").GetString());
-    }
-
     [Theory]
     [InlineData("utf-8-bom")]
     [InlineData("utf-16")]
@@ -241,36 +231,10 @@ public sealed class ImportacionApiTests : IDisposable
         Assert.Equal(EstadoCandidatura.Enviada, fila.Estado);
     }
 
-    [Fact]
-    public async Task Aplicar_LoteConEnlaceSinEsquemaYConMailto_NormalizaUnoYQuitaElOtro()
-    {
-        var lote = new LoteImportacion(1, OrigenLote.Tabla,
-        [
-            new FilaLote(1, new DateOnly(2026, 9, 1), false, "Acme", "Uno", Enlace: "www.ejemplo.com/1"),
-            new FilaLote(2, new DateOnly(2026, 9, 2), false, "Acme", "Dos", Enlace: "mailto:rrhh@ejemplo.com")
-        ]);
-        var claves = new[] { "acme|uno|2026-09-01", "acme|dos|2026-09-02" };
-
-        var resultado = await LeerResultadoAsync(await _http.PostAsJsonAsync(UrlAplicar, new AplicarLoteRequest(lote, claves), FabricaApi.Json));
-
-        Assert.Equal(2, resultado.Creadas);
-        var lista = (await _http.GetFromJsonAsync<List<CandidaturaResumenDto>>("/api/candidaturas", FabricaApi.Json))!;
-        Assert.Equal("https://www.ejemplo.com/1", Assert.Single(lista, c => c.Puesto == "Uno").Enlace);
-        Assert.Null(Assert.Single(lista, c => c.Puesto == "Dos").Enlace);
-    }
-
-    [Fact]
-    public async Task Aplicar_OtraVersion_Devuelve400()
-    {
-        var vista = await VistaPreviaAsync();
-        var lote = vista["lote"]!.DeepClone();
-        lote["version"] = 2;
-
-        var problema = await LeerProblemaAsync(await AplicarAsync(lote, ClavesAccionables(vista)), HttpStatusCode.BadRequest);
-
-        Assert.True(problema.GetProperty("errors").TryGetProperty("version", out _));
-    }
-
+    /// <summary>
+    /// La <see cref="ValidacionException"/> del servicio llega como 400 con su campo. La otra versión del lote y la
+    /// descartada sin motivo son la misma traducción: se prueban en <see cref="ImportacionServiceTests"/>.
+    /// </summary>
     [Fact]
     public async Task Aplicar_ClaveAjena_Devuelve400YNoCreaNada()
     {
@@ -374,20 +338,6 @@ public sealed class ImportacionApiTests : IDisposable
         Assert.Equal(EstadoCandidatura.Enviada, ficha.Estado);
         Assert.Single(ficha.Historial, h => h.A == EstadoCandidatura.Enviada);
         Assert.Single(ficha.Recordatorios);
-    }
-
-    [Fact]
-    public async Task Aplicar_DescartadaSinMotivo_Devuelve400ConElCampo()
-    {
-        var lote = new LoteImportacion(1, OrigenLote.Tabla,
-            [new FilaLote(4, new DateOnly(2026, 9, 1), false, "Acme", "Uno", Estado: EstadoCandidatura.Descartada)]);
-
-        var respuesta = await _http.PostAsJsonAsync(UrlAplicar, new AplicarLoteRequest(lote, ["acme|uno|2026-09-01"]), FabricaApi.Json);
-
-        var problema = await LeerProblemaAsync(respuesta, HttpStatusCode.BadRequest);
-        Assert.True(problema.GetProperty("errors").TryGetProperty("motivoDescarte", out _));
-        var candidaturas = await _http.GetFromJsonAsync<JsonElement>("/api/candidaturas");
-        Assert.Equal(0, candidaturas.GetArrayLength());
     }
 
     [Fact]

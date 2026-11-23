@@ -87,21 +87,10 @@ public sealed class DeshacerApiTests : IDisposable
         Assert.DoesNotContain((await FichaAsync(creada.Id))!.Historial, h => h.A == EstadoCandidatura.Enviada);
     }
 
-    [Fact]
-    public async Task Descartar_SeDeshaceSinMotivo()
-    {
-        var creada = await CrearAsync();
-        var descarte = await CambiarAsync(creada.Id,
-            new { estado = "Descartada", motivoDescarte = "Experiencia", motivoDescarteTexto = "Piden 5 años" });
-
-        var respuesta = await DeshacerAsync(creada.Id, descarte);
-
-        var detalle = (await respuesta.Content.ReadFromJsonAsync<CandidaturaDetalleDto>(FabricaApi.Json))!;
-        Assert.Equal(EstadoCandidatura.Detectada, detalle.Estado);
-        Assert.Null(detalle.MotivoDescarte);
-        Assert.Null(detalle.MotivoDescarteTexto);
-    }
-
+    /// <summary>
+    /// La <see cref="ReglaNegocioException"/> llega como 409 con su mensaje. Sin cambios que deshacer, pasados los
+    /// diez minutos y el descarte (que se deshace sin motivo) se prueban en <see cref="DeshacerCambioEstadoTests"/>.
+    /// </summary>
     [Fact]
     public async Task DosPestanas_LaOtraHaMovidoDespues_Devuelve409YNoTocaNada()
     {
@@ -142,25 +131,6 @@ public sealed class DeshacerApiTests : IDisposable
         var problema = await respuesta.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Falta el cambio que se quiere deshacer.", problema.GetProperty("errors").GetProperty("cambioId")[0].GetString());
         Assert.Equal(EstadoCandidatura.Preparada, (await FichaAsync(creada.Id))!.Estado);
-    }
-
-    [Fact]
-    public async Task SinCambios_Devuelve409EnEspanol()
-    {
-        var creada = await CrearAsync();
-
-        Assert.Equal("No hay ningún cambio de estado que deshacer.",
-            await DetalleConflictoAsync(await DeshacerAsync(creada.Id, creada.Historial[0].Id)));
-    }
-
-    [Fact]
-    public async Task PasadosDiezMinutos_Devuelve409()
-    {
-        var creada = await CrearAsync();
-        var preparada = await CambiarAsync(creada.Id, new { estado = "Preparada" });
-        _reloj.Avanzar(TimeSpan.FromMinutes(10));
-
-        Assert.Equal("Ya no se puede deshacer este cambio.", await DetalleConflictoAsync(await DeshacerAsync(creada.Id, preparada)));
     }
 
     [Fact]
