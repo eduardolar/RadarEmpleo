@@ -1,3 +1,4 @@
+import { SistemaInfo } from '../../core/interfaces/sistema-info.interface';
 import {
   EjecucionAgente,
   EstadoEjecucion,
@@ -131,16 +132,49 @@ export function usoEstimado(ejecucion: DatosUso, topeUsd: number | null): string
     : `uso estimado: como mucho el ${cota} % del tope de hoy`;
 }
 
-/** «Uso estimado de tu suscripción hoy: 3 % del tope» o «Hoy aún no has usado Claude»; null sin tope */
-export function usoDelDia(gasto: Pick<GastoHoy, 'gastadoUsd' | 'topeUsd'>): string | null {
+/**
+ * «Uso estimado de tu suscripción hoy: 3 % del tope» o «Hoy aún no has usado Claude» (si hay algo
+ * reservado, «Hoy aún no has gastado nada; Claude tiene trabajo en marcha»); null sin tope
+ */
+export function usoDelDia(
+  gasto: Pick<GastoHoy, 'gastadoUsd' | 'reservadoUsd' | 'topeUsd'>,
+): string | null {
   const porcentaje = porcentajeDelTope(gasto.gastadoUsd, gasto.topeUsd, false);
   if (porcentaje === null) {
     return null;
   }
   if (gasto.gastadoUsd <= 0) {
-    return 'Hoy aún no has usado Claude';
+    // Con algo en cola o en curso ya se está usando Claude: «aún no has usado» sería falso
+    return gasto.reservadoUsd > 0
+      ? 'Hoy aún no has gastado nada; Claude tiene trabajo en marcha'
+      : 'Hoy aún no has usado Claude';
   }
   return `Uso estimado de tu suscripción hoy: ${parteConocida(gasto.gastadoUsd, porcentaje)} del tope`;
+}
+
+/**
+ * «Reservado para lo que está en marcha: hasta el 4 % del tope de hoy» (el presupuesto de lo que va en
+ * cola o en curso, como cota); null si no hay nada reservado o sin tope
+ */
+export function reservaDelDia(gasto: Pick<GastoHoy, 'reservadoUsd' | 'topeUsd'>): string | null {
+  if (!(gasto.reservadoUsd > 0)) {
+    return null;
+  }
+  const cota = porcentajeDelTope(gasto.reservadoUsd, gasto.topeUsd, true);
+  return cota === null
+    ? null
+    : `Reservado para lo que está en marcha: hasta el ${cota} % del tope de hoy`;
+}
+
+/** Por qué no se pueden usar los agentes desde aquí, para /agentes (sin /api/agentes/estado, que daría 403) */
+export function motivoSinAgentes(info: Pick<SistemaInfo, 'modo' | 'agentesHabilitados'>): string {
+  if (info.modo === 'Demo') {
+    return 'En la demo no se usa Claude: los agentes están apagados.';
+  }
+  if (!info.agentesHabilitados) {
+    return 'Los agentes de Claude están apagados en la configuración de la app.';
+  }
+  return 'Los agentes de Claude solo se pueden usar desde el PC donde está instalada la app.';
 }
 
 /** Con punto final si no acaba ya en «.», «?», «!» o «…» (los mensajes de la API suelen llevarlo) */

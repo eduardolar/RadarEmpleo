@@ -7,8 +7,10 @@ import {
   conPunto,
   duracion,
   ETIQUETA_ESTADO,
+  motivoSinAgentes,
   NOMBRE_TAREA,
   relojEnCurso,
+  reservaDelDia,
   textoEstado,
   usoDelDia,
   usoEstimado,
@@ -136,6 +138,42 @@ describe('usoDelDia', () => {
 
   it('sin tope no dice nada', () => {
     expect(usoDelDia(crearGasto({ topeUsd: 0 }))).toBeNull();
+  });
+
+  it('sin nada gastado pero con algo en marcha no dice que no has usado Claude', () => {
+    expect(usoDelDia(crearGasto({ reservadoUsd: 0.5 }))).toBe(
+      'Hoy aún no has gastado nada; Claude tiene trabajo en marcha',
+    );
+  });
+});
+
+describe('reservaDelDia', () => {
+  it('lo reservado como cota, redondeado hacia arriba y sin USD', () => {
+    expect(reservaDelDia(crearGasto({ reservadoUsd: 0.5 }))).toBe(
+      'Reservado para lo que está en marcha: hasta el 4 % del tope de hoy',
+    );
+    expect(reservaDelDia(crearGasto({ reservadoUsd: 0.01 }))).toBe(
+      'Reservado para lo que está en marcha: hasta el 1 % del tope de hoy',
+    );
+  });
+
+  it('sin nada reservado o sin tope no dice nada', () => {
+    expect(reservaDelDia(crearGasto())).toBeNull();
+    expect(reservaDelDia(crearGasto({ reservadoUsd: 0.5, topeUsd: 0 }))).toBeNull();
+  });
+});
+
+describe('motivoSinAgentes', () => {
+  it('la demo, apagados en la configuración o desde otro sitio que no es el PC', () => {
+    expect(motivoSinAgentes({ modo: 'Demo', agentesHabilitados: false })).toBe(
+      'En la demo no se usa Claude: los agentes están apagados.',
+    );
+    expect(motivoSinAgentes({ modo: 'Local', agentesHabilitados: false })).toBe(
+      'Los agentes de Claude están apagados en la configuración de la app.',
+    );
+    expect(motivoSinAgentes({ modo: 'Local', agentesHabilitados: true })).toBe(
+      'Los agentes de Claude solo se pueden usar desde el PC donde está instalada la app.',
+    );
   });
 });
 
