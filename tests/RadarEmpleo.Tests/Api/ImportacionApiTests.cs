@@ -50,15 +50,21 @@ public sealed class ImportacionApiTests : IDisposable
         .Select(f => f!["clave"]!.GetValue<string>())
         .ToList();
 
-    private Task<HttpResponseMessage> AplicarAsync(JsonNode lote, IEnumerable<string> claves)
+    /// <summary>Lo que manda la página: el origen y el hash de la vista previa, y las claves.</summary>
+    private static JsonObject Cuerpo(JsonObject vista, IEnumerable<string> claves) => new()
     {
-        var cuerpo = new JsonObject
-        {
-            ["lote"] = lote.DeepClone(),
-            ["claves"] = new JsonArray(claves.Select(c => (JsonNode)JsonValue.Create(c)!).ToArray())
-        };
-        return _http.PostAsync(UrlAplicar, new StringContent(cuerpo.ToJsonString(), Encoding.UTF8, "application/json"));
-    }
+        ["origen"] = vista["origen"]!.DeepClone(),
+        ["hashRegistro"] = vista["hashRegistro"]!.DeepClone(),
+        ["claves"] = new JsonArray(claves.Select(c => (JsonNode)JsonValue.Create(c)!).ToArray())
+    };
+
+    private Task<HttpResponseMessage> AplicarAsync(JsonObject vista, IEnumerable<string> claves) => EnviarAsync(Cuerpo(vista, claves));
+
+    private Task<HttpResponseMessage> EnviarAsync(JsonObject cuerpo) =>
+        _http.PostAsync(UrlAplicar, new StringContent(cuerpo.ToJsonString(), Encoding.UTF8, "application/json"));
+
+    private async Task<int> ContarCandidaturasAsync() =>
+        (await _http.GetFromJsonAsync<JsonElement>("/api/candidaturas")).GetArrayLength();
 
     private static async Task<ResultadoAplicacionDto> LeerResultadoAsync(HttpResponseMessage respuesta)
     {
@@ -78,8 +84,7 @@ public sealed class ImportacionApiTests : IDisposable
     {
         var vista = await VistaPreviaAsync();
 
-        Assert.Equal(1, vista["lote"]!["version"]!.GetValue<int>());
-        Assert.Equal("Tabla", vista["lote"]!["origen"]!.GetValue<string>());
+        Assert.Null(vista["lote"]);
         var resumen = vista["resumen"]!;
         Assert.Equal(8, resumen["nuevas"]!.GetValue<int>());
         Assert.Equal(0, resumen["avanzan"]!.GetValue<int>());
@@ -96,9 +101,7 @@ public sealed class ImportacionApiTests : IDisposable
         Assert.Equal("Enviada", fila["estadoRegistro"]!.GetValue<string>());
         Assert.Empty(fila["avisos"]!.AsArray());
 
-        var delLote = vista["lote"]!["filas"]![2]!;
-        Assert.True(delLote["fechaAproximada"]!.GetValue<bool>());
-        Assert.Equal("NoIndicada", delLote["modalidad"]!.GetValue<string>());
+        Assert.Equal([ReglasImportacion.AvisoFechaAproximada], vista["filas"]![2]!["avisos"]!.AsArray().Select(a => a!.GetValue<string>()));
 
         var candidaturas = await _http.GetFromJsonAsync<JsonElement>("/api/candidaturas");
         Assert.Equal(0, candidaturas.GetArrayLength());
@@ -221,8 +224,8 @@ public sealed class ImportacionApiTests : IDisposable
         var vista = await VistaPreviaAsync();
         var claves = ClavesAccionables(vista);
 
-        var primera = await LeerResultadoAsync(await AplicarAsync(vista["lote"]!, claves));
-        var segunda = await LeerResultadoAsync(await AplicarAsync(vista["lote"]!, claves));
+        var primera = await LeerResultadoAsync(await AplicarAsync(vista, claves));
+        var segunda = await LeerResultadoAsync(await AplicarAsync(vista, claves));
 
         Assert.Equal(8, primera.Creadas);
         Assert.Equal(0, segunda.Creadas);
@@ -237,7 +240,7 @@ public sealed class ImportacionApiTests : IDisposable
     {
         var vista = await VistaPreviaAsync();
 
-        await LeerResultadoAsync(await AplicarAsync(vista["lote"]!, ClavesAccionables(vista)));
+        await LeerResultadoAsync(await AplicarAsync(vista, ClavesAccionables(vista)));
 
         var lista = (await _http.GetFromJsonAsync<List<CandidaturaResumenDto>>("/api/candidaturas", FabricaApi.Json))!;
         Assert.Equal(8, lista.Count);
@@ -249,69 +252,139 @@ public sealed class ImportacionApiTests : IDisposable
     }
 
     /// <summary>
-    /// La <see cref="ValidacionException"/> del servicio llega como 400 con su campo. La otra versión del lote y la
-    /// descartada sin motivo son la misma traducción: se prueban en <see cref="ImportacionServiceTests"/>.
+    /// La <see cref="ValidacionException"/> del servicio llega como 400 con su campo. La clave es la de una fila que no está
+    /// en el registro: el cliente ya no manda filas, así que no hay forma de colar una.
     /// </summary>
     [Fact]
-    public async Task Aplicar_ClaveAjena_Devuelve400YNoCreaNada()
+    public async Task Aplicar_ConLaClaveDeUnaFilaInventada_Devuelve400YNoCreaNada()
     {
         var vista = await VistaPreviaAsync();
+        var inventada = ReglasImportacion.Clave("Inventada", "Puesto inventado", new DateOnly(2026, 9, 1));
 
-        var respuesta = await AplicarAsync(vista["lote"]!, [.. ClavesAccionables(vista), "otra|cosa|2026-01-01"]);
+        var respuesta = await AplicarAsync(vista, [.. ClavesAccionables(vista), inventada]);
 
         var problema = await LeerProblemaAsync(respuesta, HttpStatusCode.BadRequest);
         Assert.True(problema.GetProperty("errors").TryGetProperty("claves", out _));
-        var candidaturas = await _http.GetFromJsonAsync<JsonElement>("/api/candidaturas");
-        Assert.Equal(0, candidaturas.GetArrayLength());
-    }
-
-    [Fact]
-    public async Task Aplicar_MasDeMilFilas_Devuelve400()
-    {
-        var fila = new FilaLote(1, new DateOnly(2026, 9, 1), false, "Acme", "Backend");
-        var lote = new LoteImportacion(1, OrigenLote.Tabla, Enumerable.Repeat(fila, 1001).ToList());
-
-        var respuesta = await _http.PostAsJsonAsync(UrlAplicar, new AplicarLoteRequest(lote, []), FabricaApi.Json);
-
-        var problema = await LeerProblemaAsync(respuesta, HttpStatusCode.BadRequest);
-        Assert.Contains("1000 filas", problema.GetProperty("detail").GetString());
-    }
-
-    [Theory]
-    [InlineData("empresa", 201, "La empresa no puede tener más de 200 caracteres.")]
-    [InlineData("puesto", 301, "El puesto no puede tener más de 300 caracteres.")]
-    [InlineData("enlace", 2001, "El enlace no puede tener más de 2000 caracteres.")]
-    public async Task Aplicar_CampoPorEncimaDelLimite_Devuelve400EnEspanol(string campo, int largo, string mensaje)
-    {
-        var vista = await VistaPreviaAsync();
-        var lote = vista["lote"]!.DeepClone();
-        lote["filas"]![0]![campo] = new string('x', largo);
-
-        var problema = await LeerProblemaAsync(await AplicarAsync(lote, []), HttpStatusCode.BadRequest);
-
-        Assert.Equal(mensaje, problema.GetProperty("detail").GetString());
+        Assert.Equal(0, await ContarCandidaturasAsync());
     }
 
     [Fact]
     public async Task Aplicar_SinClaves_Devuelve400()
     {
-        var vista = await VistaPreviaAsync();
-        var cuerpo = new JsonObject { ["lote"] = vista["lote"]!.DeepClone() };
+        var cuerpo = Cuerpo(await VistaPreviaAsync(), []);
+        cuerpo.Remove("claves");
 
-        var respuesta = await _http.PostAsync(UrlAplicar, new StringContent(cuerpo.ToJsonString(), Encoding.UTF8, "application/json"));
+        var problema = await LeerProblemaAsync(await EnviarAsync(cuerpo), HttpStatusCode.BadRequest);
 
-        var problema = await LeerProblemaAsync(respuesta, HttpStatusCode.BadRequest);
         Assert.Equal("Faltan las claves.", problema.GetProperty("detail").GetString());
     }
 
-    [Fact]
-    public async Task Aplicar_EnumNumericoEnElLote_Devuelve400()
+    [Theory]
+    [InlineData(null, "Falta el hash del registro.")]
+    [InlineData("abc", "El hash del registro tiene que tener 64 caracteres.")]
+    public async Task Aplicar_SinHashOConHashCorto_Devuelve400EnEspanol(string? hash, string mensaje)
     {
         var vista = await VistaPreviaAsync();
-        var lote = vista["lote"]!.DeepClone();
-        lote["filas"]![0]!["estado"] = 99;
+        var cuerpo = Cuerpo(vista, ClavesAccionables(vista));
+        cuerpo["hashRegistro"] = hash;
 
-        await LeerProblemaAsync(await AplicarAsync(lote, []), HttpStatusCode.BadRequest);
+        var problema = await LeerProblemaAsync(await EnviarAsync(cuerpo), HttpStatusCode.BadRequest);
+
+        Assert.Equal(mensaje, problema.GetProperty("detail").GetString());
+        Assert.True(problema.GetProperty("errors").TryGetProperty("hashRegistro", out _));
+        Assert.Equal(0, await ContarCandidaturasAsync());
+    }
+
+    [Fact]
+    public async Task Aplicar_SinOrigen_Devuelve400()
+    {
+        var vista = await VistaPreviaAsync();
+        var cuerpo = Cuerpo(vista, ClavesAccionables(vista));
+        cuerpo.Remove("origen");
+
+        var problema = await LeerProblemaAsync(await EnviarAsync(cuerpo), HttpStatusCode.BadRequest);
+
+        Assert.Equal("Falta el origen.", problema.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task Aplicar_TablaConEjecucionId_Devuelve400()
+    {
+        var vista = await VistaPreviaAsync();
+        var cuerpo = Cuerpo(vista, ClavesAccionables(vista));
+        cuerpo["ejecucionId"] = 1;
+
+        var problema = await LeerProblemaAsync(await EnviarAsync(cuerpo), HttpStatusCode.BadRequest);
+
+        Assert.True(problema.GetProperty("errors").TryGetProperty("ejecucionId", out _));
+        Assert.Equal(0, await ContarCandidaturasAsync());
+    }
+
+    [Fact]
+    public async Task Aplicar_ConUnHashDistinto_Da409ConSuMensajeYNoCreaNada()
+    {
+        var vista = await VistaPreviaAsync();
+        var cuerpo = Cuerpo(vista, ClavesAccionables(vista));
+        cuerpo["hashRegistro"] = new string('0', 64);
+
+        var problema = await LeerProblemaAsync(await EnviarAsync(cuerpo), HttpStatusCode.Conflict);
+
+        Assert.Equal(ImportacionService.MensajeRegistroCambiado, problema.GetProperty("detail").GetString());
+        Assert.Equal(0, await ContarCandidaturasAsync());
+        Assert.False(File.Exists(RutaRadar));
+    }
+
+    [Fact]
+    public async Task Aplicar_RegistroEditadoTrasLaVistaPrevia_Da409YAlVolverALeerAplicaLoNuevo()
+    {
+        var vieja = await VistaPreviaAsync();
+        var registro = await File.ReadAllTextAsync(RutaRegistro);
+        await File.WriteAllTextAsync(RutaRegistro, registro.Replace("| Remoto | Preparada |", "| Remoto | Enviada |", StringComparison.Ordinal));
+
+        var problema = await LeerProblemaAsync(await AplicarAsync(vieja, ClavesAccionables(vieja)), HttpStatusCode.Conflict);
+        Assert.Equal(ImportacionService.MensajeRegistroCambiado, problema.GetProperty("detail").GetString());
+        Assert.Equal(0, await ContarCandidaturasAsync());
+
+        var nueva = await VistaPreviaAsync();
+        Assert.Equal(8, (await LeerResultadoAsync(await AplicarAsync(nueva, ClavesAccionables(nueva)))).Creadas);
+        var lista = (await _http.GetFromJsonAsync<List<CandidaturaResumenDto>>("/api/candidaturas", FabricaApi.Json))!;
+        Assert.Equal(EstadoCandidatura.Enviada, Assert.Single(lista, c => c.Puesto == "Programador C#").Estado);
+    }
+
+    [Fact]
+    public async Task Aplicar_ConUnLoteInventadoEnElCuerpo_LoIgnoraYUsaElDelRegistro()
+    {
+        var vista = await VistaPreviaAsync();
+        var cuerpo = Cuerpo(vista, ClavesAccionables(vista));
+        cuerpo["lote"] = new JsonObject
+        {
+            ["version"] = 1,
+            ["origen"] = "Tabla",
+            ["filas"] = new JsonArray(new JsonObject
+            {
+                ["linea"] = 1, ["fecha"] = "2026-09-01", ["fechaAproximada"] = false,
+                ["empresa"] = "Inventada", ["puesto"] = "Puesto inventado", ["estado"] = "Enviada"
+            })
+        };
+
+        var resultado = await LeerResultadoAsync(await EnviarAsync(cuerpo));
+
+        Assert.Equal(8, resultado.Creadas);
+        var lista = (await _http.GetFromJsonAsync<List<CandidaturaResumenDto>>("/api/candidaturas", FabricaApi.Json))!;
+        Assert.Equal(8, lista.Count);
+        Assert.DoesNotContain(lista, c => c.Puesto == "Puesto inventado");
+    }
+
+    [Fact]
+    public async Task Aplicar_SinRegistro_Devuelve409()
+    {
+        var vista = await VistaPreviaAsync();
+        File.Delete(RutaRegistro);
+
+        var problema = await LeerProblemaAsync(await AplicarAsync(vista, ClavesAccionables(vista)), HttpStatusCode.Conflict);
+
+        Assert.Contains(RutasCurriculum.ArchivoRegistro, problema.GetProperty("detail").GetString());
+        Assert.Equal(0, await ContarCandidaturasAsync());
     }
 
     [Fact]
@@ -320,7 +393,7 @@ public sealed class ImportacionApiTests : IDisposable
         var vista = await VistaPreviaAsync();
         var claves = ClavesAccionables(vista);
 
-        var respuestas = await Task.WhenAll(AplicarAsync(vista["lote"]!, claves), AplicarAsync(vista["lote"]!, claves));
+        var respuestas = await Task.WhenAll(AplicarAsync(vista, claves), AplicarAsync(vista, claves));
 
         Assert.All(respuestas, r => Assert.Contains(r.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Conflict }));
         Assert.Contains(respuestas, r => r.StatusCode == HttpStatusCode.OK);
@@ -332,14 +405,14 @@ public sealed class ImportacionApiTests : IDisposable
     public async Task Aplicar_DosALaVezConCambioDeEstado_UnSoloCambioYUnSoloSeguimiento()
     {
         var inicial = await VistaPreviaAsync();
-        await LeerResultadoAsync(await AplicarAsync(inicial["lote"]!, ClavesAccionables(inicial)));
+        await LeerResultadoAsync(await AplicarAsync(inicial, ClavesAccionables(inicial)));
         var registro = await File.ReadAllTextAsync(RutaRegistro);
         await File.WriteAllTextAsync(RutaRegistro, registro.Replace("| Remoto | Preparada |", "| Remoto | Enviada |", StringComparison.Ordinal));
         var vista = await VistaPreviaAsync();
         var claves = ClavesAccionables(vista);
         Assert.Single(claves);
 
-        var respuestas = await Task.WhenAll(AplicarAsync(vista["lote"]!, claves), AplicarAsync(vista["lote"]!, claves));
+        var respuestas = await Task.WhenAll(AplicarAsync(vista, claves), AplicarAsync(vista, claves));
 
         Assert.All(respuestas, r => Assert.Contains(r.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Conflict }));
         Assert.Contains(respuestas, r => r.StatusCode == HttpStatusCode.OK);
@@ -365,7 +438,7 @@ public sealed class ImportacionApiTests : IDisposable
         var vista = await VistaPreviaAsync();
         Assert.False(File.Exists(RutaRadar)); // la vista previa no escribe nada
 
-        var resultado = await LeerResultadoAsync(await AplicarAsync(vista["lote"]!, ClavesAccionables(vista)));
+        var resultado = await LeerResultadoAsync(await AplicarAsync(vista, ClavesAccionables(vista)));
 
         Assert.True(resultado.RadarActualizado);
         Assert.Equal(antes, SHA256.HashData(await File.ReadAllBytesAsync(RutaRegistro)));
@@ -378,7 +451,7 @@ public sealed class ImportacionApiTests : IDisposable
     {
         var vista = await VistaPreviaAsync();
 
-        await LeerResultadoAsync(await AplicarAsync(vista["lote"]!, ClavesAccionables(vista)));
+        await LeerResultadoAsync(await AplicarAsync(vista, ClavesAccionables(vista)));
 
         var lineas = await File.ReadAllLinesAsync(RutaRadar);
         Assert.Contains(lineas, l => l.StartsWith("NO EDITAR: lo genera RadarEmpleo", StringComparison.Ordinal));
@@ -391,7 +464,7 @@ public sealed class ImportacionApiTests : IDisposable
         Directory.CreateDirectory(RutaRadar); // una carpeta en su sitio hace fallar la escritura
         var vista = await VistaPreviaAsync();
 
-        var resultado = await LeerResultadoAsync(await AplicarAsync(vista["lote"]!, ClavesAccionables(vista)));
+        var resultado = await LeerResultadoAsync(await AplicarAsync(vista, ClavesAccionables(vista)));
 
         Assert.Equal(8, resultado.Creadas);
         Assert.False(resultado.RadarActualizado);

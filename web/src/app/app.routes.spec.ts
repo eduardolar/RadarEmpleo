@@ -8,6 +8,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { routes } from './app.routes';
 import { crearDetalle } from './candidaturas/utils/candidatura-de-prueba';
+import { crearVista } from './importacion/utils/importacion-de-prueba';
 import { crearPanel } from './recordatorios/utils/recordatorio-de-prueba';
 
 describe('Navegación', () => {
@@ -111,19 +112,7 @@ describe('Navegación', () => {
 
     expect(TestBed.inject(Router).url).toBe('/importacion');
     expect(TestBed.inject(Title).getTitle()).toBe('Importar del registro · RadarEmpleo');
-    http.expectOne('/api/importacion/tabla/previsualizar').flush({
-      lote: { version: 1, origen: 'Tabla', filas: [] },
-      resumen: {
-        nuevas: 0,
-        avanzan: 0,
-        yaExisten: 0,
-        paraRevisar: 0,
-        sinLeer: 0,
-        enviosEnTexto: 0,
-      },
-      filas: [],
-      sinLeer: [],
-    });
+    http.expectOne('/api/importacion/tabla/previsualizar').flush(crearVista());
     await harness.fixture.whenStable();
 
     expect(pagina.querySelector('h1')?.textContent).toContain('Importar del registro');

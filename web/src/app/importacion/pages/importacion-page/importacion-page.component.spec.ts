@@ -4,12 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { AvisosService } from '../../../shared/services/avisos.service';
 import { FilaVistaPrevia, VistaPreviaImportacion } from '../../interfaces/importacion.interface';
-import {
-  crearFila,
-  crearFilaLote,
-  crearResultado,
-  crearVista,
-} from '../../utils/importacion-de-prueba';
+import { crearFila, crearResultado, crearVista } from '../../utils/importacion-de-prueba';
 import {
   AVISO_RADAR,
   EXPLICACION_PARA_REVISAR,
@@ -447,16 +442,6 @@ describe('ImportacionPageComponent', () => {
       expect(elemento().textContent).toContain('El enlace no es válido: se importará sin enlace.');
     });
 
-    it('no enseña el enlace del lote: aún no es el definitivo', async () => {
-      const vista = crearVista([NUEVA]);
-      await abrir({
-        ...vista,
-        lote: { ...vista.lote, filas: [crearFilaLote({ enlace: 'www.ejemplo.com/oferta' })] },
-      });
-
-      expect(elemento().textContent).not.toContain('www.ejemplo.com');
-    });
-
     it('avisa de los envíos escritos como texto', async () => {
       const vista = crearVista([NUEVA]);
       await abrir({ ...vista, resumen: { ...vista.resumen, enviosEnTexto: 41 } });
@@ -508,8 +493,12 @@ describe('ImportacionPageComponent', () => {
       await pulsarAplicar();
 
       const peticion = http.expectOne(URL_APLICAR);
-      expect(peticion.request.body.lote).toBe(vista.lote);
-      expect(peticion.request.body.claves).toEqual(['nueva', 'avanza']);
+      expect(peticion.request.body).toStrictEqual({
+        origen: 'Tabla',
+        ejecucionId: null,
+        hashRegistro: vista.hashRegistro,
+        claves: ['nueva', 'avanza'],
+      });
       peticion.flush(crearResultado({ creadas: 1, avanzadas: 1, paraRevisar: 1 }));
       await fixture.whenStable();
 
@@ -602,8 +591,7 @@ describe('ImportacionPageComponent', () => {
     });
 
     it('un 409 enseña el detail y vuelve a leer el registro solo, sin quitar el aviso', async () => {
-      const detail =
-        'Estas candidaturas ya se han importado desde otra pestaña. Vuelvo a leer el registro.';
+      const detail = 'El registro ha cambiado desde que lo leíste. Vuelvo a leerlo.';
       await abrirCon([NUEVA]);
 
       await pulsarAplicar();

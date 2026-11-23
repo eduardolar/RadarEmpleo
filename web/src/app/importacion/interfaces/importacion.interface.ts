@@ -1,8 +1,4 @@
-import {
-  EstadoCandidatura,
-  Modalidad,
-  MotivoDescarte,
-} from '../../candidaturas/interfaces/candidatura.interface';
+import { EstadoCandidatura } from '../../candidaturas/interfaces/candidatura.interface';
 
 // Tipos del contrato de /api/importacion (RadarEmpleo.Services/Contratos/Importacion.cs).
 // Los enums viajan como texto; `fecha` es un día suelto («2026-10-30»), sin hora ni zona.
@@ -10,33 +6,6 @@ import {
 export type OrigenLote = 'Tabla';
 
 export type ResultadoFila = 'Nueva' | 'AvanzaEstado' | 'YaExiste' | 'Conflicto';
-
-/** Fila tal como está en el registro: `enlace` aún no está normalizado y puede no llegar a guardarse */
-export interface FilaLote {
-  linea: number;
-  fecha: string;
-  fechaAproximada: boolean;
-  empresa: string;
-  puesto: string;
-  modalidad: Modalidad;
-  modalidadDetalle: string | null;
-  ubicacion: string | null;
-  portal: string | null;
-  enlace: string | null;
-  estado: EstadoCandidatura;
-  motivoDescarte: MotivoDescarte | null;
-  motivoDescarteTexto: string | null;
-  nota: string | null;
-  /** El estado sale de una palabra del medio del texto; la fila ya trae el aviso para comprobarlo */
-  estadoDeducido: boolean;
-}
-
-/** Sale de la vista previa y vuelve sin tocar al aplicar: el servidor lo recalcula todo */
-export interface LoteImportacion {
-  version: number;
-  origen: OrigenLote;
-  filas: FilaLote[];
-}
 
 export interface ResumenImportacion {
   nuevas: number;
@@ -80,20 +49,21 @@ export interface FilaFuera {
 
 /** Respuesta de POST /api/importacion/tabla/previsualizar. No se ha escrito nada */
 export interface VistaPreviaImportacion {
-  lote: LoteImportacion;
-  resumen: ResumenImportacion;
-  filas: FilaVistaPrevia[];
-  sinLeer: FilaSinLeer[];
   origen: OrigenLote;
   /** SHA-256 del registro leído: aplicar lo exige igual, y si ha cambiado da un 409 */
   hashRegistro: string;
   ejecucionId: number | null;
+  resumen: ResumenImportacion;
+  filas: FilaVistaPrevia[];
+  sinLeer: FilaSinLeer[];
   fuera: FilaFuera[];
 }
 
-/** Cuerpo de POST /api/importacion/lote/aplicar */
-export interface AplicarLote {
-  lote: LoteImportacion;
+/** Cuerpo de POST /api/importacion/lote/aplicar: el servidor rehace el lote, el cliente no manda filas */
+export interface AplicarImportacion {
+  origen: OrigenLote;
+  ejecucionId: number | null;
+  hashRegistro: string;
   claves: string[];
 }
 

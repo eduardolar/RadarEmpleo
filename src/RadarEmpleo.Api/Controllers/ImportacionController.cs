@@ -20,13 +20,14 @@ public class ImportacionController(ImportacionService importacion) : ControllerB
     public Task<VistaPreviaImportacionDto> PrevisualizarTabla() => importacion.PrevisualizarTablaAsync();
 
     /// <summary>
-    /// Vuelve a comparar el lote y aplica las claves pedidas. Los conflictos no dan error: se saltan y se
-    /// cuentan. Devuelve 400 si el lote o las claves no son válidos, y 409 si otra aplicación se ha
-    /// adelantado (en ese caso no cambia nada).
+    /// Vuelve a leer el registro, rehace el lote, lo compara otra vez y aplica las claves pedidas. Los conflictos no
+    /// dan error: se saltan y se cuentan. Devuelve 400 si el origen, la ejecución, el hash o las claves no son válidos,
+    /// y 409 si el registro ha cambiado desde la vista previa (por su hash) o si otra aplicación se ha adelantado (en
+    /// los dos casos no cambia nada).
     /// </summary>
     [HttpPost("lote/aplicar")]
     [ProducesResponseType<ResultadoAplicacionDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public Task<ResultadoAplicacionDto> AplicarLote(AplicarLoteRequest peticion) => importacion.AplicarAsync(peticion);
+    public Task<ResultadoAplicacionDto> AplicarLote(AplicarImportacionRequest peticion) => importacion.AplicarAsync(peticion);
 }

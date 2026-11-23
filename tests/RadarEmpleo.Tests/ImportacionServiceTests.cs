@@ -42,8 +42,12 @@ public class ImportacionServiceTests : ArnesSqliteTests
         var claves = vista.Filas
             .Where(f => f.Resultado is ResultadoFila.Nueva or ResultadoFila.AvanzaEstado)
             .Select(f => f.Clave).ToList();
-        return await _importacion.AplicarAsync(new AplicarLoteRequest(vista.Lote, claves));
+        return await _importacion.AplicarAsync(Peticion(vista, claves));
     }
+
+    /// <summary>Lo que manda la página: el origen y el hash de la vista previa, y las claves.</summary>
+    private static AplicarImportacionRequest Peticion(VistaPreviaImportacionDto vista, IReadOnlyList<string> claves) =>
+        new(OrigenLote.Tabla, null, vista.HashRegistro, claves);
 
     private async Task<CandidaturaDetalleDto> FichaAsync(string puesto)
     {
@@ -59,7 +63,6 @@ public class ImportacionServiceTests : ArnesSqliteTests
         var vista = await _importacion.PrevisualizarTablaAsync();
 
         Assert.Equal(new ResumenImportacionDto(8, 0, 0, 0, 0, 3), vista.Resumen);
-        Assert.Equal(8, vista.Lote.Filas.Count);
         Assert.Equal(8, vista.Filas.Count);
         Assert.Empty(vista.SinLeer);
         await using var db = CreateContext();
@@ -125,7 +128,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
     {
         UsarEjemplo();
         var vista = await _importacion.PrevisualizarTablaAsync();
-        var peticion = new AplicarLoteRequest(vista.Lote, vista.Filas.Select(f => f.Clave).ToList());
+        var peticion = Peticion(vista, vista.Filas.Select(f => f.Clave).ToList());
 
         await _importacion.AplicarAsync(peticion);
         var segunda = await _importacion.AplicarAsync(peticion);
@@ -234,21 +237,6 @@ public class ImportacionServiceTests : ArnesSqliteTests
     }
 
     [Fact]
-    public async Task Aplicar_LoteConLaNotaIgualAlMotivo_NoCreaLaNota()
-    {
-        const string texto = "Piden inglés C1";
-        var fila = new FilaLote(3, new DateOnly(2026, 9, 1), false, "Acme", "Backend", Estado: EstadoCandidatura.Descartada,
-            MotivoDescarte: MotivoDescarte.Otro, MotivoDescarteTexto: texto, Nota: texto);
-        var lote = new LoteImportacion(1, OrigenLote.Tabla, [fila]);
-
-        await _importacion.AplicarAsync(new AplicarLoteRequest(lote, [ReglasImportacion.Clave("Acme", "Backend", fila.Fecha)]));
-
-        var ficha = await FichaAsync("Backend");
-        Assert.Equal(texto, ficha.MotivoDescarteTexto);
-        Assert.Empty(ficha.Notas);
-    }
-
-    [Fact]
     public async Task Previsualizar_EstadoDeducidoDelTexto_LlevaAviso()
     {
         UsarFilas(
@@ -348,7 +336,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
         Assert.Equal(ResultadoFila.Conflicto, fila.Resultado);
         Assert.Equal(manual.Id, fila.CandidaturaId);
 
-        var resultado = await _importacion.AplicarAsync(new AplicarLoteRequest(vista.Lote, [fila.Clave]));
+        var resultado = await _importacion.AplicarAsync(Peticion(vista, [fila.Clave]));
 
         Assert.Equal(new ResultadoAplicacionDto(0, 0, 0, 1, true), resultado);
         Assert.Equal(EstadoCandidatura.Detectada, (await _candidaturas.ObtenerAsync(manual.Id))!.Estado);
@@ -385,7 +373,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
         var vista = await _importacion.PrevisualizarTablaAsync();
         var clave = vista.Filas[3].Clave;
 
-        var resultado = await _importacion.AplicarAsync(new AplicarLoteRequest(vista.Lote, [clave]));
+        var resultado = await _importacion.AplicarAsync(Peticion(vista, [clave]));
 
         Assert.Equal(new ResultadoAplicacionDto(1, 0, 7, 0, true), resultado);
         await using var db = CreateContext();
@@ -398,7 +386,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
         UsarEjemplo();
         var vista = await _importacion.PrevisualizarTablaAsync();
 
-        var resultado = await _importacion.AplicarAsync(new AplicarLoteRequest(vista.Lote, []));
+        var resultado = await _importacion.AplicarAsync(Peticion(vista, []));
 
         Assert.Equal(new ResultadoAplicacionDto(0, 0, 8, 0, true), resultado);
     }
@@ -437,7 +425,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
         var vista = await _importacion.PrevisualizarTablaAsync();
         var claves = vista.Filas.Select(f => f.Clave).Append("otra|cosa|2026-01-01").ToList();
 
-        var ex = await Assert.ThrowsAsync<ValidacionException>(() => _importacion.AplicarAsync(new AplicarLoteRequest(vista.Lote, claves)));
+        var ex = await Assert.ThrowsAsync<ValidacionException>(() => _importacion.AplicarAsync(Peticion(vista, claves)));
 
         Assert.Equal("claves", ex.Campo);
         await using var db = CreateContext();
@@ -445,47 +433,43 @@ public class ImportacionServiceTests : ArnesSqliteTests
     }
 
     [Fact]
-    public async Task Aplicar_OtraVersionDelLote_LanzaValidacion()
+    public async Task Aplicar_ConUnHashDistinto_Da409ConSuMensajeYNoCreaNada()
     {
-        var lote = new LoteImportacion(2, OrigenLote.Tabla, []);
+        UsarEjemplo();
+        var vista = await _importacion.PrevisualizarTablaAsync();
 
-        var ex = await Assert.ThrowsAsync<ValidacionException>(() => _importacion.AplicarAsync(new AplicarLoteRequest(lote, [])));
+        var error = await Assert.ThrowsAsync<ReglaNegocioException>(() => _importacion.AplicarAsync(
+            new AplicarImportacionRequest(OrigenLote.Tabla, null, new string('0', 64), vista.Filas.Select(f => f.Clave).ToList())));
 
-        Assert.Equal("version", ex.Campo);
-    }
-
-    [Fact]
-    public async Task Aplicar_MasDeMilFilas_LanzaValidacion()
-    {
-        var fila = new FilaLote(1, new DateOnly(2026, 9, 1), false, "Acme", "Backend");
-        var lote = new LoteImportacion(1, OrigenLote.Tabla, Enumerable.Repeat(fila, LimitesLote.Filas + 1).ToList());
-
-        await Assert.ThrowsAsync<ValidacionException>(() => _importacion.AplicarAsync(new AplicarLoteRequest(lote, [])));
+        Assert.Equal(ImportacionService.MensajeRegistroCambiado, error.Message);
+        await using var db = CreateContext();
+        Assert.Equal(0, await db.Candidaturas.CountAsync());
+        Assert.Equal(0, Exportador.Llamadas);
     }
 
     [Theory]
-    [InlineData(1, 1, 1)]
-    [InlineData(9999, 12, 31)]
-    public async Task Aplicar_FechaFueraDeRango_LanzaValidacion(int anio, int mes, int dia)
+    [InlineData(null)]
+    [InlineData((OrigenLote)99)]
+    public async Task Aplicar_SinOrigenOConUnoQueNoExiste_LanzaValidacion(OrigenLote? origen)
     {
-        var fila = new FilaLote(1, new DateOnly(anio, mes, dia), false, "Acme", "Backend");
+        UsarEjemplo();
+        var vista = await _importacion.PrevisualizarTablaAsync();
 
-        await Assert.ThrowsAsync<ValidacionException>(() =>
-            _importacion.AplicarAsync(new AplicarLoteRequest(new LoteImportacion(1, OrigenLote.Tabla, [fila]), [])));
+        var ex = await Assert.ThrowsAsync<ValidacionException>(() =>
+            _importacion.AplicarAsync(new AplicarImportacionRequest(origen, null, vista.HashRegistro, [])));
+
+        Assert.Equal("origen", ex.Campo);
     }
 
     [Fact]
-    public async Task Aplicar_EmpresaSinNombreEnElLote_LanzaValidacionYNoGuardaNingunaFila()
+    public async Task Aplicar_RegistroSinTablaConSuHash_Da409DeSinTabla()
     {
-        var buena = new FilaLote(1, new DateOnly(2026, 9, 1), false, "Acme", "Backend");
-        var mala = new FilaLote(2, new DateOnly(2026, 9, 2), false, ", S.L.", "Tester");
-        var lote = new LoteImportacion(1, OrigenLote.Tabla, [buena, mala]);
-        var claves = ReglasImportacion.Comparar(lote.Filas, []).Select(f => f.Clave).ToList();
+        _lector.Texto = "# Sin tabla\n";
 
-        await Assert.ThrowsAsync<ValidacionException>(() => _importacion.AplicarAsync(new AplicarLoteRequest(lote, claves)));
+        var error = await Assert.ThrowsAsync<ReglaNegocioException>(() =>
+            _importacion.AplicarAsync(new AplicarImportacionRequest(OrigenLote.Tabla, null, _lector.Hash, [])));
 
-        await using var db = CreateContext();
-        Assert.Equal(0, await db.Candidaturas.CountAsync());
+        Assert.Equal(ImportacionService.MensajeSinTabla, error.Message);
     }
 
     [Fact]
@@ -506,7 +490,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
         }), _lector, Exportador, Reloj);
 
         var error = await Assert.ThrowsAsync<ReglaNegocioException>(() =>
-            importacion.AplicarAsync(new AplicarLoteRequest(vista.Lote, vista.Filas.Select(f => f.Clave).ToList())));
+            importacion.AplicarAsync(Peticion(vista, vista.Filas.Select(f => f.Clave).ToList())));
 
         Assert.Equal(ImportacionService.MensajeYaImportadas, error.Message);
         await using var db = CreateContext();
@@ -523,7 +507,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
         UsarFilas("| 2026-10-25 | Acme | Backend | Remoto | Enviada | — |");
         Reloj.Avanzar(TimeSpan.FromHours(1));
         var vista = await _importacion.PrevisualizarTablaAsync();
-        var peticion = new AplicarLoteRequest(vista.Lote, [Assert.Single(vista.Filas, f => f.Resultado == ResultadoFila.AvanzaEstado).Clave]);
+        var peticion = Peticion(vista, [Assert.Single(vista.Filas, f => f.Resultado == ResultadoFila.AvanzaEstado).Clave]);
 
         // La «otra pestaña» aplica el mismo lote entre la lectura y el guardado de esta.
         var lenta = new ImportacionService(FactoryAntesDeGuardar(async () =>
@@ -558,7 +542,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
             _candidaturas.CambiarEstadoAsync(fila.CandidaturaId!.Value, new CambiarEstadoRequest(EstadoCandidatura.Enviada))),
             _lector, Exportador, Reloj);
 
-        var error = await Assert.ThrowsAsync<ReglaNegocioException>(() => lenta.AplicarAsync(new AplicarLoteRequest(vista.Lote, [fila.Clave])));
+        var error = await Assert.ThrowsAsync<ReglaNegocioException>(() => lenta.AplicarAsync(Peticion(vista, [fila.Clave])));
 
         Assert.Equal(ImportacionService.MensajeCambiadasEnOtraPestana, error.Message);
         var ficha = await FichaAsync("Backend");
@@ -578,7 +562,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
         var lenta = new ImportacionService(FactoryAntesDeConsultar("Recordatorios", () =>
             _candidaturas.BorrarAsync(fila.CandidaturaId!.Value)), _lector, Exportador, Reloj);
 
-        var error = await Assert.ThrowsAsync<ReglaNegocioException>(() => lenta.AplicarAsync(new AplicarLoteRequest(vista.Lote, [fila.Clave])));
+        var error = await Assert.ThrowsAsync<ReglaNegocioException>(() => lenta.AplicarAsync(Peticion(vista, [fila.Clave])));
 
         Assert.Equal(ImportacionService.MensajeCambiadasEnOtraPestana, error.Message);
     }
@@ -627,7 +611,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
             await otra.SaveChangesAsync();
         }), _lector, Exportador, Reloj);
 
-        var resultado = await importacion.AplicarAsync(new AplicarLoteRequest(vista.Lote, vista.Filas.Select(f => f.Clave).ToList()));
+        var resultado = await importacion.AplicarAsync(Peticion(vista, vista.Filas.Select(f => f.Clave).ToList()));
 
         Assert.Equal(3, resultado.Creadas);
         await using var db = CreateContext();
@@ -635,21 +619,6 @@ public class ImportacionServiceTests : ArnesSqliteTests
         Assert.Equal(["acme", "globex"], empresas.Select(e => e.NombreNormalizado));
         Assert.Equal(["Uno", "Dos"], empresas[0].Candidaturas.OrderBy(c => c.Id).Select(c => c.Puesto));
         Assert.Equal("Tres", Assert.Single(empresas[1].Candidaturas).Puesto);
-    }
-
-    [Fact]
-    public async Task Aplicar_DescartadaSinMotivoEnElLote_LanzaValidacionDelMotivo()
-    {
-        var fila = new FilaLote(3, new DateOnly(2026, 9, 1), false, "Acme", "Backend", Estado: EstadoCandidatura.Descartada);
-        var lote = new LoteImportacion(1, OrigenLote.Tabla, [fila]);
-        var claves = ReglasImportacion.Comparar(lote.Filas, []).Select(f => f.Clave).ToList();
-
-        var ex = await Assert.ThrowsAsync<ValidacionException>(() => _importacion.AplicarAsync(new AplicarLoteRequest(lote, claves)));
-
-        Assert.Equal("motivoDescarte", ex.Campo);
-        Assert.Contains("línea 3", ex.Message);
-        await using var db = CreateContext();
-        Assert.Equal(0, await db.Candidaturas.CountAsync());
     }
 
     [Fact]

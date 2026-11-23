@@ -99,16 +99,19 @@ describe('ImportacionService', () => {
       crearFila({ clave: 'revisar', resultado: 'Conflicto' }),
     ]);
 
-    it('reenvía el lote tal cual con las claves de las nuevas y las que cambian de estado', () => {
-      cargarVista(VISTA);
+    it('manda origen, ejecucionId, hashRegistro y claves, sin lote', () => {
+      cargarVista({ ...VISTA, hashRegistro: 'b'.repeat(64) });
 
       service.aplicar().subscribe();
 
       const peticion = http.expectOne(URL_APLICAR);
       expect(peticion.request.method).toBe('POST');
-      expect(peticion.request.body).toEqual({ lote: VISTA.lote, claves: ['nueva', 'avanza'] });
-      // El lote es el mismo objeto: ni se rellenan los null ni se toca el enlace
-      expect(peticion.request.body.lote).toBe(VISTA.lote);
+      expect(peticion.request.body).toStrictEqual({
+        origen: 'Tabla',
+        ejecucionId: null,
+        hashRegistro: 'b'.repeat(64),
+        claves: ['nueva', 'avanza'],
+      });
       peticion.flush(crearResultado());
       previsualizacion().flush(crearVista());
     });
@@ -192,8 +195,7 @@ describe('ImportacionService', () => {
     });
 
     it('un 409 da el detail y vuelve a pedir la vista previa: la que había ya no vale', () => {
-      const detail =
-        'Estas candidaturas ya se han importado desde otra pestaña. Vuelvo a leer el registro.';
+      const detail = 'El registro ha cambiado desde que lo leíste. Vuelvo a leerlo.';
       cargarVista(VISTA);
 
       let error: ErrorApi | undefined;

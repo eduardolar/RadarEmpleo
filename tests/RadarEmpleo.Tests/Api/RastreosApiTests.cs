@@ -199,7 +199,7 @@ public sealed class RastreosApiTests : IDisposable
     {
         var vista = await (await _http.PostAsync("/api/importacion/tabla/previsualizar", null)).Content.ReadFromJsonAsync<JsonElement>();
         var claves = vista.GetProperty("filas").EnumerateArray().Select(f => f.GetProperty("clave").GetString()).ToList();
-        var aplicar = await _http.PostAsJsonAsync("/api/importacion/lote/aplicar", new { lote = vista.GetProperty("lote"), claves });
+        var aplicar = await _http.PostAsJsonAsync("/api/importacion/lote/aplicar", new { origen = "Tabla", hashRegistro = vista.GetProperty("hashRegistro").GetString(), claves });
         Assert.Equal(HttpStatusCode.OK, aplicar.StatusCode);
 
         var resultado = await EscanearAsync();
