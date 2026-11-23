@@ -447,13 +447,14 @@ describe('FichaPageComponent', () => {
 
     it('«Deshacer» del aviso devuelve la ficha al estado anterior con lo que dice la API', async () => {
       await crear({ estado: 'Preparada' });
+      vi.useFakeTimers();
       boton('Marcar enviada').click();
       responderEstado('Enviada');
-      await fixture.whenStable();
+      await pasan(MARGEN_PINTADO_MS);
       expect(estadoActual().textContent).toContain('Enviada');
 
       // Pasada la pausa del doble clic, que también frena el deshacer
-      await new Promise((listo) => setTimeout(listo, 510));
+      await pasan(500 + MARGEN_PINTADO_MS);
       (document.activeElement as HTMLElement | null)?.blur();
       (avisos.deshacible.mock.calls[0][1] as () => boolean)();
       http.expectOne('/api/candidaturas/1/estado/deshacer').flush(
@@ -463,7 +464,7 @@ describe('FichaPageComponent', () => {
           estadosPosibles: estadosPosibles('Preparada'),
         }),
       );
-      await fixture.whenStable();
+      await pasan(MARGEN_PINTADO_MS);
 
       expect(estadoActual().textContent).toContain('Preparada');
       expect(boton('Marcar enviada')).toBeDefined();
