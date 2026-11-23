@@ -6,7 +6,12 @@ import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import { EjecucionAgente } from '../../interfaces/ejecucion.interface';
 import { AgentesService, INTERVALO_SEGUIMIENTO_MS } from '../../services/agentes.service';
 import { crearEjecucion, crearEstadoAgentes } from '../../utils/ejecucion-de-prueba';
-import { avisoCambio, TEXTO_PERDIDA } from '../../utils/textos-ejecucion';
+import {
+  avisoCambio,
+  avisoCambioCorto,
+  TEXTO_PERDIDA,
+  TEXTO_PERDIDA_CORTO,
+} from '../../utils/textos-ejecucion';
 import { EstadoEjecucion, INTERVALO_RELOJ_MS } from './estado-ejecucion';
 
 const URL_EJECUCIONES = '/api/agentes/ejecuciones';
@@ -41,15 +46,12 @@ describe('EstadoEjecucion', () => {
 
   function crear(
     ejecucion: EjecucionAgente,
-    entradas: { compacta?: boolean; topeUsd?: number | null } = {},
+    entradas: { compacta?: boolean; topeUsd?: number | null; contexto?: string } = {},
   ): HTMLElement {
     fixture = TestBed.createComponent(EstadoEjecucion);
     fixture.componentRef.setInput('ejecucion', ejecucion);
-    if (entradas.compacta !== undefined) {
-      fixture.componentRef.setInput('compacta', entradas.compacta);
-    }
-    if (entradas.topeUsd !== undefined) {
-      fixture.componentRef.setInput('topeUsd', entradas.topeUsd);
+    for (const [nombre, valor] of Object.entries(entradas)) {
+      fixture.componentRef.setInput(nombre, valor);
     }
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
@@ -128,11 +130,22 @@ describe('EstadoEjecucion', () => {
       ],
       [
         'no ha salido, con el error',
-        { estado: 'Error', error: 'Claude no ha contestado a tiempo.' },
+        { estado: 'Error', error: 'Ha tardado más de 5 min y la he parado.' },
         'No ha salido',
-        'No ha salido: Claude no ha contestado a tiempo.',
+        'No ha salido. Ha tardado más de 5 min y la he parado.',
       ],
-      ['cancelada', { estado: 'Cancelada' }, 'Cancelada', 'Cancelada antes de terminar.'],
+      [
+        'cancelada antes de empezar',
+        { estado: 'Cancelada' },
+        'Cancelada',
+        'Cancelada antes de empezar. No ha gastado nada.',
+      ],
+      [
+        'cancelada en curso, con su uso',
+        { estado: 'Cancelada', inicio: '2026-11-23T10:00:00Z', costeUsd: 0.15 },
+        'Cancelada',
+        'Cancelada antes de terminar · uso estimado: 1 % del tope de hoy',
+      ],
     ])('%s', (_caso, cambios, etiqueta, frase) => {
       crear(crearEjecucion(cambios), { topeUsd: 15 });
 
@@ -169,9 +182,26 @@ describe('EstadoEjecucion', () => {
         'Tarea de Claude: Análisis del encaje',
       );
     });
+
+    it('con contexto, el grupo lo añade a su nombre', () => {
+      crear(crearEjecucion(), { contexto: 'Acme' });
+
+      expect(elemento().querySelector('[role="group"]')!.getAttribute('aria-label')).toBe(
+        'Tarea de Claude: Análisis del encaje · Acme',
+      );
+    });
+
+    it('compacta: sin región que se anuncie', () => {
+      crear(crearEjecucion(), { compacta: true });
+
+      expect(elemento().querySelector('[role="status"]')).toBeNull();
+      expect(elemento().querySelector('[aria-live]')).toBeNull();
+    });
   });
 
   describe('botones', () => {
+    beforeEach(() => conAgentes());
+
     it.each<[Partial<EjecucionAgente>, boolean, boolean]>([
       [{ estado: 'EnCola' }, true, false],
       [{ estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z' }, true, false],
@@ -207,12 +237,38 @@ describe('EstadoEjecucion', () => {
       }
     });
 
-    it('«Cancelar» en rojo con borde y nombre con la tarea', () => {
+    it('«Cancelar la tarea» en rojo con borde y nombre con la tarea; en la compacta, «Cancelar»', () => {
       crear(crearEjecucion());
 
-      expect(boton('Cancelar')!.classList).toContain('boton-peligro-borde');
-      expect(boton('Cancelar')!.getAttribute('aria-label')).toBe('Cancelar: Análisis del encaje');
+      expect(boton('Cancelar la tarea')!.classList).toContain('boton-peligro-borde');
+      expect(boton('Cancelar')!.getAttribute('aria-label')).toBe(
+        'Cancelar la tarea: Análisis del encaje',
+      );
+      fixture.destroy();
+
+      crear(crearEjecucion(), { compacta: true, contexto: 'Acme' });
+      expect(boton('Cancelar')!.textContent!.trim()).toBe('Cancelar');
+      expect(boton('Cancelar')!.getAttribute('aria-label')).toBe(
+        'Cancelar: Análisis del encaje · Acme',
+      );
     });
+
+    it('«Reintentar» con el contexto en su nombre', () => {
+      crear(crearEjecucion({ estado: 'Error' }), { contexto: 'Acme' });
+
+      expect(boton('Reintentar')!.getAttribute('aria-label')).toBe(
+        'Reintentar: Análisis del encaje · Acme',
+      );
+    });
+  });
+
+  it('sin agentes disponibles no salen los botones (no harían nada)', () => {
+    crear(crearEjecucion());
+    expect(boton('Cancelar')).toBeUndefined();
+    fixture.destroy();
+
+    crear(crearEjecucion({ estado: 'Error' }));
+    expect(boton('Reintentar')).toBeUndefined();
   });
 
   describe('avisos rojos', () => {
@@ -240,11 +296,11 @@ describe('EstadoEjecucion', () => {
       expect(alertas[0].textContent).toContain('tu registro de candidaturas');
     });
 
-    it('compacta (la lista de /agentes): el aviso se ve, pero sin role="alert"', () => {
+    it('compacta (la lista de /agentes): el aviso corto se ve, pero sin role="alert"', () => {
       crear(crearEjecucion({ estado: 'Ok', perfilCambiado: true }), { compacta: true });
 
-      expect(elemento().querySelector('.estado-ejecucion__aviso')!.textContent).toContain(
-        avisoCambio('perfil'),
+      expect(elemento().querySelector('.estado-ejecucion__aviso')!.textContent!.trim()).toBe(
+        avisoCambioCorto('perfil'),
       );
       expect(elemento().querySelector('[role="alert"]')).toBeNull();
     });
@@ -295,14 +351,20 @@ describe('EstadoEjecucion', () => {
       fixture.destroy();
       expect(vi.getTimerCount()).toBe(0);
     });
+
+    it('cancelándose (sin tiempo que enseñar) no corre el reloj', () => {
+      crear(enCurso({ puedeCancelar: false }));
+
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 
   describe('acciones', () => {
     beforeEach(() => conAgentes());
 
     it('cancelar en cola: deshabilitado mientras responde y, cancelada, ofrece reintentar y avisa una vez', () => {
-      const ejecucion = crearEjecucion();
-      crear(ejecucion);
+      const cancelar = vi.spyOn(TestBed.inject(AgentesService), 'cancelar');
+      crear(crearEjecucion());
       const terminadas: EjecucionAgente[] = [];
       fixture.componentInstance.terminada.subscribe((e) => terminadas.push(e));
 
@@ -315,6 +377,7 @@ describe('EstadoEjecucion', () => {
 
       // Un segundo clic mientras va el primero no manda otra
       boton('Cancelando')!.click();
+      expect(cancelar).toHaveBeenCalledTimes(1);
       const peticion = http.expectOne(`${URL_EJECUCIONES}/1/cancelar`);
       expect(peticion.request.method).toBe('POST');
       peticion.flush(crearEjecucion({ estado: 'Cancelada' }));
@@ -339,6 +402,21 @@ describe('EstadoEjecucion', () => {
       expect(document.activeElement).toBe(elemento().querySelector('[role="group"]'));
     });
 
+    it('si el foco ya se había ido a otra parte, no salta a la tarjeta', async () => {
+      crear(crearEjecucion());
+      boton('Cancelar')!.focus();
+      boton('Cancelar')!.blur();
+      await Promise.resolve();
+
+      boton('Cancelar')!.click();
+      http
+        .expectOne(`${URL_EJECUCIONES}/1/cancelar`)
+        .flush(crearEjecucion({ estado: 'Cancelada' }));
+      pintar();
+
+      expect(document.activeElement).toBe(document.body);
+    });
+
     it('si cancelar falla, lo dice con role="alert" y se puede volver a intentar', () => {
       crear(crearEjecucion());
 
@@ -354,6 +432,31 @@ describe('EstadoEjecucion', () => {
       expect(elemento().querySelector('.estado-ejecucion__error-accion')!.textContent).toContain(
         'No se ha podido cancelar.',
       );
+      expect(deshabilitado(boton('Cancelar')!)).toBe(false);
+
+      // El fallo deja de valer en cuanto cambia el estado
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+      http.expectOne(`${URL_EJECUCIONES}/1`).flush(enCurso());
+      pintar();
+      expect(elemento().querySelector('.estado-ejecucion__error-accion')).toBeNull();
+    });
+
+    it('si cambia la ejecución con una acción en vuelo, la respuesta vieja no cae en la nueva', () => {
+      crear(crearEjecucion());
+      boton('Cancelar')!.click();
+      pintar();
+
+      fixture.componentRef.setInput('ejecucion', crearEjecucion({ id: 2 }));
+      pintar();
+      expect(deshabilitado(boton('Cancelar')!)).toBe(false);
+
+      http
+        .expectOne(`${URL_EJECUCIONES}/1/cancelar`)
+        .flush({ title: 'Ya ha terminado.' }, { status: 409, statusText: 'Conflict' });
+      pintar();
+
+      expect(insignia()).toBe('En cola');
+      expect(elemento().querySelector('.estado-ejecucion__error-accion')).toBeNull();
       expect(deshabilitado(boton('Cancelar')!)).toBe(false);
     });
 
@@ -407,6 +510,47 @@ describe('EstadoEjecucion', () => {
       vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS * 3);
       http.expectNone(`${URL_EJECUCIONES}/1`);
       expect(terminadas.length).toBe(1);
+    });
+
+    it('con la entrada sin terminar y el mapa ya terminada: avisa al momento, una vez, sin pedir nada', () => {
+      const agentes = TestBed.inject(AgentesService);
+      agentes.ultimaDe('AnalizarEncaje', 12).subscribe();
+      const hecha = crearEjecucion({ estado: 'Ok' });
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([hecha]);
+      const terminadas: EjecucionAgente[] = [];
+
+      fixture = TestBed.createComponent(EstadoEjecucion);
+      fixture.componentInstance.terminada.subscribe((e) => terminadas.push(e));
+      fixture.componentRef.setInput('ejecucion', crearEjecucion());
+      pintar();
+      pintar();
+
+      expect(insignia()).toBe('Hecha');
+      expect(terminadas).toEqual([hecha]);
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS * 2);
+      http.expectNone(`${URL_EJECUCIONES}/1`);
+    });
+
+    it('la que ya llega terminada no avisa', () => {
+      const terminadas: EjecucionAgente[] = [];
+      fixture = TestBed.createComponent(EstadoEjecucion);
+      fixture.componentInstance.terminada.subscribe((e) => terminadas.push(e));
+      fixture.componentRef.setInput('ejecucion', crearEjecucion({ estado: 'Ok' }));
+      pintar();
+
+      expect(terminadas).toEqual([]);
+    });
+
+    it('perdida en la compacta: el texto corto', () => {
+      crear(enCurso(), { compacta: true });
+
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+      http
+        .expectOne(`${URL_EJECUCIONES}/1`)
+        .flush({ title: 'No existe.' }, { status: 404, statusText: 'Not Found' });
+      pintar();
+
+      expect(texto()).toBe(TEXTO_PERDIDA_CORTO);
     });
 
     it('si la API ya no la encuentra, lo dice, quita los botones, para el reloj y emite perdida', () => {

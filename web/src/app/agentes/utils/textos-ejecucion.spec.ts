@@ -2,10 +2,13 @@ import { EjecucionAgente } from '../interfaces/ejecucion.interface';
 import { crearEjecucion, crearGasto } from './ejecucion-de-prueba';
 import {
   avisoCambio,
+  avisoCambioCorto,
   avisosCambio,
+  conPunto,
   duracion,
   ETIQUETA_ESTADO,
   NOMBRE_TAREA,
+  relojEnCurso,
   textoEstado,
   usoDelDia,
   usoEstimado,
@@ -229,15 +232,43 @@ describe('textoEstado', () => {
     expect(resultado).toBe('Hecha.');
   });
 
-  it('error: el mensaje de la API tal cual', () => {
+  it('error: el mensaje de la API (MensajesEjecucion) detrás de «No ha salido.»', () => {
     expect(texto({ estado: 'Error', error: 'Claude ha devuelto un error.' })).toBe(
-      'No ha salido: Claude ha devuelto un error.',
+      'No ha salido. Claude ha devuelto un error.',
+    );
+    expect(texto({ estado: 'Error', error: 'Ha tardado más de 5 min y la he parado.' })).toBe(
+      'No ha salido. Ha tardado más de 5 min y la he parado.',
+    );
+    expect(texto({ estado: 'Error', error: 'No encuentro Claude Code en este PC' })).toBe(
+      'No ha salido. No encuentro Claude Code en este PC.',
     );
     expect(texto({ estado: 'Error' })).toBe('No ha salido.');
+    expect(texto({ estado: 'Error', error: '  ' })).toBe('No ha salido.');
   });
 
-  it('cancelada, sin decir quién la ha parado', () => {
-    expect(texto({ estado: 'Cancelada' })).toBe('Cancelada antes de terminar.');
+  it('cancelada sin empezar: no ha gastado nada; empezada, con su uso si se sabe', () => {
+    expect(texto({ estado: 'Cancelada' })).toBe('Cancelada antes de empezar. No ha gastado nada.');
+    expect(texto({ estado: 'Cancelada', inicio: '2026-11-23T10:00:00Z', costeUsd: 0.15 })).toBe(
+      'Cancelada antes de terminar · uso estimado: 1 % del tope de hoy',
+    );
+    expect(
+      texto({ estado: 'Cancelada', inicio: '2026-11-23T10:00:00Z', costeEstimado: true }),
+    ).toBe(
+      'Cancelada antes de terminar · uso estimado: no se sabe, como mucho el 4 % del tope de hoy',
+    );
+    expect(texto({ estado: 'Cancelada', inicio: '2026-11-23T10:00:00Z' })).toBe(
+      'Cancelada antes de terminar.',
+    );
+  });
+
+  it('en curso sin `ahora`, la frase sin el tiempo', () => {
+    expect(
+      textoEstado(
+        crearEjecucion({ estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z' }),
+        null,
+        TOPE,
+      ),
+    ).toBe('Analizando el encaje…');
   });
 
   it('ningún estado habla de dólares ni pinta «NaN»', () => {
@@ -283,5 +314,45 @@ describe('etiquetas', () => {
     expect(NOMBRE_TAREA.AnalizarEncaje).toBe('Análisis del encaje');
     expect(NOMBRE_TAREA.ExtraerRegistro).toBe('Lectura del registro');
     expect(NOMBRE_TAREA.RellenarEnvio).toBe('Preparar el envío');
+  });
+});
+
+describe('conPunto', () => {
+  it.each([
+    ['Claude ha devuelto un error.', 'Claude ha devuelto un error.'],
+    ['Sin conexión', 'Sin conexión.'],
+    ['¿Está instalado?', '¿Está instalado?'],
+    ['¡Para!', '¡Para!'],
+    ['Leyendo…', 'Leyendo…'],
+    ['  con espacios  ', 'con espacios.'],
+  ])('%j → %j', (entrada, salida) => {
+    expect(conPunto(entrada)).toBe(salida);
+  });
+});
+
+describe('relojEnCurso', () => {
+  const enCurso = (cambios: Partial<EjecucionAgente> = {}) =>
+    crearEjecucion({ estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z', ...cambios });
+
+  it('el tiempo que lleva y el máximo', () => {
+    expect(relojEnCurso(enCurso(), AHORA)).toBe('1 min 20 s (máximo 5 min)');
+  });
+
+  it('null fuera de en curso, cancelándose, sin inicio o con una fecha inválida', () => {
+    expect(relojEnCurso(crearEjecucion(), AHORA)).toBeNull();
+    expect(relojEnCurso(enCurso({ puedeCancelar: false }), AHORA)).toBeNull();
+    expect(relojEnCurso(enCurso({ inicio: null }), AHORA)).toBeNull();
+    expect(relojEnCurso(enCurso({ inicio: 'x' }), AHORA)).toBeNull();
+  });
+});
+
+describe('avisoCambioCorto', () => {
+  it('en una línea y sin el nombre del archivo', () => {
+    expect(avisoCambioCorto('registro')).toBe(
+      'Ojo: cambió tu registro de candidaturas mientras trabajaba Claude.',
+    );
+    expect(avisosCambio(crearEjecucion({ perfilCambiado: true }), true)).toEqual([
+      'Ojo: cambió tu perfil de búsqueda mientras trabajaba Claude.',
+    ]);
   });
 });
