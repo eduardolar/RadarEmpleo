@@ -4,6 +4,7 @@ import {
   Component,
   computed,
   DestroyRef,
+  DOCUMENT,
   effect,
   ElementRef,
   inject,
@@ -14,6 +15,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   FormControl,
   FormGroup,
@@ -29,7 +31,10 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Title } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
-import { filter, switchMap } from 'rxjs';
+import { filter, finalize, switchMap } from 'rxjs';
+import { EstadoEjecucion } from '../../../agentes/components/estado-ejecucion/estado-ejecucion';
+import { EjecucionAgente } from '../../../agentes/interfaces/ejecucion.interface';
+import { AgentesService, esTerminal } from '../../../agentes/services/agentes.service';
 import { ErrorApi } from '../../../core/interfaces/error-api.interface';
 import { PanelDocumentos } from '../../../documentos/components/panel-documentos/panel-documentos';
 import { TarjetaRecordatorio } from '../../../recordatorios/components/tarjeta-recordatorio/tarjeta-recordatorio';
@@ -77,6 +82,7 @@ import { esEstadoFinal } from '../../utils/transiciones-permitidas';
     PanelDocumentos,
     EnlaceVolver,
     TarjetaRecordatorio,
+    EstadoEjecucion,
   ],
   selector: 'app-ficha-page',
   templateUrl: './ficha-page.component.html',
@@ -92,12 +98,20 @@ export default class FichaPageComponent {
   private readonly fechaActual = inject(FechaActualService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
+  private readonly agentes = inject(AgentesService);
+  private readonly documento = inject(DOCUMENT);
   private readonly inicio = viewChild.required<ElementRef<HTMLElement>>('inicio');
   private readonly estadoActual = viewChild<ElementRef<HTMLElement>>('estadoActual');
   private readonly bloqueAcciones = viewChild<ElementRef<HTMLElement>>('bloqueAcciones');
   private readonly elementoNota = viewChild<ElementRef<HTMLTextAreaElement>>('entradaNota');
   private readonly tituloHistorial = viewChild<ElementRef<HTMLElement>>('tituloHistorial');
   private readonly tituloRecordatorios = viewChild<ElementRef<HTMLElement>>('tituloRecordatorios');
+  private readonly tarjetaAnalisis = viewChild(EstadoEjecucion);
+  // read: con la referencia en un mat-button, sin él llegaría el componente y no el elemento
+  private readonly botonAnalizar = viewChild('botonAnalizar', { read: ElementRef<HTMLElement> });
+  private readonly botonDescartarCerrada = viewChild('botonDescartarCerrada', {
+    read: ElementRef<HTMLElement>,
+  });
 
   /** Viene de la ruta /candidaturas/:id (withComponentInputBinding) */
   readonly id = input.required({ transform: numberAttribute });
@@ -151,6 +165,48 @@ export default class FichaPageComponent {
     () => this.fueraDelProceso() && (this.candidatura()?.recordatorios ?? []).some((r) => !r.hecho),
   );
 
+  /** El análisis del encaje que se enseña: el lanzado aquí o el que seguía en marcha al entrar */
+  private readonly _analisis = signal<EjecucionAgente | null>(null);
+  protected readonly analisis = computed(() => {
+    const e = this._analisis();
+    return e?.candidaturaId === this.id() ? e : null;
+  });
+  private readonly perdidoId = signal<number | null>(null);
+  protected readonly lanzandoAnalisis = signal(false);
+  /** La ficha que se recarga tras un análisis: el aviso sale con el encaje que traiga */
+  private readonly avisarEncajeDe = signal<number | null>(null);
+
+  /** Con la versión del seguimiento; null si se ha perdido (la API ya no la encuentra) */
+  private readonly analisisActual = computed(() => {
+    const e = this.analisis();
+    return e && this.perdidoId() !== e.id ? (this.agentes.ejecuciones().get(e.id) ?? e) : null;
+  });
+  private readonly puedeAnalizar = computed(
+    () => this.agentes.puedeLanzar() && this.candidatura() !== null && !this.fueraDelProceso(),
+  );
+  protected readonly bloqueClaude = computed(
+    () => this.puedeAnalizar() || this.analisis() !== null,
+  );
+  protected readonly resumenAnalisis = computed(() => {
+    const e = this.analisisActual();
+    return e?.estado === 'Ok' ? e.resumen : null;
+  });
+  /** Con la oferta cerrada no hay análisis: se propone descartarla, nunca se descarta sola */
+  protected readonly proponerDescartar = computed(() => {
+    const e = this.analisisActual();
+    return (
+      e?.estado === 'Ok' &&
+      e.estadoOferta === 'Cerrada' &&
+      (this.candidatura()?.estadosPosibles.includes('Descartada') ?? false)
+    );
+  });
+  protected readonly verBotonAnalizar = computed(() => {
+    const e = this.analisisActual();
+    // En Error o Cancelada la tarjeta ya ofrece «Reintentar»
+    const libre = e === null || (esTerminal(e) && !e.puedeReintentar);
+    return this.puedeAnalizar() && libre && !this.proponerDescartar();
+  });
+
   protected readonly formularioNota = new FormGroup({
     texto: new FormControl('', {
       nonNullable: true,
@@ -167,6 +223,9 @@ export default class FichaPageComponent {
   private estadoVisto: { id: number; estado: EstadoCandidatura } | null = null;
   // El próximo cambio de estado es un «Deshacer» del aviso: el foco vuelve a los botones de estado
   private enfocarAcciones = false;
+  // El botón de lanzar desaparece al salir la tarjeta: el foco pasa a ella y no cae en <body>
+  private enfocarTarjeta = false;
+  private siguienteVisto: HTMLElement | undefined;
 
   constructor() {
     effect(() => {
@@ -222,6 +281,126 @@ export default class FichaPageComponent {
         this.accionesRecordatorio.nuevo('Entrevista', c).subscribe();
       });
     });
+
+    // Al entrar se retoma el análisis que siga en marcha; uno ya terminado no se enseña
+    effect(() => {
+      const id = this.id();
+      if (this.agentes.disponibles()) {
+        untracked(() => this.retomarAnalisis(id));
+      }
+    });
+
+    effect(() => {
+      const id = this.avisarEncajeDe();
+      const c = this.candidatura();
+      if (id === null || this.cargando()) {
+        return;
+      }
+      untracked(() => {
+        this.avisarEncajeDe.set(null);
+        if (c?.id === id && this.error() === null) {
+          this.avisos.exito(`Encaje actualizado: ${ETIQUETAS_ENCAJE[c.encaje]}.`);
+        }
+      });
+    });
+
+    // Lo siguiente que se puede hacer (volver a lanzar, descartar) recibe el foco si se ha quedado en
+    // <body> o en el marco de la tarjeta, que lo coge cuando desaparece su botón
+    afterRenderEffect(() => {
+      const tarjeta = this.tarjetaAnalisis();
+      const siguiente = (this.botonDescartarCerrada() ?? this.botonAnalizar())?.nativeElement;
+      untracked(() => {
+        if (this.enfocarTarjeta && tarjeta) {
+          this.enfocarTarjeta = false;
+          tarjeta.enfocar();
+        }
+        const nuevo = siguiente !== this.siguienteVisto;
+        this.siguienteVisto = siguiente;
+        const activo = this.documento.activeElement;
+        const perdido =
+          !activo ||
+          activo === this.documento.body ||
+          activo.matches('app-estado-ejecucion > [tabindex="-1"]');
+        if (tarjeta && siguiente && nuevo && perdido) {
+          siguiente.focus();
+        }
+      });
+    });
+  }
+
+  protected analizarEncaje(): void {
+    const c = this.candidatura();
+    if (!c || this.lanzandoAnalisis()) {
+      return;
+    }
+    this.lanzandoAnalisis.set(true);
+    this.agentes
+      .lanzarAnalisis(c.id)
+      .pipe(
+        finalize(() => this.lanzandoAnalisis.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (e) => {
+          this.enfocarTarjeta = true;
+          this._analisis.set(e);
+        },
+        error: (error: ErrorApi) => this.avisos.error(error.mensaje),
+      });
+  }
+
+  /** También para `reintentada`: la tarjeta pasa a la nueva y la ficha la guarda como la suya */
+  protected guardarAnalisis(e: EjecucionAgente): void {
+    this._analisis.set(e);
+  }
+
+  protected alTerminarAnalisis(e: EjecucionAgente): void {
+    this._analisis.set(e);
+    if (e.estado !== 'Ok' || e.candidaturaId !== this.id()) {
+      return;
+    }
+    if (e.estadoOferta === 'Cerrada') {
+      this.avisos.exito('La oferta ya no está publicada: no se ha analizado nada.');
+      return;
+    }
+    this.avisarEncajeDe.set(e.candidaturaId);
+    this.candidaturasService.cargarDetalle(e.candidaturaId);
+  }
+
+  protected alPerderAnalisis(id: number): void {
+    this.perdidoId.set(id);
+  }
+
+  /** El diálogo de descartar con «Oferta cerrada» ya elegido: hay que confirmarlo en él */
+  protected descartarCerrada(): void {
+    const c = this.candidatura();
+    if (c && !this.bloqueado()) {
+      this.cambioEstado.mover(
+        c,
+        'Descartada',
+        undefined,
+        () => (this.enfocarAcciones = true),
+        'Cerrada',
+      );
+    }
+  }
+
+  private retomarAnalisis(id: number): void {
+    if (this.agentes.estado() === null && !this.agentes.cargandoEstado()) {
+      this.agentes.cargarEstado();
+    }
+    this.agentes
+      .ultimaDe('AnalizarEncaje', id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (e) => {
+          if (e && !esTerminal(e) && this.id() === id && this.analisis() === null) {
+            this._analisis.set(e);
+          }
+        },
+        // Sin la última se puede lanzar igual: la API devuelve la que esté en marcha
+        error: () => undefined,
+      });
   }
 
   protected reintentar(): void {

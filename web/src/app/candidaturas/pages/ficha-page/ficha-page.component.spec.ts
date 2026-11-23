@@ -4,6 +4,11 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
+import { EjecucionAgente } from '../../../agentes/interfaces/ejecucion.interface';
+import { INTERVALO_SEGUIMIENTO_MS } from '../../../agentes/services/agentes.service';
+import { crearEjecucion, crearEstadoAgentes } from '../../../agentes/utils/ejecucion-de-prueba';
+import { SistemaService } from '../../../core/services/sistema.service';
+import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import { DialogoRecordatorio } from '../../../recordatorios/components/dialogo-recordatorio/dialogo-recordatorio';
 import { crearRecordatorio } from '../../../recordatorios/utils/recordatorio-de-prueba';
 import { AccionAviso, AvisosService } from '../../../shared/services/avisos.service';
@@ -758,6 +763,167 @@ describe('FichaPageComponent', () => {
       opcionesDelMenu()[1].click();
 
       expect(seccion().querySelectorAll('app-tarjeta-recordatorio')).toHaveLength(1);
+    });
+  });
+
+  describe('analizar el encaje con Claude', () => {
+    const URL_EJECUCIONES = '/api/agentes/ejecuciones';
+    const analisis = (cambios: Partial<EjecucionAgente> = {}) =>
+      crearEjecucion({ id: 5, candidaturaId: 1, ...cambios });
+
+    /** Con reloj simulado desde aquí: el seguimiento pide cada 5 s */
+    async function conAgentes(ultima: EjecucionAgente | null = null): Promise<void> {
+      vi.useFakeTimers();
+      TestBed.inject(SistemaService).cargarInfo();
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ agentesDisponibles: true }));
+      await pasan(0);
+      http.expectOne('/api/agentes/estado').flush(crearEstadoAgentes());
+      const ultimas = http.expectOne((r) => r.url === URL_EJECUCIONES);
+      expect(ultimas.request.params.toString()).toBe(
+        'tarea=AnalizarEncaje&limite=1&candidaturaId=1',
+      );
+      ultimas.flush(ultima ? [ultima] : []);
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    function botonTexto(texto: string): HTMLButtonElement | undefined {
+      return [...elemento().querySelectorAll('button')].find((b) => b.textContent?.includes(texto));
+    }
+
+    const botonAnalizar = () => botonTexto('Analizar encaje con Claude');
+    const tarjeta = () => elemento().querySelector('app-estado-ejecucion');
+
+    async function lanzar(): Promise<void> {
+      botonAnalizar()!.click();
+      const peticion = http.expectOne('/api/agentes/analizar/1');
+      expect(peticion.request.body).toEqual({});
+      peticion.flush(analisis());
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    async function seguimiento(id: number, respuesta: EjecucionAgente | null): Promise<void> {
+      await pasan(INTERVALO_SEGUIMIENTO_MS);
+      const peticion = http.expectOne(`${URL_EJECUCIONES}/${id}`);
+      if (respuesta) {
+        peticion.flush(respuesta);
+      } else {
+        peticion.flush({ detail: 'No existe.' }, { status: 404, statusText: 'Not Found' });
+      }
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    it('sin agentes disponibles no sale; con ellos va con borde y el único relleno es el del estado', async () => {
+      await crear({ estado: 'Enviada' });
+      expect(botonAnalizar()).toBeUndefined();
+
+      await conAgentes();
+
+      expect(botonAnalizar()!.hasAttribute('mat-stroked-button')).toBe(true);
+      expect(elemento().querySelectorAll('[mat-flat-button]')).toHaveLength(1);
+    });
+
+    it.each(['Descartada', 'Cerrada'] as const)('en una %s no sale', async (estado) => {
+      await crear({ estado, motivoDescarte: estado === 'Descartada' ? 'Ingles' : null });
+      await conAgentes();
+
+      expect(botonAnalizar()).toBeUndefined();
+    });
+
+    it('al pulsar, la tarjeta sale en su sitio con el foco y un doble toque no la cancela', async () => {
+      await crear({ estado: 'Enviada', empresa: 'Acme' });
+      await conAgentes();
+
+      await lanzar();
+
+      expect(botonAnalizar()).toBeUndefined();
+      expect(document.activeElement?.getAttribute('aria-label')).toBe(
+        'Tarea de Claude: Análisis del encaje · Acme',
+      );
+      botonTexto('Cancelar la tarea')!.click();
+      http.expectNone(`${URL_EJECUCIONES}/5/cancelar`);
+    });
+
+    it('al terminar en Ok recarga la ficha, avisa con el encaje y vuelve el botón con el foco', async () => {
+      await crear({ estado: 'Enviada' });
+      await conAgentes();
+      await lanzar();
+
+      await seguimiento(5, analisis({ estado: 'Ok', resumen: 'Encaje medio. Sin pega.' }));
+      http
+        .expectOne('/api/candidaturas/1')
+        .flush(crearDetalle({ id: 1, estado: 'Enviada', encaje: 'Medio' }));
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(avisos.exito).toHaveBeenCalledWith('Encaje actualizado: Medio.');
+      expect(elemento().textContent).toContain('Encaje medio. Sin pega.');
+      expect(document.activeElement).toBe(botonAnalizar());
+    });
+
+    it('con la oferta cerrada no recarga ni descarta: propone descartar con el motivo ya elegido', async () => {
+      await crear({ estado: 'Enviada' });
+      await conAgentes();
+      await lanzar();
+
+      await seguimiento(5, analisis({ estado: 'Ok', estadoOferta: 'Cerrada' }));
+
+      http.expectNone('/api/candidaturas/1');
+      expect(avisos.exito).toHaveBeenCalledWith(
+        'La oferta ya no está publicada: no se ha analizado nada.',
+      );
+      expect(botonAnalizar()).toBeUndefined();
+      const descartar = botonTexto('Descartar: oferta cerrada')!;
+      expect(descartar.classList).toContain('boton-peligro-borde');
+      expect(document.activeElement).toBe(descartar);
+
+      descartar.click();
+      expect(abrirDialogo.mock.calls[0][1].data).toMatchObject({
+        destino: 'Descartada',
+        motivo: 'Cerrada',
+      });
+      http.expectNone('/api/candidaturas/1/estado');
+    });
+
+    it('al entrar retoma la que sigue en marcha', async () => {
+      await crear({ estado: 'Enviada' });
+      await conAgentes(analisis({ estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z' }));
+
+      expect(tarjeta()).not.toBeNull();
+      expect(botonAnalizar()).toBeUndefined();
+    });
+
+    it('al entrar, una ya terminada no sale ni avisa', async () => {
+      await crear({ estado: 'Enviada' });
+      await conAgentes(analisis({ estado: 'Ok' }));
+
+      expect(tarjeta()).toBeNull();
+      expect(botonAnalizar()).toBeDefined();
+      expect(avisos.exito).not.toHaveBeenCalled();
+    });
+
+    it('si la API ya no la encuentra, vuelve el botón de lanzar', async () => {
+      await crear({ estado: 'Enviada' });
+      await conAgentes();
+      await lanzar();
+
+      await seguimiento(5, null);
+
+      expect(botonAnalizar()).toBeDefined();
+    });
+
+    it('tras reintentar desde la tarjeta sigue a la nueva hasta el final', async () => {
+      await crear({ estado: 'Enviada' });
+      await conAgentes();
+      await lanzar();
+      await seguimiento(5, analisis({ estado: 'Error', error: 'Se interrumpió.' }));
+      expect(botonAnalizar()).toBeUndefined();
+
+      botonTexto('Reintentar')!.click();
+      http.expectOne(`${URL_EJECUCIONES}/5/reintentar`).flush(analisis({ id: 6 }));
+      await seguimiento(6, analisis({ id: 6, estado: 'Ok' }));
+
+      http.expectOne('/api/candidaturas/1').flush(crearDetalle({ id: 1, encaje: 'Alto' }));
+      await pasan(MARGEN_PINTADO_MS);
+      expect(avisos.exito).toHaveBeenCalledWith('Encaje actualizado: Alto.');
     });
   });
 });
