@@ -475,6 +475,7 @@
                     [ejecucion]="e"
                     [contexto]="c.empresa"
                     [protegerDobleToque]="true"
+                    [permitirReintentar]="!fueraDelProceso()"
                     (terminada)="alTerminarAnalisis($event)"
                     (reintentada)="guardarAnalisis($event)"
                     (perdida)="alPerderAnalisis($event)"
@@ -491,10 +492,14 @@
                     class="min-h-12"
                     disabledInteractive
                     [disabled]="lanzandoAnalisis()"
+                    aria-describedby="gasto-analisis"
                     (click)="analizarEncaje()"
                   >
-                    {{ lanzandoAnalisis() ? 'Lanzando…' : 'Analizar encaje con Claude' }}
+                    {{ lanzandoAnalisis() ? 'Lanzando…' : textoAnalizar() }}
                   </button>
+                  <p id="gasto-analisis" class="-mt-1 text-xs text-on-surface-variant">
+                    {{ avisoGasto }}
+                  </p>
                 }
                 @if (proponerDescartar()) {
                   <button

@@ -7,7 +7,6 @@ import { of } from 'rxjs';
 import { EjecucionAgente } from '../../../agentes/interfaces/ejecucion.interface';
 import { INTERVALO_SEGUIMIENTO_MS } from '../../../agentes/services/agentes.service';
 import { crearEjecucion, crearEstadoAgentes } from '../../../agentes/utils/ejecucion-de-prueba';
-import { SistemaService } from '../../../core/services/sistema.service';
 import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import { DialogoRecordatorio } from '../../../recordatorios/components/dialogo-recordatorio/dialogo-recordatorio';
 import { crearRecordatorio } from '../../../recordatorios/utils/recordatorio-de-prueba';
@@ -37,7 +36,8 @@ describe('FichaPageComponent', () => {
     origen: 'Manual',
   };
 
-  async function crear(detalle: Partial<CandidaturaDetalle>): Promise<void> {
+  /** Con `conAgentes`, /api/sistema/info se queda sin responder: lo responde `conAgentes()` */
+  async function crear(detalle: Partial<CandidaturaDetalle>, conAgentes = false): Promise<void> {
     abrirDialogo = vi.fn(() => ({ afterClosed: () => of(undefined) }));
     avisos = { exito: vi.fn(), error: vi.fn(), deshacible: vi.fn() };
     TestBed.configureTestingModule({
@@ -63,6 +63,9 @@ describe('FichaPageComponent', () => {
         ...detalle,
       }),
     );
+    if (!conAgentes) {
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
+    }
     await fixture.whenStable();
   }
 
@@ -327,6 +330,7 @@ describe('FichaPageComponent', () => {
     http
       .expectOne('/api/candidaturas/99')
       .flush({ title: 'No se ha encontrado.' }, { status: 404, statusText: 'Not Found' });
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
     await fixture.whenStable();
 
     expect(elemento().textContent).toContain('Esta candidatura no existe o se ha borrado.');
@@ -771,16 +775,21 @@ describe('FichaPageComponent', () => {
     const analisis = (cambios: Partial<EjecucionAgente> = {}) =>
       crearEjecucion({ id: 5, candidaturaId: 1, ...cambios });
 
-    /** Con reloj simulado desde aquí: el seguimiento pide cada 5 s */
-    async function conAgentes(ultima: EjecucionAgente | null = null): Promise<void> {
+    const AHORA = new Date('2026-11-23T10:01:20Z');
+
+    /**
+     * Como al entrar en frío (F5): la ficha pide /api/sistema/info, luego el estado y la última. Con reloj
+     * simulado desde aquí: el seguimiento pide cada 5 s
+     */
+    async function conAgentes(ultima: EjecucionAgente | null = null, id = 1): Promise<void> {
       vi.useFakeTimers();
-      TestBed.inject(SistemaService).cargarInfo();
+      vi.setSystemTime(AHORA);
       http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ agentesDisponibles: true }));
       await pasan(0);
       http.expectOne('/api/agentes/estado').flush(crearEstadoAgentes());
       const ultimas = http.expectOne((r) => r.url === URL_EJECUCIONES);
       expect(ultimas.request.params.toString()).toBe(
-        'tarea=AnalizarEncaje&limite=1&candidaturaId=1',
+        `tarea=AnalizarEncaje&limite=1&candidaturaId=${id}`,
       );
       ultimas.flush(ultima ? [ultima] : []);
       await pasan(MARGEN_PINTADO_MS);
@@ -790,7 +799,8 @@ describe('FichaPageComponent', () => {
       return [...elemento().querySelectorAll('button')].find((b) => b.textContent?.includes(texto));
     }
 
-    const botonAnalizar = () => botonTexto('Analizar encaje con Claude');
+    const botonAnalizar = () =>
+      botonTexto('Analizar encaje con Claude') ?? botonTexto('Volver a analizar el encaje');
     const tarjeta = () => elemento().querySelector('app-estado-ejecucion');
 
     async function lanzar(): Promise<void> {
@@ -813,24 +823,31 @@ describe('FichaPageComponent', () => {
     }
 
     it('sin agentes disponibles no sale; con ellos va con borde y el único relleno es el del estado', async () => {
-      await crear({ estado: 'Enviada' });
+      await crear({ estado: 'Enviada', encaje: 'SinValorar' }, true);
       expect(botonAnalizar()).toBeUndefined();
 
       await conAgentes();
 
+      expect(botonAnalizar()!.textContent!.trim()).toBe('Analizar encaje con Claude');
       expect(botonAnalizar()!.hasAttribute('mat-stroked-button')).toBe(true);
+      const gasto = elemento().querySelector(
+        `#${botonAnalizar()!.getAttribute('aria-describedby')}`,
+      );
+      expect(gasto?.textContent?.trim()).toBe(
+        'Gasta un poco de tu tope diario de Claude (suele ser en torno al 1\u00a0%).',
+      );
       expect(elemento().querySelectorAll('[mat-flat-button]')).toHaveLength(1);
     });
 
     it.each(['Descartada', 'Cerrada'] as const)('en una %s no sale', async (estado) => {
-      await crear({ estado, motivoDescarte: estado === 'Descartada' ? 'Ingles' : null });
+      await crear({ estado, motivoDescarte: estado === 'Descartada' ? 'Ingles' : null }, true);
       await conAgentes();
 
       expect(botonAnalizar()).toBeUndefined();
     });
 
     it('al pulsar, la tarjeta sale en su sitio con el foco y un doble toque no la cancela', async () => {
-      await crear({ estado: 'Enviada', empresa: 'Acme' });
+      await crear({ estado: 'Enviada', empresa: 'Acme' }, true);
       await conAgentes();
 
       await lanzar();
@@ -844,7 +861,7 @@ describe('FichaPageComponent', () => {
     });
 
     it('al terminar en Ok recarga la ficha, avisa con el encaje y vuelve el botón con el foco', async () => {
-      await crear({ estado: 'Enviada' });
+      await crear({ estado: 'Enviada' }, true);
       await conAgentes();
       await lanzar();
 
@@ -854,22 +871,37 @@ describe('FichaPageComponent', () => {
         .flush(crearDetalle({ id: 1, estado: 'Enviada', encaje: 'Medio' }));
       await pasan(MARGEN_PINTADO_MS);
 
-      expect(avisos.exito).toHaveBeenCalledWith('Encaje actualizado: Medio.');
+      expect(avisos.exito).toHaveBeenCalledWith('Encaje actualizado: Alto → Medio.');
       expect(elemento().textContent).toContain('Encaje medio. Sin pega.');
+      expect(botonAnalizar()!.textContent!.trim()).toBe('Volver a analizar el encaje');
       expect(document.activeElement).toBe(botonAnalizar());
     });
 
+    it('si al terminar el foco no estaba en la tarjeta (leyendo otra cosa), no se mueve', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes();
+      await lanzar();
+      (document.activeElement as HTMLElement).blur();
+
+      await seguimiento(5, analisis({ estado: 'Ok' }));
+      http.expectOne('/api/candidaturas/1').flush(crearDetalle({ id: 1, estado: 'Enviada' }));
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(document.activeElement).toBe(document.body);
+    });
+
     it('con la oferta cerrada no recarga ni descarta: propone descartar con el motivo ya elegido', async () => {
-      await crear({ estado: 'Enviada' });
+      await crear({ estado: 'Enviada' }, true);
       await conAgentes();
       await lanzar();
 
       await seguimiento(5, analisis({ estado: 'Ok', estadoOferta: 'Cerrada' }));
 
       http.expectNone('/api/candidaturas/1');
-      expect(avisos.exito).toHaveBeenCalledWith(
-        'La oferta ya no está publicada: no se ha analizado nada.',
-      );
+      expect(avisos.exito).toHaveBeenCalledWith('La oferta ya no está publicada. ¿La descartas?', {
+        texto: 'Descartar',
+        alPulsar: expect.any(Function),
+      });
       expect(botonAnalizar()).toBeUndefined();
       const descartar = botonTexto('Descartar: oferta cerrada')!;
       expect(descartar.classList).toContain('boton-peligro-borde');
@@ -881,10 +913,16 @@ describe('FichaPageComponent', () => {
         motivo: 'Cerrada',
       });
       http.expectNone('/api/candidaturas/1/estado');
+
+      // «Descartar» del aviso abre el mismo diálogo
+      await pasan(500);
+      (avisos.exito.mock.calls[0][1] as AccionAviso).alPulsar();
+      expect(abrirDialogo).toHaveBeenCalledTimes(2);
+      expect(abrirDialogo.mock.calls[1][1].data).toMatchObject({ motivo: 'Cerrada' });
     });
 
-    it('al entrar retoma la que sigue en marcha', async () => {
-      await crear({ estado: 'Enviada' });
+    it('al entrar en frío (F5) pide la info, el estado y la última, y retoma la que sigue en marcha', async () => {
+      await crear({ estado: 'Enviada' }, true);
       await conAgentes(analisis({ estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z' }));
 
       expect(tarjeta()).not.toBeNull();
@@ -892,7 +930,7 @@ describe('FichaPageComponent', () => {
     });
 
     it('al entrar, una ya terminada no sale ni avisa', async () => {
-      await crear({ estado: 'Enviada' });
+      await crear({ estado: 'Enviada' }, true);
       await conAgentes(analisis({ estado: 'Ok' }));
 
       expect(tarjeta()).toBeNull();
@@ -901,7 +939,7 @@ describe('FichaPageComponent', () => {
     });
 
     it('si la API ya no la encuentra, vuelve el botón de lanzar', async () => {
-      await crear({ estado: 'Enviada' });
+      await crear({ estado: 'Enviada' }, true);
       await conAgentes();
       await lanzar();
 
@@ -911,7 +949,7 @@ describe('FichaPageComponent', () => {
     });
 
     it('tras reintentar desde la tarjeta sigue a la nueva hasta el final', async () => {
-      await crear({ estado: 'Enviada' });
+      await crear({ estado: 'Enviada' }, true);
       await conAgentes();
       await lanzar();
       await seguimiento(5, analisis({ estado: 'Error', error: 'Se interrumpió.' }));
@@ -923,7 +961,35 @@ describe('FichaPageComponent', () => {
 
       http.expectOne('/api/candidaturas/1').flush(crearDetalle({ id: 1, encaje: 'Alto' }));
       await pasan(MARGEN_PINTADO_MS);
-      expect(avisos.exito).toHaveBeenCalledWith('Encaje actualizado: Alto.');
+      expect(avisos.exito).toHaveBeenCalledWith('Encaje sin cambios: Alto.');
+    });
+
+    it('en una ficha descartada, la tarjeta que acaba en error no ofrece «Reintentar»', async () => {
+      await crear({ estado: 'Descartada', motivoDescarte: 'Ingles' }, true);
+      await conAgentes(analisis());
+
+      await seguimiento(5, analisis({ estado: 'Error', error: 'Se interrumpió.' }));
+
+      expect(tarjeta()).not.toBeNull();
+      expect(botonTexto('Reintentar')).toBeUndefined();
+    });
+
+    it('si se cambia de ficha antes de que conteste, la tarjeta de la otra no se lleva el foco', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes();
+      botonAnalizar()!.click();
+      fixture.componentRef.setInput('id', 2);
+      await pasan(0);
+      http.expectOne('/api/candidaturas/2').flush(crearDetalle({ id: 2, estado: 'Enviada' }));
+      http.expectOne('/api/agentes/analizar/1').flush(analisis());
+      await pasan(MARGEN_PINTADO_MS);
+
+      const ultimas = http.expectOne((r) => r.url === URL_EJECUCIONES);
+      ultimas.flush([analisis({ id: 9, candidaturaId: 2 })]);
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(tarjeta()).not.toBeNull();
+      expect(document.activeElement?.closest('app-estado-ejecucion')).toBeNull();
     });
   });
 });

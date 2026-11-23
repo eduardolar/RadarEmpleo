@@ -87,6 +87,8 @@ describe('Navegación', () => {
     const harness = await RouterTestingHarness.create('/candidaturas/1');
 
     http.expectOne('/api/candidaturas/1').flush(crearDetalle({ id: 1, puesto: 'Dev de la ficha' }));
+    // La ficha pregunta si hay agentes, para ofrecer analizar el encaje
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
     await harness.fixture.whenStable();
 
     const pagina = harness.routeNativeElement!;
@@ -102,6 +104,7 @@ describe('Navegación', () => {
   it('al salir de la ficha, Tablero deja de estar resaltado', async () => {
     const harness = await RouterTestingHarness.create('/candidaturas/1');
     http.expectOne('/api/candidaturas/1').flush(crearDetalle({ id: 1 }));
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
 
     await harness.navigateByUrl('/rastreos');
     responderRastreos();
