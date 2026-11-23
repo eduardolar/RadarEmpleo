@@ -1,0 +1,23 @@
+# Finales de línea iguales en Windows y en el CI (Linux): el repositorio guarda LF y la copia de trabajo también.
+# Así los textos de varias líneas de los tests ("""...""") y Prettier dan lo mismo en los dos sitios.
+* text=auto eol=lf
+
+# Windows PowerShell 5.1 y cmd prefieren CRLF.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binarios: nunca se tocan sus bytes.
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.mp4 binary
+*.woff binary
+*.woff2 binary
+*.db binary
