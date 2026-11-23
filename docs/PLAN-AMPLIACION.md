@@ -25,6 +25,7 @@ Antes de programar, **F4 = 1 día de pruebas de viabilidad**: no se sabe sin pro
 | F11 | Modo Automático con salvaguardas | 1,5 | Tests de `ReglasEnvioAutomatico`; en vivo con correo desbloqueado: preparar → se envía sola → aviso por correo y en Hoy; «Pausar» detiene la siguiente |
 | F12 | Móvil (antigua F7) + vista de solo lectura de «Esperan tu OK» y envíos | 1,5 | Con datos móviles: tablero, nota que aparece en el PC, envío pendiente con «Confírmalo en el PC» |
 | F13 | Demo y portfolio (antigua F8) + preparaciones y envíos de ejemplo, envío y correo apagados en Demo | 1,5 | URL pública con datos inventados; CI en verde; script sin datos personales |
+| F14 | **Perfil desde la app** (propuesta del 23/11/2026, ver 7c): F14a editarlo por secciones; F14b «Mejorar mi perfil con Claude» | 2-3 | F14a: cambiar los filtros en la app y verlos en `perfil-busqueda.md` sin pisar un cambio de `/empleo`; F14b: una propuesta de Claude aceptada a medias deja en el archivo solo lo aceptado |
 
 Total ~17 días. Si hay que recortar: F11, estadísticas por motivo e importación de LinkedIn.
 
@@ -136,6 +137,14 @@ Revisión de [AIHawk](https://github.com/feder-cr/jobs_applier_ai_agent_aihawk) 
 - **Filtro previo por palabras del título (Rastreos).** Palabras que descartan una oferta antes de pasarla a la IA (por ejemplo «Senior» o tecnologías que no interesan), editables por Eduardo, con la oferta marcada «Descartada por filtro» y visible por si acaso.
 
 Lo que AIHawk hace y aquí no se adopta: enviar sin revisión, rellenar con datos que no hay («Please see my attached CV», opciones «cercanas» en preguntas legales), crear cuentas con contraseña generada, leer el correo para sacar códigos, telemetría y pasar los datos por un intermediario de pago.
+
+## 7c. Perfil desde la app (F14, propuesta del 23/11/2026)
+
+Hoy la app solo lee `perfil-busqueda.md` (`PLAN.md`, punto 4) y el perfil se cambia con `/empleo` o a mano. Eduardo pidió el 23/11/2026 que la app ayude a hacerlo, en dos niveles. Va después de la F7b; el orden respecto a F8-F13 se decide al planificarla.
+
+- **F14a. Editarlo en la app.** La página Perfil gana «Editar» por secciones (stack, filtros, idiomas, zonas y modalidad, salario, lo que no quiere). Guarda en `perfil-busqueda.md` conservando el resto del archivo tal cual (las secciones que la app no entiende no se tocan). Para no pisar un cambio de `/empleo` o hecho a mano, se guarda con el hash leído, como la importación: si el archivo ha cambiado, 409 «El perfil ha cambiado desde que lo abriste. Vuelvo a leerlo.». Copia del archivo antes de cada guardado. Solo desde el PC.
+- **F14b. «Mejorar mi perfil con Claude».** Tarea de agente nueva, con el mismo patrón que AnalizarEncaje (cola, tope, sin herramientas, datos entre delimitadores y salida con esquema): Claude lee el perfil, el CV y las candidaturas (encajes, descartes y motivos) y **propone** cambios concretos por sección, cada uno con su porqué. La pantalla enseña cada propuesta como «antes → después» y Eduardo acepta o descarta una a una; solo lo aceptado se escribe, con el mismo hash y la misma copia que en F14a. **Claude nunca escribe el perfil por su cuenta.**
+- Riesgos: que el formato del archivo cambie y la app no lo entienda (se edita solo lo que se reconoce y lo demás no se toca); inyección desde el CV o las ofertas en F14b (mismas defensas que AnalizarEncaje).
 
 ## 8. Decisiones de Eduardo (06/11/2026)
 
