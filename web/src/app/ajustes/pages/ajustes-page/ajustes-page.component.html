@@ -13,7 +13,9 @@
     @switch (sistemaService.estado()) {
       @case ('conectada') {
         @if (sistemaService.info(); as info) {
-          <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
+          <!-- Etiquetas con un ancho mínimo común: los valores de las dos tarjetas empiezan en la misma
+               columna, con o sin las filas de los agentes -->
+          <dl class="grid grid-cols-[minmax(5rem,auto)_1fr] gap-x-6 gap-y-2">
             <dt class="text-sm text-on-surface-variant">Modo</dt>
             <dd class="font-semibold text-on-surface">
               {{ info.modo }}
@@ -44,7 +46,7 @@
     >
       <h2 id="titulo-agentes" class="mb-3 text-xl font-extrabold">Agentes de Claude</h2>
 
-      <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
+      <dl class="grid grid-cols-[minmax(5rem,auto)_1fr] gap-x-6 gap-y-2">
         <dt class="text-sm text-on-surface-variant">Estado</dt>
         <dd class="min-w-0 [overflow-wrap:anywhere]">
           @if (disponibles()) {
