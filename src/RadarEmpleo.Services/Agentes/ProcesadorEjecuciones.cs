@@ -84,7 +84,7 @@ public sealed class ProcesadorEjecuciones : BackgroundService
     }
 
     /// <summary>
-    /// Al arrancar la API: lo que estaba en curso queda en Error («Se interrumpió…») y lo que estaba en cola, Cancelada;
+    /// Al arrancar la API: lo que estaba en curso queda en Error («Se cortó porque la app se cerró…») y lo que estaba en cola, Cancelada;
     /// si sigue vivo el claude.exe de una ejecución (mismo pid, hora de inicio y nombre), se mata con su árbol; se borra
     /// el bloqueo propio caducado y los logs y carpetas de ejecución de más de 60 días. Solo si esta API tiene la
     /// exclusión de la base de datos; si no, no toca nada y devuelve false.

@@ -45,7 +45,7 @@ public class EjecucionAgente
     public const int LargoParametros = 500, LargoSesion = 100;
 
     /// <summary>Error que queda en lo que estaba en curso cuando se cerró la API.</summary>
-    public const string MensajeInterrumpida = "Se interrumpió: la API se cerró mientras trabajaba.";
+    public const string MensajeInterrumpida = "Se cortó porque la app se cerró mientras trabajaba.";
 
     /// <summary>Resumen de lo que estaba en cola cuando se cerró la API (no se relanza solo).</summary>
     public const string MensajeReiniciadaAntesDeEmpezar = "La API se reinició antes de empezar.";

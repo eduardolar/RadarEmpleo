@@ -307,7 +307,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var final = await LeerAsync(ejecucion.Id);
         Assert.Equal(EstadoEjecucion.Error, final.Estado);
-        Assert.Equal("Ha llegado al tope de uso de esta tarea y la he parado.", final.Error);
+        Assert.Equal(MensajesEjecucion.TopeTarea, final.Error);
         Assert.Equal(0.52m, final.CosteUsd);
         Assert.False(File.Exists(RutaBloqueo));
     }
@@ -349,8 +349,8 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(ModoFalso.Error, "Claude ha devuelto un error.")]
-    [InlineData(ModoFalso.SalidaNoValida, "Claude ha respondido en un formato que no entiendo.")]
+    [InlineData(ModoFalso.Error, MensajesEjecucion.ErrorDeClaude)]
+    [InlineData(ModoFalso.SalidaNoValida, MensajesEjecucion.SalidaNoValida)]
     public async Task UnFalloDeClaude_QuedaErrorConSuMensaje(ModoFalso modo, string mensaje)
     {
         var ejecucion = await EncolarAsync();
@@ -1003,7 +1003,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var curso = await LeerAsync(enCurso.Id);
         Assert.Equal(EstadoEjecucion.Error, curso.Estado);
-        Assert.Equal("Se interrumpió: la API se cerró mientras trabajaba.", curso.Error);
+        Assert.Equal(EjecucionAgente.MensajeInterrumpida, curso.Error);
         var cola = await LeerAsync(enCola.Id);
         Assert.Equal(EstadoEjecucion.Cancelada, cola.Estado);
         Assert.Equal("La API se reinició antes de empezar.", cola.Resumen);
@@ -1054,7 +1054,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var a = await LeerAsync(primera.Id);
         Assert.Equal(EstadoEjecucion.Error, a.Estado);
-        Assert.Equal("Algo ha fallado al lanzar Claude.", a.Error);
+        Assert.Equal(MensajesEjecucion.Inesperado, a.Error);
         Assert.Equal(EstadoEjecucion.Ok, (await LeerAsync(segunda.Id)).Estado);
         Assert.False(File.Exists(RutaBloqueo));
     }

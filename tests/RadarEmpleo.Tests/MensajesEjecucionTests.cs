@@ -1,3 +1,4 @@
+using RadarEmpleo.Domain;
 using RadarEmpleo.Services.Agentes;
 
 namespace RadarEmpleo.Tests;
@@ -19,10 +20,61 @@ public class MensajesEjecucionTests
     }
 
     [Fact]
-    public void De_PresupuestoAgotado_DiceElTopeDeUsoDeLaTarea()
+    public void De_PresupuestoAgotado_DiceElTopeDeUsoDeLaTareaYQueReintentarPuedeGastarLoMismo()
     {
-        Assert.Equal("Ha llegado al tope de uso de esta tarea y la he parado.",
+        Assert.Equal("Ha llegado al tope de uso de esta tarea y la he parado. Si la reintentas, puede volver a gastar lo mismo.",
             MensajesEjecucion.De(FalloClaude.PresupuestoAgotado, TimeSpan.FromMinutes(5)));
+    }
+
+    /// <summary>El front los pinta tras «No ha salido.»: cada uno dice qué ha pasado y qué hacer.</summary>
+    [Theory]
+    [InlineData(FalloClaude.ErrorDeClaude, "Claude ha devuelto un error. Prueba a reintentarla en un rato.")]
+    [InlineData(FalloClaude.SalidaNoValida, "Claude ha respondido en un formato que no entiendo. Reintentarla suele bastar.")]
+    [InlineData(FalloClaude.NoInstalado, "No encuentro Claude Code en este PC. Instálalo o abre la app en el PC donde lo tengas.")]
+    public void De_DiceQueHacer(FalloClaude fallo, string esperado)
+    {
+        Assert.Equal(esperado, MensajesEjecucion.De(fallo, TimeSpan.FromMinutes(5)));
+    }
+
+    [Fact]
+    public void Inesperado_DiceQueHacer()
+    {
+        Assert.Equal("Algo ha fallado al lanzar Claude. Vuelve a intentarlo y, si se repite, reinicia la app.", MensajesEjecucion.Inesperado);
+    }
+
+    [Fact]
+    public void BloqueoDemasiadoTiempo_ConElNombreHumanoYSinHablarDeEjecuciones()
+    {
+        var mensaje = MensajesEjecucion.BloqueoDemasiadoTiempo(BloqueoEjecucion.NombreVisible(BloqueoEjecucion.QuienEmpleo));
+
+        Assert.Equal("Ha esperado una hora y tu sesión de /empleo en Claude Code sigue usando Claude. Reintenta cuando termine.", mensaje);
+        Assert.DoesNotContain("ejecución", mensaje, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void MensajeInterrumpida_HablaDeLaAppYNoDeLaApi()
+    {
+        Assert.Equal("Se cortó porque la app se cerró mientras trabajaba.", EjecucionAgente.MensajeInterrumpida);
+        Assert.DoesNotContain("API", EjecucionAgente.MensajeInterrumpida);
+    }
+
+    public static TheoryData<string> Fijos =>
+    [
+        MensajesEjecucion.NoInstalado, MensajesEjecucion.SalidaNoValida, MensajesEjecucion.ErrorDeClaude, MensajesEjecucion.Inesperado,
+        MensajesEjecucion.SinManejador, MensajesEjecucion.Cancelada, MensajesEjecucion.OtraCopiaLlevaLaCola,
+        MensajesEjecucion.ColaSinArrancar, MensajesEjecucion.TopeTarea, MensajesEjecucion.TopeDiario,
+        MensajesEjecucion.BloqueoDemasiadoTiempo(BloqueoEjecucion.NombreOtroPrograma),
+        EjecucionAgente.MensajeInterrumpida, EjecucionAgente.MensajeReiniciadaAntesDeEmpezar
+    ];
+
+    [Theory]
+    [MemberData(nameof(Fijos))]
+    public void NingunMensaje_LlevaRutasNiNombresDeTipos(string mensaje)
+    {
+        Assert.DoesNotContain("\\", mensaje);
+        Assert.DoesNotContain("Exception", mensaje);
+        Assert.DoesNotContain("{", mensaje);
+        Assert.EndsWith(".", mensaje);
     }
 
     [Fact]
