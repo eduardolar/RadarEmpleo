@@ -1,32 +1,10 @@
 import {
-  FilaLote,
   FilaVistaPrevia,
   ResultadoAplicacion,
   VistaPreviaImportacion,
 } from '../interfaces/importacion.interface';
 
 // Solo para los tests: datos inventados que cada prueba completa con lo que le importa
-
-export function crearFilaLote(cambios: Partial<FilaLote> = {}): FilaLote {
-  return {
-    linea: 5,
-    fecha: '2026-08-03',
-    fechaAproximada: false,
-    empresa: 'Acme',
-    puesto: 'Desarrollador Angular',
-    modalidad: 'NoIndicada',
-    modalidadDetalle: null,
-    ubicacion: null,
-    portal: null,
-    enlace: null,
-    estado: 'Enviada',
-    motivoDescarte: null,
-    motivoDescarteTexto: null,
-    nota: null,
-    estadoDeducido: false,
-    ...cambios,
-  };
-}
 
 export function crearFila(cambios: Partial<FilaVistaPrevia> = {}): FilaVistaPrevia {
   return {
@@ -53,11 +31,9 @@ export function crearVista(
     filas.filter((f) => f.resultado === resultado).length;
   const sinLeer = cambios.sinLeer ?? [];
   return {
-    lote: {
-      version: 1,
-      origen: 'Tabla',
-      filas: filas.map((f, i) => crearFilaLote({ linea: i + 5, empresa: f.empresa })),
-    },
+    origen: 'Tabla',
+    hashRegistro: 'a'.repeat(64),
+    ejecucionId: null,
     resumen: {
       nuevas: contar('Nueva'),
       avanzan: contar('AvanzaEstado'),
@@ -68,6 +44,7 @@ export function crearVista(
     },
     filas,
     sinLeer,
+    fuera: [],
     ...cambios,
   };
 }

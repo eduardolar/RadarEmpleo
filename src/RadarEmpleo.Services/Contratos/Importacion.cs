@@ -60,7 +60,7 @@ public sealed record FilaLote(
     [MaxLength(LimitesLote.Nota, ErrorMessage = "La nota no puede tener más de 5000 caracteres.")] string? Nota = null,
     bool EstadoDeducido = false);
 
-/// <summary>Lote de candidaturas: lo que sale de la vista previa y vuelve al aplicar.</summary>
+/// <summary>Lote de candidaturas leído del registro. Solo es interno: el servidor lo rehace al aplicar y nunca viaja.</summary>
 public sealed record LoteImportacion(
     int Version,
     OrigenLote Origen,
@@ -89,17 +89,35 @@ public sealed record FilaVistaPreviaDto(
 /// <summary>Una fila de la tabla que no se ha podido leer.</summary>
 public sealed record FilaSinLeerDto(int Linea, string Motivo);
 
+/// <summary>Una fila extraída que se ha quedado fuera del lote porque ya estaba, con el aviso para enseñarlo tal cual.</summary>
+/// <param name="Linea">Línea de su <c>cita</c> en el registro, empezando en 1.</param>
+public sealed record FilaFueraDelLote(int Linea, string Empresa, string Puesto, DateOnly Fecha, string Aviso);
+
 /// <summary>Respuesta de la vista previa. No se ha escrito nada.</summary>
+/// <param name="HashRegistro">SHA-256 (hexadecimal en minúsculas) de los bytes del registro leído: aplicar lo exige igual.</param>
+/// <param name="EjecucionId">La extracción de Claude de la que sale el lote, o null con la tabla.</param>
+/// <param name="Fuera">Las extraídas que se quedan fuera porque ya estaban; vacía con la tabla.</param>
 public sealed record VistaPreviaImportacionDto(
-    LoteImportacion Lote,
+    OrigenLote Origen,
+    string HashRegistro,
+    int? EjecucionId,
     ResumenImportacionDto Resumen,
     IReadOnlyList<FilaVistaPreviaDto> Filas,
-    IReadOnlyList<FilaSinLeerDto> SinLeer);
+    IReadOnlyList<FilaSinLeerDto> SinLeer,
+    IReadOnlyList<FilaFueraDelLote> Fuera);
 
-/// <summary>Petición de aplicar: el lote de la vista previa y las claves sobre las que actuar.</summary>
-public sealed record AplicarLoteRequest(
-    [Required(ErrorMessage = "Falta el lote.")] LoteImportacion Lote,
-    [Required(ErrorMessage = "Faltan las claves.")] IReadOnlyList<string> Claves);
+/// <summary>
+/// Petición de aplicar: de dónde sale el lote, el hash del registro de la vista previa y las claves sobre las que actuar.
+/// El cliente no manda filas: el servidor vuelve a leer el registro y rehace el lote.
+/// </summary>
+/// <param name="EjecucionId">La extracción de Claude; con la tabla no va.</param>
+public sealed record AplicarImportacionRequest(
+    [Required(ErrorMessage = "Falta el origen.")] OrigenLote? Origen,
+    int? EjecucionId,
+    [Required(ErrorMessage = "Falta el hash del registro."),
+     StringLength(64, MinimumLength = 64, ErrorMessage = "El hash del registro tiene que tener 64 caracteres.")] string HashRegistro,
+    [Required(ErrorMessage = "Faltan las claves."),
+     MaxLength(LimitesLote.Filas, ErrorMessage = "No puede haber más de 1000 claves.")] IReadOnlyList<string> Claves);
 
 /// <summary>
 /// Resultado de aplicar. Las cuatro cifras suman todas las filas del lote.

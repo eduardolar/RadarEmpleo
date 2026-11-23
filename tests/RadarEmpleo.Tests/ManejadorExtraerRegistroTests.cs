@@ -29,8 +29,11 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     private readonly RelojFijo _reloj = new(new DateTime(2026, 11, 18, 11, 0, 0, DateTimeKind.Utc));
     private readonly TestDbContextFactory _factory;
     private readonly RutasCurriculum _rutas;
+    private readonly OpcionesEjecutor _opciones;
+    private readonly LectorCurriculum _lector;
     private readonly EjecutorClaudeFalso _claude;
     private readonly ServiceProvider _servicios;
+    private readonly IServiceScopeFactory _ambitos;
     private readonly GuardiaCola _guardia;
     private readonly ColaEjecuciones _cola;
     private readonly ProcesadorEjecuciones _procesador;
@@ -45,21 +48,24 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         using (var db = new AppDbContext(opcionesBd)) db.Database.EnsureCreated();
         _factory = new TestDbContextFactory(opcionesBd);
 
-        var opciones = new OpcionesEjecutor("claude.exe", [], Path.Combine(_raiz, "datos"), 15m, "2.1.185");
-        var lector = new LectorCurriculum(_rutas);
+        _opciones = new OpcionesEjecutor("claude.exe", [], Path.Combine(_raiz, "datos"), 15m, "2.1.185");
+        _lector = new LectorCurriculum(_rutas);
         _claude = new EjecutorClaudeFalso(_reloj);
         _servicios = new ServiceCollection()
-            .AddSingleton<ILectorCurriculum>(lector)
+            .AddSingleton<ILectorCurriculum>(_lector)
             .AddSingleton(_rutas)
             .AddScoped<IManejadorTarea, ManejadorExtraerRegistro>()
             .BuildServiceProvider();
-        var ambitos = _servicios.GetRequiredService<IServiceScopeFactory>();
-        _guardia = new GuardiaCola(opciones);
-        _cola = new ColaEjecuciones(_factory, _reloj, _rutas, opciones, ambitos, _guardia);
-        _procesador = new ProcesadorEjecuciones(_factory, _reloj, _rutas, opciones, _cola,
-            new BloqueoCompartido(_rutas, NullLogger<BloqueoCompartido>.Instance), _claude, lector, ambitos, _guardia,
-            NullLogger<ProcesadorEjecuciones>.Instance);
+        _ambitos = _servicios.GetRequiredService<IServiceScopeFactory>();
+        _guardia = new GuardiaCola(_opciones);
+        _cola = new ColaEjecuciones(_factory, _reloj, _rutas, _opciones, _ambitos, _guardia);
+        _procesador = CrearProcesador(_lector);
     }
+
+    /// <summary>El procesador con el lector del que saca los hashes; el manejador siempre lee con el real.</summary>
+    private ProcesadorEjecuciones CrearProcesador(ILectorCurriculum lector) => new(_factory, _reloj, _rutas, _opciones, _cola,
+        new BloqueoCompartido(_rutas, NullLogger<BloqueoCompartido>.Instance), _claude, lector, _ambitos, _guardia,
+        NullLogger<ProcesadorEjecuciones>.Instance);
 
     public void Dispose()
     {
@@ -324,6 +330,42 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     [Fact]
+    public async Task RegistroQueCambiaJustoAlEmpezar_DaErrorSinClaudeNiGasto()
+    {
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([Fila()]), CosteUsd: 0.42m));
+        using var procesador = CrearProcesador(new HashDeOtroRegistro(_lector));
+        var (encolada, _) = (await _cola.EncolarAsync(TareaAgente.ExtraerRegistro))!.Value;
+
+        Assert.True(await procesador.ProcesarSiguienteAsync(CancellationToken.None));
+
+        await using var db = _factory.CreateDbContext();
+        var ejecucion = await db.EjecucionesAgente.AsNoTracking().SingleAsync(e => e.Id == encolada.Id);
+        Assert.Equal(EstadoEjecucion.Error, ejecucion.Estado);
+        Assert.Equal(ManejadorExtraerRegistro.MensajeRegistroCambiandoAlEmpezar, ejecucion.Error);
+        Assert.Equal(0m, ejecucion.CosteUsd);
+        Assert.Equal(HashDeOtroRegistro.Hash, ejecucion.HashRegistroAntes);
+        Assert.Null(ejecucion.ResultadoJson);
+        Assert.Empty(_claude.Peticiones);
+    }
+
+    [Fact]
+    public async Task RegistroSinHashAlEmpezar_DaErrorQueLoDiceSinClaudeNiGasto()
+    {
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([Fila()]), CosteUsd: 0.42m));
+        using var procesador = CrearProcesador(new HashDeOtroRegistro(_lector, hash: null));
+        var (encolada, _) = (await _cola.EncolarAsync(TareaAgente.ExtraerRegistro))!.Value;
+
+        Assert.True(await procesador.ProcesarSiguienteAsync(CancellationToken.None));
+
+        await using var db = _factory.CreateDbContext();
+        var ejecucion = await db.EjecucionesAgente.AsNoTracking().SingleAsync(e => e.Id == encolada.Id);
+        Assert.Equal(EstadoEjecucion.Error, ejecucion.Estado);
+        Assert.Equal(ManejadorExtraerRegistro.MensajeRegistroSinHashAlEmpezar, ejecucion.Error);
+        Assert.Equal(0m, ejecucion.CosteUsd);
+        Assert.Empty(_claude.Peticiones);
+    }
+
+    [Fact]
     public async Task Encolar_SinRegistroOSinCarpetaDa409YConCandidaturaDa400()
     {
         await Assert.ThrowsAsync<ValidacionException>(() => _cola.EncolarAsync(TareaAgente.ExtraerRegistro, 1));
@@ -540,5 +582,67 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     {
         var error = Assert.Throws<ReglaNegocioException>(() => ManejadorExtraerRegistro.Validar(salida));
         Assert.Equal(MensajesEjecucion.SalidaNoValida, error.Message);
+    }
+
+    // ---------------------------------------------------------------- LeerGuardado
+
+    [Fact]
+    public async Task LeerGuardado_LoQueGuardaAplicar_DaLoMismo()
+    {
+        var mala = Fila();
+        mala["fecha"] = "ayer";
+        var salida = Salida([Fila(), mala], ["Empresa Texto Dos no dice la fecha."]);
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: salida));
+        var esperado = ManejadorExtraerRegistro.Validar(salida);
+
+        var leido = ManejadorExtraerRegistro.LeerGuardado((await ExtraerAsync()).ResultadoJson);
+
+        Assert.NotNull(leido);
+        Assert.Equal(esperado.Candidaturas, leido.Candidaturas);
+        Assert.Equal(esperado.Dudas, leido.Dudas);
+        Assert.Equal(esperado.SinLeer, leido.SinLeer);
+        Assert.Single(leido.SinLeer);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("{")]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("""{"candidaturas":[],"dudas":[]}""")]
+    [InlineData("""{"candidaturas":[{"estado":3}],"dudas":[],"sinLeer":[]}""")]
+    [InlineData("""{"candidaturas":[null],"dudas":[],"sinLeer":[]}""")]
+    [InlineData("""{"candidaturas":[{}],"dudas":[],"sinLeer":[]}""")]
+    [InlineData("""{"candidaturas":[],"dudas":[null],"sinLeer":[]}""")]
+    [InlineData("""{"candidaturas":[],"dudas":[],"sinLeer":[null]}""")]
+    [InlineData("""{"candidaturas":[],"dudas":[],"sinLeer":[{"cita":"x"}]}""")]
+    [InlineData("""{"candidaturas":[],"dudas":[],"sinLeer":[{"cita":null,"motivo":"m"}]}""")]
+    [InlineData("""{"candidaturas":null,"dudas":[],"sinLeer":[]}""")]
+    public void LeerGuardado_JsonRotoONull_DaNull(string? json) =>
+        Assert.Null(ManejadorExtraerRegistro.LeerGuardado(json));
+
+    /// <summary>
+    /// El lector real, pero el hash del registro que ve el procesador es otro: como si el archivo cambiara justo entre el
+    /// hash «antes» y la lectura del manejador. Con null, como si estuviera bloqueado justo al sacar el hash.
+    /// </summary>
+    private sealed class HashDeOtroRegistro(ILectorCurriculum real, string? hash = HashDeOtroRegistro.Hash) : ILectorCurriculum
+    {
+        public const string Hash = "0000000000000000000000000000000000000000000000000000000000000000";
+
+        public Task<string> LeerRegistroAsync(CancellationToken cancelacion = default) => real.LeerRegistroAsync(cancelacion);
+
+        public Task<TextoLeido> LeerRegistroConFechaAsync(CancellationToken cancelacion = default) => real.LeerRegistroConFechaAsync(cancelacion);
+
+        public Task<TextoLeido> LeerPerfilAsync(CancellationToken cancelacion = default) => real.LeerPerfilAsync(cancelacion);
+
+        public Task<string?> LeerHashAsync(ArchivoVigilado archivo, CancellationToken cancelacion = default) =>
+            archivo == ArchivoVigilado.Registro ? Task.FromResult(hash) : real.LeerHashAsync(archivo, cancelacion);
+
+        public IReadOnlyList<ArchivoDisponible> LeerDocumentosDisponibles() => real.LeerDocumentosDisponibles();
+
+        public DocumentoLeido? LeerDocumento(string rutaRelativa) => real.LeerDocumento(rutaRelativa);
+
+        public Task<InformesRastreo> LeerInformesRastreoAsync(CancellationToken cancelacion = default) => real.LeerInformesRastreoAsync(cancelacion);
     }
 }

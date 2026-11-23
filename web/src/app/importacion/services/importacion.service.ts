@@ -5,7 +5,7 @@ import { environment } from '../../../environments/environment';
 import { ErrorApi } from '../../core/interfaces/error-api.interface';
 import { conErrorApi, convertirErrorApi } from '../../core/utils/error-api';
 import {
-  AplicarLote,
+  AplicarImportacion,
   ResultadoAplicacion,
   VistaPreviaImportacion,
 } from '../interfaces/importacion.interface';
@@ -14,8 +14,9 @@ import { filasAplicables } from '../utils/resumen-importacion';
 const URL_IMPORTACION = `${environment.apiUrl}/api/importacion`;
 
 /**
- * Importación del registro: la vista previa en signals y aplicarla. El lote se reenvía tal como llegó
- * (el servidor lo recalcula todo) y, al aplicar bien o con un 409, se vuelve a pedir la vista previa.
+ * Importación del registro: la vista previa en signals y aplicarla. Al aplicar solo van el origen, la
+ * ejecución, el hash del registro leído y las claves: el servidor vuelve a leer el registro y rehace el lote.
+ * Al aplicar bien o con un 409 (por ejemplo, el registro ha cambiado), se vuelve a pedir la vista previa.
  */
 @Injectable({ providedIn: 'root' })
 export class ImportacionService {
@@ -66,11 +67,16 @@ export class ImportacionService {
       }
 
       this._aplicando.set(true);
-      const peticion: AplicarLote = { lote: vista.lote, claves };
+      const peticion: AplicarImportacion = {
+        origen: vista.origen,
+        ejecucionId: vista.ejecucionId,
+        hashRegistro: vista.hashRegistro,
+        claves,
+      };
       return this.http.post<ResultadoAplicacion>(`${URL_IMPORTACION}/lote/aplicar`, peticion).pipe(
         tap(() => this.previsualizar()),
         conErrorApi(),
-        // Un 409 es que otra pestaña se ha adelantado: la vista previa ya no vale y se vuelve a pedir
+        // Un 409 es que el registro ha cambiado u otra pestaña se ha adelantado: la vista previa ya no vale
         tap({
           error: (error: ErrorApi) => {
             if (error.estado === 409) {

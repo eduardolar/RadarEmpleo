@@ -8,8 +8,9 @@ namespace RadarEmpleo.Services.Importacion;
 
 /// <summary>
 /// Importación del registro: vista previa (no escribe nada) y aplicar. El registro nunca se escribe.
-/// Aplicar recalcula todo con el lote que llega, porque desde la vista previa han podido cambiar las
-/// candidaturas, y solo actúa sobre las claves pedidas. No borra nada ni toca datos o notas existentes.
+/// Aplicar no se fía del cliente: vuelve a leer el registro, exige que sea el de la vista previa (por su hash),
+/// rehace el lote y lo compara otra vez, porque desde la vista previa han podido cambiar las candidaturas. Solo
+/// actúa sobre las claves pedidas. No borra nada ni toca datos o notas existentes.
 /// </summary>
 public class ImportacionService
 {
@@ -18,6 +19,11 @@ public class ImportacionService
 
     /// <summary>Otra petición ha cambiado entre medias alguna de las candidaturas que cambian de estado.</summary>
     public const string MensajeCambiadasEnOtraPestana = "Otra pestaña acaba de cambiar estas candidaturas. Vuelvo a leer el registro.";
+
+    /// <summary>El registro de la vista previa ya no es el que hay en el disco.</summary>
+    public const string MensajeRegistroCambiado = "El registro ha cambiado desde que lo leíste. Vuelvo a leerlo.";
+
+    public const string MensajeSinTabla = "No se encuentra la tabla en el registro: tiene que tener las columnas Fecha, Empresa, Puesto y Estado.";
 
     private readonly IDbContextFactory<AppDbContext> _factory;
     private readonly ILectorCurriculum _lector;
@@ -32,37 +38,53 @@ public class ImportacionService
         _reloj = reloj;
     }
 
-    /// <summary>Lee la tabla del registro y la compara con lo que ya hay en la app.</summary>
+    /// <summary>
+    /// Lee la tabla del registro y la compara con lo que ya hay en la app. El hash sale de los mismos bytes que el texto.
+    /// </summary>
     /// <exception cref="ReglaNegocioException">Falta la carpeta, el registro o la tabla.</exception>
     public async Task<VistaPreviaImportacionDto> PrevisualizarTablaAsync()
     {
-        var analisis = AnalizadorRegistro.Analizar(await _lector.LeerRegistroAsync());
-        if (!analisis.TablaEncontrada)
-            throw new ReglaNegocioException("No se encuentra la tabla en el registro: tiene que tener las columnas Fecha, Empresa, Puesto y Estado.");
+        var leido = await _lector.LeerRegistroConFechaAsync();
+        var analisis = AnalizarTabla(leido.Texto);
 
         await using var db = await _factory.CreateDbContextAsync();
         var filas = ReglasImportacion.Comparar(analisis.Lote.Filas, await LeerExistentesAsync(db));
 
         return new VistaPreviaImportacionDto(
-            analisis.Lote,
+            OrigenLote.Tabla,
+            leido.Hash,
+            null,
             ReglasImportacion.Resumir(filas, analisis.SinLeer.Count, analisis.EnviosEnTexto),
             filas,
-            analisis.SinLeer);
+            analisis.SinLeer,
+            []);
     }
 
     /// <summary>
-    /// Crea las nuevas y avanza las que cambian de estado entre las <see cref="AplicarLoteRequest.Claves"/>,
-    /// en un solo guardado: o entra todo o no entra nada. Si otra aplicación se adelanta (salta el índice
-    /// único de la clave, o el control de concurrencia de una candidatura que cambia de estado), no se
-    /// guarda nada y se lanza <see cref="ReglaNegocioException"/> (409). Si solo choca una empresa nueva
-    /// que otra petición acaba de crear, se reutiliza esa y se reintenta. Los conflictos no dan error: se
+    /// Rehace el lote con el registro actual, que tiene que ser el de la vista previa
+    /// (<see cref="AplicarImportacionRequest.HashRegistro"/>; si no, 409 <see cref="MensajeRegistroCambiado"/>): el texto
+    /// y el hash salen de la misma lectura. Crea las nuevas y avanza las que cambian de estado entre las
+    /// <see cref="AplicarImportacionRequest.Claves"/>, en un solo guardado: o entra todo o no entra nada. Si otra
+    /// aplicación se adelanta (salta el índice único de la clave, o el control de concurrencia de una candidatura que
+    /// cambia de estado), no se guarda nada y se lanza <see cref="ReglaNegocioException"/> (409). Si solo choca una
+    /// empresa nueva que otra petición acaba de crear, se reutiliza esa y se reintenta. Los conflictos no dan error: se
     /// saltan y se cuentan. El radar se exporta después de guardar: si falla, lo importado sigue siendo válido.
     /// </summary>
-    /// <exception cref="ValidacionException">Lote o claves no válidos.</exception>
-    /// <exception cref="ReglaNegocioException">Otra aplicación ha guardado antes alguna de las filas.</exception>
-    public async Task<ResultadoAplicacionDto> AplicarAsync(AplicarLoteRequest peticion)
+    /// <exception cref="ValidacionException">Origen, ejecución o claves no válidos.</exception>
+    /// <exception cref="ReglaNegocioException">El registro ha cambiado o ya no tiene la tabla, o otra aplicación ha
+    /// guardado antes alguna de las filas.</exception>
+    public async Task<ResultadoAplicacionDto> AplicarAsync(AplicarImportacionRequest peticion)
     {
-        var filas = ValidarLote(peticion.Lote);
+        var origen = peticion.Origen ?? throw new ValidacionException("Falta el origen.", "origen");
+        ValidacionException.ExigirDefinido(origen, "origen");
+        if (peticion.EjecucionId is not null)
+            throw new ValidacionException("Con la tabla no va ninguna ejecución.", "ejecucionId");
+
+        var leido = await _lector.LeerRegistroConFechaAsync();
+        if (!string.Equals(peticion.HashRegistro, leido.Hash, StringComparison.Ordinal))
+            throw new ReglaNegocioException(MensajeRegistroCambiado);
+
+        var filas = ValidarLote(AnalizarTabla(leido.Texto).Lote.Filas);
         await using var db = await _factory.CreateDbContextAsync();
 
         var comparadas = ReglasImportacion.Comparar(filas, await LeerExistentesAsync(db));
@@ -98,23 +120,26 @@ public class ImportacionService
 
     // ---------------------------------------------------------------- auxiliares
 
-    /// <summary>
-    /// Lo que no comprueban las anotaciones de los DTO. La fecha va acotada porque un lote escrito a
-    /// mano podría traer una que se salga del rango de <see cref="DateTime"/> al calcular el seguimiento.
-    /// </summary>
-    private static IReadOnlyList<FilaLote> ValidarLote(LoteImportacion lote)
+    /// <summary>El análisis del registro, o 409 si no tiene la tabla.</summary>
+    private static AnalisisRegistro AnalizarTabla(string registro)
     {
-        if (lote.Version != LimitesLote.VersionActual)
-            throw new ValidacionException($"La versión del lote tiene que ser {LimitesLote.VersionActual}.", "version");
-        if (lote.Filas.Count > LimitesLote.Filas)
-            throw new ValidacionException($"El lote no puede tener más de {LimitesLote.Filas} filas.", "filas");
-        ValidacionException.ExigirDefinido(lote.Origen, "origen");
+        var analisis = AnalizadorRegistro.Analizar(registro);
+        return analisis.TablaEncontrada ? analisis : throw new ReglaNegocioException(MensajeSinTabla);
+    }
 
-        foreach (var fila in lote.Filas)
+    /// <summary>
+    /// Defensa sobre el lote que monta el servidor: el analizador y el combinador ya lo dejan así, y si algo se escapa es
+    /// un error nuestro que da 400 antes de guardar nada. La fecha va acotada porque una que se salga del rango de
+    /// <see cref="DateTime"/> rompería el cálculo del seguimiento.
+    /// </summary>
+    private static IReadOnlyList<FilaLote> ValidarLote(IReadOnlyList<FilaLote> filas)
+    {
+        if (filas.Count > LimitesLote.Filas)
+            throw new ValidacionException($"El lote no puede tener más de {LimitesLote.Filas} filas.", "filas");
+
+        foreach (var fila in filas)
         {
-            if (fila is null)
-                throw new ValidacionException("El lote tiene filas vacías.", "filas");
-            if (fila.Fecha.Year is < 2000 or > 2100)
+            if (fila.Fecha.Year is < CombinadorLotes.AnioMinimo or > CombinadorLotes.AnioMaximo)
                 throw new ValidacionException($"La fecha de la línea {fila.Linea} no es válida.", "fecha");
             ValidacionException.ExigirDefinido(fila.Modalidad, "modalidad");
             ValidacionException.ExigirDefinido(fila.Estado, "estado");
@@ -124,7 +149,7 @@ public class ImportacionService
             if (fila.Estado == EstadoCandidatura.Descartada && fila.MotivoDescarte is null)
                 throw new ValidacionException($"La línea {fila.Linea} está descartada y le falta el motivo.", "motivoDescarte");
         }
-        return lote.Filas;
+        return filas;
     }
 
     /// <summary>Traduce los choques con otra aplicación a un 409 que dice qué ha pasado.</summary>
@@ -176,7 +201,7 @@ public class ImportacionService
             candidatura.CambiarEstado(fila.Estado, fecha, Origen.Registro, fila.MotivoDescarte, fila.MotivoDescarteTexto,
                 programarSeguimiento: ReglasEstado.FechaSeguimiento(fecha) > ahora);
         }
-        // Un lote hecho a mano puede traer en la nota el mismo texto del motivo: en la ficha saldría dos veces.
+        // Si una fila trae en la nota el mismo texto del motivo, en la ficha saldría dos veces.
         if (fila.Nota is { } nota && nota != fila.MotivoDescarteTexto)
             candidatura.Notas.Add(new Nota { Texto = nota, Fecha = fecha, Origen = Origen.Registro });
 

@@ -6,10 +6,6 @@ using RadarEmpleo.Services.Ofertas;
 
 namespace RadarEmpleo.Services.Importacion;
 
-/// <summary>Una fila extraída que se ha quedado fuera del lote porque ya estaba, con el aviso para enseñarlo tal cual.</summary>
-/// <param name="Linea">Línea de su <c>cita</c> en el registro, empezando en 1.</param>
-public sealed record FilaFueraDelLote(int Linea, string Empresa, string Puesto, DateOnly Fecha, string Aviso);
-
 /// <summary>Lo que sale de unir la tabla del registro y lo extraído por Claude del texto libre.</summary>
 /// <param name="Filas">Las de la tabla, en su orden, y detrás las extraídas, por línea. Como mucho <see cref="LimitesLote.Filas"/>.</param>
 /// <param name="SinLeer">Las de la tabla y las extraídas que no se han podido leer o no caben, por línea (las sin línea, al final).</param>
