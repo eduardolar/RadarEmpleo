@@ -1076,9 +1076,9 @@ Encontrados por el revisor .NET, el auditor de seguridad y el tester en el PR 4.
 Encontrados por el revisor .NET y el auditor de seguridad en el PR 7. No bloquean; se arreglan en un PR posterior de la F7b.
 
 - `PlantillaPrompt.QuitarInvisibles` (compartida) no quita los selectores de variación suplementarios U+E0100–E01EF.
-- ExtraerRegistro admite un `enlace` `javascript:` o `file:` y fechas absurdas (0001, 9999). En la vista previa del PR 9, el enlace solo va como `href` si es https (`EnlaceSeguro`) y las dudas se pintan siempre como texto.
-- Se guarda `motivoDescarte` aunque el estado no sea Descartada.
-- TOCTOU entre el hash «antes» y el texto leído para el prompt: usar `LeerRegistroConFechaAsync` y su `Hash`.
+- ExtraerRegistro admite un `enlace` `javascript:` o `file:` y fechas absurdas (0001, 9999). En la vista previa del PR 9, el enlace solo va como `href` si es https (`EnlaceSeguro`) y las dudas se pintan siempre como texto. **Resuelto en el PR 9a/9b:** las fechas fuera de 2000-2100 van a «Sin leer» en el combinador y el enlace ya no llega al front (la vista previa no trae el lote). Si el PR 15 lo enseña, solo como `href` si es https, y las dudas como texto.
+- Se guarda `motivoDescarte` aunque el estado no sea Descartada. **Resuelto en el PR 9b:** `CombinadorLotes.AFilaLote` lo quita si no es Descartada, así que al aplicar con RegistroConClaude no llega.
+- TOCTOU entre el hash «antes» y el texto leído para el prompt: usar `LeerRegistroConFechaAsync` y su `Hash`. **Resuelto en el PR 9a:** `ContextoTarea.HashRegistroAntes` y la comparación en `ManejadorExtraerRegistro.ConstruirAsync`.
 - La `cita` sale del texto limpiado (NFKC, `‹‹‹`): el PR 8 tiene que compararla con la misma limpieza.
 - Una tabla con columnas parecidas dentro de un rastreo tapa la buena, en los dos analizadores.
 - Casos raros de las secciones de rastreo: «#» dentro de un bloque de código, «##Otra» sin espacio y U+2028.
@@ -1091,10 +1091,10 @@ Encontrados por el revisor .NET y el auditor de seguridad en el PR 7. No bloquea
 
 Encontrados por el revisor .NET y el tester en el PR 8. Los cuatro primeros hay que resolverlos en el PR 9; el resto no bloquea.
 
-- **PR 9:** la plantilla de Importación hace `track fila.linea` en la lista de «Sin leer», y ahora puede haber líneas repetidas (varias con 0, o dos filas con la misma cita): pasar a `$index`. La vista previa nunca debe usar `Linea` como identificador de fila.
-- **PR 9:** `FilaLote` no tiene sección: la `Seccion` de la fila extraída se pierde, y `ImportacionService.CrearAsync` pone siempre `SeccionOrigen = "Tabla del registro"`. Decidirlo con `OrigenLote.RegistroConClaude`.
-- **PR 9:** `ValidarLote` tiene escritos a mano los años 2000 y 2100: usar `CombinadorLotes.AnioMinimo` y `AnioMaximo` para que no se separen.
-- **PR 9:** `LoteCombinado.Fuera` (las filas que se quedan fuera porque ya están en la tabla o salen dos veces en el texto) no tiene sitio en `VistaPreviaImportacionDto`: decidir cómo se enseña.
+- **PR 9:** la plantilla de Importación hace `track fila.linea` en la lista de «Sin leer», y ahora puede haber líneas repetidas (varias con 0, o dos filas con la misma cita): pasar a `$index`. La vista previa nunca debe usar `Linea` como identificador de fila. **Resuelto en el PR 9a.**
+- **PR 9:** `FilaLote` no tiene sección: la `Seccion` de la fila extraída se pierde, y `ImportacionService.CrearAsync` pone siempre `SeccionOrigen = "Tabla del registro"`. Decidirlo con `OrigenLote.RegistroConClaude`. **Resuelto en el PR 9b:** `FilaLote.Seccion`; las extraídas se guardan con «Texto libre del registro: …».
+- **PR 9:** `ValidarLote` tiene escritos a mano los años 2000 y 2100: usar `CombinadorLotes.AnioMinimo` y `AnioMaximo` para que no se separen. **Resuelto en el PR 9a.**
+- **PR 9:** `LoteCombinado.Fuera` (las filas que se quedan fuera porque ya están en la tabla o salen dos veces en el texto) no tiene sitio en `VistaPreviaImportacionDto`: decidir cómo se enseña. **Resuelto en el PR 9a/9b:** el DTO trae `fuera` (vacío con la tabla); se enseña en el PR 15.
 - El recorte a 200 de la cita de una fila sin leer lo hace el manejador sobre el texto sin NFKC: un corte entre una letra y su tilde (NFD) o en medio de un «<<<» deja un principio que ya no encaja, y la fila sale con línea 0 (del lado seguro).
-- Una fila que cita una línea real con datos inventados (la línea «## Septiembre» con la empresa «Omega») entra igual. Comprobación barata posible: que la empresa normalizada aparezca en la línea citada, o al menos un aviso. **Decisión de Eduardo.**
+- Una fila que cita una línea real con datos inventados (la línea «## Septiembre» con la empresa «Omega») entra igual. Comprobación barata posible: que la empresa normalizada aparezca en la línea citada, o al menos un aviso. **Decisión de Eduardo.** **Resuelto en el PR 9b:** la fila entra con el aviso «Revisa la empresa: no aparece en la línea.» (`FilaLote.EmpresaFueraDeLaCita`).
 - Una nota vacía (`""`) llega como `""` y no como null.
