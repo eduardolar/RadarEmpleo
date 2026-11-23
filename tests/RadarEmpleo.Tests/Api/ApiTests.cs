@@ -367,6 +367,8 @@ public sealed class ApiTests : IDisposable
         Assert.StartsWith("Ya existe un registro con esos mismos datos", problema.RootElement.GetProperty("detail").GetString());
     }
 
+    /// <summary>El 409 de una regla del cambio de estado por HTTP. Las reglas (también descartar sin motivo) se prueban en
+    /// <c>CandidaturasServiceTests</c> y <c>ReglasEstadoTests</c>.</summary>
     [Fact]
     public async Task CambiarEstado_TransicionProhibida_Devuelve409ConProblemDetailsEnEspanol()
     {
