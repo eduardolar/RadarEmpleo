@@ -1,19 +1,20 @@
-<!-- Una tarjeta en línea con un solo marco y sin relleno lima; compacta, sin marco (va dentro de una lista).
+<!-- Una tarjeta en línea con un solo marco fino, como la de los recordatorios (va dentro de otra tarjeta)
+     y sin relleno lima; compacta, sin marco (va dentro de una lista).
      tabindex -1: si el botón con el foco desaparece al cambiar el estado, el foco vuelve aquí -->
 <div
   #tarjeta
   tabindex="-1"
   role="group"
-  class="estado-ejecucion focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+  class="estado-ejecucion focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest focus-visible:outline-none"
   [class]="
     compacta()
       ? 'estado-ejecucion--compacta py-2'
-      : 'rounded-md border-2 border-trazo bg-surface-container-lowest p-4'
+      : 'rounded-md border border-borde-fino bg-surface-container-lowest p-3 sm:p-4'
   "
   [attr.aria-label]="'Tarea de Claude: ' + nombreTarea()"
   [attr.data-estado]="estadoVisible()"
 >
-  <div class="estado-ejecucion__cabecera flex flex-wrap items-start gap-x-3 gap-y-1">
+  <div class="estado-ejecucion__cabecera flex flex-wrap items-start gap-x-3 gap-y-1.5">
     <span class="estado-ejecucion__insignia insignia" [class]="colorInsignia()">
       <svg
         aria-hidden="true"
@@ -31,13 +32,13 @@
     <!-- La región que se anuncia solo lleva la frase del estado: el reloj va al lado, fuera de ella,
          para que el lector de pantalla no repita la hora cada segundo -->
     <p
-      class="estado-ejecucion__texto min-w-0 flex-1 text-sm text-on-surface [overflow-wrap:anywhere]"
+      class="estado-ejecucion__texto mt-0.5 min-w-[10rem] flex-1 text-sm font-medium text-on-surface [overflow-wrap:anywhere]"
     >
       <span class="estado-ejecucion__anuncio" role="status" aria-live="polite">{{
         anuncio()
       }}</span>
       @if (reloj()) {
-        <span class="estado-ejecucion__reloj text-on-surface-variant tabular-nums">{{
+        <span class="estado-ejecucion__reloj font-normal text-on-surface-variant tabular-nums">{{
           reloj()
         }}</span>
       }
@@ -45,9 +46,9 @@
   </div>
 
   @if (enCurso() && !compacta()) {
-    <!-- Sin movimiento con el movimiento reducido: la insignia y el texto ya dicen que va en curso -->
+    <!-- Sin movimiento con el movimiento reducido (con !: Material pone display:block sin capa): la insignia y el texto ya dicen que va en curso -->
     <mat-progress-bar
-      class="estado-ejecucion__progreso mt-3 motion-reduce:hidden"
+      class="estado-ejecucion__progreso mt-3 [--mat-progress-bar-active-indicator-height:2px] [--mat-progress-bar-track-height:2px] motion-reduce:hidden!"
       mode="indeterminate"
       [attr.aria-label]="nombreTarea() + ' en curso'"
     />
@@ -56,7 +57,7 @@
   @for (aviso of avisos(); track aviso) {
     <!-- En la lista compacta, sin role="alert": al abrir /agentes no se leerían todos de golpe -->
     <p
-      class="estado-ejecucion__aviso mt-2 flex items-start gap-2 text-sm font-bold text-error [overflow-wrap:anywhere]"
+      class="estado-ejecucion__aviso mt-3 flex items-start gap-2 rounded-sm border-l-4 border-error bg-error/8 px-3 py-2 text-sm font-medium text-on-surface [overflow-wrap:anywhere]"
       [attr.role]="compacta() ? null : 'alert'"
     >
       <svg
@@ -65,7 +66,7 @@
         fill="none"
         stroke="currentColor"
         stroke-width="2"
-        class="mt-0.5 h-4 w-4 shrink-0"
+        class="mt-0.5 h-4 w-4 shrink-0 text-error"
       >
         <path stroke-linejoin="round" d="M10 3 18 17H2L10 3Z" />
         <path stroke-linecap="square" d="M10 8v4M10 14.5v.5" />
@@ -84,7 +85,7 @@
   }
 
   @if (puedeCancelar() || puedeReintentar()) {
-    <div class="estado-ejecucion__acciones mt-3 flex flex-wrap gap-2">
+    <div class="estado-ejecucion__acciones mt-3 flex flex-wrap gap-3">
       @if (puedeCancelar()) {
         <button
           mat-stroked-button
