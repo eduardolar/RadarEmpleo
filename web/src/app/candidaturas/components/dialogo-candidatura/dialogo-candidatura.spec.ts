@@ -349,5 +349,65 @@ describe('DialogoCandidatura', () => {
       expect(avisos.exito).toHaveBeenCalledWith('Cambios guardados.');
       expect(cerrar).toHaveBeenCalled();
     });
+
+    it('al editar manda la versión que leyó (el alta no: su cuerpo se comprueba entero arriba)', async () => {
+      await crear(crearDetalle({ id: 3, fechaUltimoCambio: '2026-11-23T10:15:30.1234567Z' }));
+
+      await pulsar('Guardar cambios');
+
+      const peticion = http.expectOne('/api/candidaturas/3');
+      expect(peticion.request.body).toMatchObject({
+        fechaUltimoCambioLeida: '2026-11-23T10:15:30.1234567Z',
+      });
+      peticion.flush(crearDetalle({ id: 3 }));
+    });
+  });
+
+  describe('la candidatura ha cambiado mientras se editaba (409)', () => {
+    const OTRA_PESTANA =
+      'Esta candidatura acaba de cambiar en otra pestaña o con un análisis de Claude. Recarga la página para ver cómo ha quedado.';
+
+    async function guardarConConflicto(): Promise<void> {
+      await crear(crearDetalle({ id: 3, puesto: 'Dev' }));
+      escribir('puesto', 'Dev senior');
+      await pulsar('Guardar cambios');
+      http
+        .expectOne('/api/candidaturas/3')
+        .flush({ status: 409, detail: OTRA_PESTANA }, { status: 409, statusText: 'Conflict' });
+      await fixture.whenStable();
+      await fixture.whenStable();
+    }
+
+    it('lo dice dentro del diálogo, con el foco en el aviso, sin cerrar ni perder lo escrito', async () => {
+      await guardarConConflicto();
+
+      const aviso = elemento().querySelector<HTMLElement>('mat-dialog-content > [role="alert"]')!;
+      expect(aviso.textContent).toContain(OTRA_PESTANA);
+      expect(document.activeElement).toBe(aviso);
+      expect(avisos.error).not.toHaveBeenCalled();
+      expect(cerrar).not.toHaveBeenCalled();
+      expect(campo('puesto').value).toBe('Dev senior');
+      expect(boton('Guardar cambios').disabled).toBe(false);
+    });
+
+    it('«Recargar la ficha» vuelve a leerla y cierra sin guardar', async () => {
+      await guardarConConflicto();
+
+      await pulsar('Recargar la ficha');
+
+      const lectura = http.expectOne('/api/candidaturas/3');
+      expect(lectura.request.method).toBe('GET');
+      expect(cerrar).toHaveBeenCalledWith();
+      lectura.flush(crearDetalle({ id: 3 }));
+    });
+
+    it('al volver a guardar se quita el aviso', async () => {
+      await guardarConConflicto();
+
+      await pulsar('Guardar cambios');
+
+      expect(elemento().querySelector('mat-dialog-content > [role="alert"]')).toBeNull();
+      http.expectOne('/api/candidaturas/3').flush(crearDetalle({ id: 3 }));
+    });
   });
 });

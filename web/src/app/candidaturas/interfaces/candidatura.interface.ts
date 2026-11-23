@@ -131,6 +131,11 @@ export interface GuardarCandidatura {
   pega?: string | null;
   analisis?: string | null;
   salario?: string | null;
+  /**
+   * Solo al editar: la `fechaUltimoCambio` de la ficha que se abrió. Si la candidatura ha cambiado desde
+   * entonces (otra pestaña, un análisis de Claude), la API no guarda nada y responde 409
+   */
+  fechaUltimoCambioLeida?: string;
 }
 
 /** Cuerpo de POST /api/candidaturas/{id}/estado (el motivo es obligatorio al descartar) */

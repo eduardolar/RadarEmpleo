@@ -113,7 +113,9 @@ public class CandidaturasService
 
     /// <summary>
     /// Edita los datos (no el estado). Si cambia el nombre de la empresa, se resuelve de nuevo
-    /// (reutilizar o crear). Devuelve null si no existe.
+    /// (reutilizar o crear). Devuelve null si no existe. Con <see cref="GuardarCandidaturaRequest.FechaUltimoCambioLeida"/>,
+    /// se compara con la de la BD antes de tocar nada: si ya no es la misma, lanza
+    /// <see cref="DbUpdateConcurrencyException"/> (el 409 de «otra pestaña») y no se guarda nada, ni siquiera una empresa nueva.
     /// </summary>
     public async Task<CandidaturaDetalleDto?> EditarAsync(int id, GuardarCandidaturaRequest datos)
     {
@@ -123,6 +125,11 @@ public class CandidaturasService
 
         var candidatura = await CargarCompletaAsync(db, id, seguimiento: true);
         if (candidatura is null) return null;
+
+        // Cambiada desde que se abrió el formulario: no se sigue (tampoco se crea la empresa). Si cambia
+        // entre esta lectura y el guardado, ya lo para el token de concurrencia.
+        if (datos.FechaUltimoCambioLeida is { } leida && Fechas.AUtc(leida) != candidatura.FechaUltimoCambio)
+            throw new DbUpdateConcurrencyException("La candidatura ha cambiado desde que se leyó.");
 
         if (NombresEmpresa.Normalizar(datos.Empresa) != candidatura.Empresa.NombreNormalizado)
             candidatura.Empresa = await EmpresasService.ObtenerOCrearAsync(db, datos.Empresa);

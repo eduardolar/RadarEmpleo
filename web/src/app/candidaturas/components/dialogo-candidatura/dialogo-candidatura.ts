@@ -1,4 +1,13 @@
-import { Component, DestroyRef, inject, signal, viewChild } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  DestroyRef,
+  ElementRef,
+  inject,
+  Injector,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import {
@@ -28,6 +37,7 @@ export interface DatosDialogoCandidatura {
  * Alta o edición de una candidatura en un diálogo. Se cierra con la ficha guardada. En el alta solo
  * pide lo básico (y «Añadir más datos» despliega el resto); al editar enseña todo.
  * Si hay algo escrito, Cancelar, Esc o un clic fuera preguntan antes de cerrar para no perderlo.
+ * Si al editar la candidatura ha cambiado desde que se abrió (409), lo dice aquí mismo con «Recargar la ficha».
  */
 @Component({
   imports: [MatDialogModule, MatButtonModule, FormularioCandidatura],
@@ -48,6 +58,10 @@ export class DialogoCandidatura {
   protected readonly textoGuardar = this.candidatura ? 'Guardar cambios' : 'Crear candidatura';
   protected readonly guardando = signal(false);
   protected readonly erroresServidor = signal<Record<string, string[]>>({});
+  /** El 409 al editar: la candidatura ha cambiado desde que se abrió (otra pestaña, un análisis de Claude) */
+  protected readonly conflicto = signal<string | null>(null);
+  private readonly avisoConflicto = viewChild<ElementRef<HTMLElement>>('avisoConflicto');
+  private readonly injector = inject(Injector);
 
   constructor() {
     // Se abre con disableClose: Esc y el clic fuera pasan por aquí
@@ -59,9 +73,14 @@ export class DialogoCandidatura {
   protected guardar(datos: GuardarCandidatura): void {
     this.guardando.set(true);
     this.erroresServidor.set({});
+    this.conflicto.set(null);
 
+    // Al editar va la versión que se abrió: si ha cambiado desde entonces, la API no pisa nada (409)
     const peticion = this.candidatura
-      ? this.candidaturasService.editar(this.candidatura.id, datos)
+      ? this.candidaturasService.editar(this.candidatura.id, {
+          ...datos,
+          fechaUltimoCambioLeida: this.candidatura.fechaUltimoCambio,
+        })
       : this.candidaturasService.crear(datos);
 
     // Sin cancelar al destruirse: una navegación cierra el diálogo y no debe perder lo que se guarda
@@ -81,13 +100,29 @@ export class DialogoCandidatura {
       },
       error: (error: ErrorApi) => {
         this.guardando.set(false);
-        if (Object.keys(error.errores).length > 0 && !this.destroyRef.destroyed) {
+        if (this.destroyRef.destroyed) {
+          this.avisos.error(error.mensaje);
+        } else if (Object.keys(error.errores).length > 0) {
           this.erroresServidor.set(error.errores);
+        } else if (this.candidatura && error.estado === 409) {
+          // Se queda abierto con lo escrito, para poder copiarlo antes de recargar
+          this.conflicto.set(error.mensaje);
+          afterNextRender(() => this.avisoConflicto()?.nativeElement.focus(), {
+            injector: this.injector,
+          });
         } else {
           this.avisos.error(error.mensaje);
         }
       },
     });
+  }
+
+  /** Tras el 409: cierra sin guardar (lo escrito se pierde, el aviso lo dice) y vuelve a leer la ficha */
+  protected recargar(): void {
+    if (this.candidatura) {
+      this.candidaturasService.cargarDetalle(this.candidatura.id);
+    }
+    this.dialogRef.close();
   }
 
   /** Cancelar, Esc o clic fuera: cierra si no hay nada escrito; si lo hay, pregunta antes */
