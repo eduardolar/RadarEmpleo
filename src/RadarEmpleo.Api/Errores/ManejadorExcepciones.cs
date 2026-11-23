@@ -21,7 +21,7 @@ public sealed class ManejadorExcepciones(IProblemDetailsService problemDetails) 
 {
     // También salta si un análisis de Claude la cambia mientras se edita la ficha
     public const string MensajeCambiadaEnOtraPestana =
-        "Esta candidatura acaba de cambiar en otra pestaña o con un análisis de Claude. Vuelve a abrirla para ver cómo ha quedado.";
+        "Esta candidatura acaba de cambiar en otra pestaña o con un análisis de Claude. Recarga la página para ver cómo ha quedado.";
 
     public async ValueTask<bool> TryHandleAsync(HttpContext http, Exception exception, CancellationToken cancellationToken)
     {
