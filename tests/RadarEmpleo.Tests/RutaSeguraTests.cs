@@ -270,17 +270,13 @@ public sealed class RutaSeguraTests : IDisposable
         AssertAbiertoNoValido(resuelta);
     }
 
-    [Fact]
+    [FactConNombresCortos]
     public void ComprobarAbierto_NombreCortoQueEscondeOtraExtension_LoRechaza()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         // «notas.pdfx» tiene el nombre corto «NOTAS~1.PDF»: pasa Resolver, pero lo que se abre no es un PDF.
         var real = Path.Combine(_raiz, "Candidaturas", Semana, "notas.pdfx");
         File.WriteAllText(real, "no es un pdf");
         var corto = Path.GetFileName(NombreCorto(real));
-        if (string.Equals(corto, "notas.pdfx", StringComparison.OrdinalIgnoreCase))
-            return; // este disco no genera nombres cortos (8.3): el caso no se puede dar
         Assert.EndsWith(".PDF", corto, StringComparison.OrdinalIgnoreCase);
 
         // Primera barrera: GetFullPath expande el nombre corto y la ruta final ya no es un PDF.
@@ -289,30 +285,23 @@ public sealed class RutaSeguraTests : IDisposable
         AssertAbiertoNoValido(Path.Combine(_raiz, "Candidaturas", Semana, corto));
     }
 
-    [Fact]
+    [FactConNombresCortos]
     public void ComprobarAbierto_NombreCortoDeUnPdfDeVerdad_DevuelveElNombreLargo()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         var real = Path.Combine(_raiz, "Candidaturas", Semana, "CV_Nombre_Largo_MarcoTalento.pdf");
         File.WriteAllText(real, "pdf");
         var corto = Path.GetFileName(NombreCorto(real));
-        if (string.Equals(corto, "CV_Nombre_Largo_MarcoTalento.pdf", StringComparison.OrdinalIgnoreCase)) return;
+        Assert.False(string.Equals(corto, "CV_Nombre_Largo_MarcoTalento.pdf", StringComparison.OrdinalIgnoreCase), "No ha dado nombre corto.");
         using var abierto = Abrir(RutaSegura.Resolver(_raiz, "Candidaturas/" + Semana + "/" + corto));
 
         Assert.Equal("Candidaturas/" + Semana + "/CV_Nombre_Largo_MarcoTalento.pdf", RutaSegura.ComprobarAbierto(_raiz, abierto));
     }
 
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "GetShortPathNameW",
-        CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-    private static extern uint GetShortPathName(string larga, char[] corta, uint largo);
-
     private static string NombreCorto(string ruta)
     {
-        var bufer = new char[1024];
-        var largo = GetShortPathName(ruta, bufer, (uint)bufer.Length);
-        Assert.NotEqual(0u, largo);
-        return new string(bufer, 0, (int)largo);
+        var corto = RequisitosSistema.NombreCorto(ruta);
+        Assert.NotNull(corto);
+        return corto;
     }
 
     /// <summary>
