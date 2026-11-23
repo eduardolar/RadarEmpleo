@@ -73,6 +73,11 @@ export const routes: Routes = [
         loadComponent: () => import('./ajustes/pages/ajustes-page/ajustes-page.component'),
       },
       {
+        path: 'agentes',
+        title: 'Agentes · RadarEmpleo',
+        loadComponent: () => import('./agentes/pages/agentes-page/agentes-page.component'),
+      },
+      {
         path: '**',
         redirectTo: 'inicio',
       },

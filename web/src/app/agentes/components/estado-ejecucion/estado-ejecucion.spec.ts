@@ -46,7 +46,12 @@ describe('EstadoEjecucion', () => {
 
   function crear(
     ejecucion: EjecucionAgente,
-    entradas: { compacta?: boolean; topeUsd?: number | null; contexto?: string } = {},
+    entradas: {
+      compacta?: boolean;
+      topeUsd?: number | null;
+      contexto?: string;
+      permitirReintentar?: boolean;
+    } = {},
   ): HTMLElement {
     fixture = TestBed.createComponent(EstadoEjecucion);
     fixture.componentRef.setInput('ejecucion', ejecucion);
@@ -259,6 +264,15 @@ describe('EstadoEjecucion', () => {
       expect(boton('Reintentar')!.getAttribute('aria-label')).toBe(
         'Reintentar: Análisis del encaje · Acme',
       );
+    });
+
+    it('con permitirReintentar a false no ofrece reintentar, pero sí cancelar', () => {
+      crear(crearEjecucion({ estado: 'Error' }), { permitirReintentar: false });
+      expect(boton('Reintentar')).toBeUndefined();
+      fixture.destroy();
+
+      crear(crearEjecucion(), { permitirReintentar: false });
+      expect(boton('Cancelar')).toBeDefined();
     });
   });
 

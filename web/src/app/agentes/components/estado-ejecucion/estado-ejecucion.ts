@@ -98,6 +98,8 @@ export class EstadoEjecucion {
   readonly topeUsd = input<number | null>(null);
   /** Lo que la distingue de otras iguales en la pantalla (la empresa), para los nombres accesibles */
   readonly contexto = input<string | null>(null);
+  /** En /agentes solo la última de cada tarea y candidatura ofrece «Reintentar»: las viejas no */
+  readonly permitirReintentar = input(true);
 
   /** La enseñada ha terminado (Ok, Error o Cancelada) tras llegar sin terminar: sale una vez */
   readonly terminada = output<EjecucionAgente>();
@@ -187,7 +189,11 @@ export class EstadoEjecucion {
     () => !this.sinRastro() && this.agentes.disponibles() && this.actual().puedeCancelar,
   );
   protected readonly puedeReintentar = computed(
-    () => !this.sinRastro() && this.agentes.disponibles() && this.actual().puedeReintentar,
+    () =>
+      this.permitirReintentar() &&
+      !this.sinRastro() &&
+      this.agentes.disponibles() &&
+      this.actual().puedeReintentar,
   );
 
   protected readonly enCurso = computed(() => this.estadoVisible() === 'EnCurso');

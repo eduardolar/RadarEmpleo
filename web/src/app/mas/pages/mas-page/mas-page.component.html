@@ -58,6 +58,29 @@
         </svg>
       </app-tarjeta-enlace>
     </li>
+    @if (conAgentes()) {
+      <li class="flex">
+        <app-tarjeta-enlace
+          class="flex-1"
+          ruta="/agentes"
+          titulo="Agentes de Claude"
+          descripcion="Lo que ha lanzado la app con Claude y cuánto llevas usado hoy."
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            class="h-6 w-6"
+          >
+            <path
+              stroke-linecap="square"
+              d="M12 3v4M12 17v4M3 12h4M17 12h4M7 7l2.5 2.5M14.5 14.5 17 17M7 17l2.5-2.5M14.5 9.5 17 7"
+            />
+          </svg>
+        </app-tarjeta-enlace>
+      </li>
+    }
   </ul>
 
   <p class="font-mono text-sm text-on-surface-variant">

@@ -11,11 +11,12 @@ describe('opcionDeUrl', () => {
     expect(opcionDeUrl('/candidaturas/12')?.etiqueta).toBe('Tablero');
   });
 
-  it('la importación, el perfil, las estadísticas y los ajustes cuentan como Más', () => {
+  it('la importación, el perfil, las estadísticas, los ajustes y los agentes cuentan como Más', () => {
     expect(opcionDeUrl('/importacion')?.etiqueta).toBe('Más');
     expect(opcionDeUrl('/perfil')?.etiqueta).toBe('Más');
     expect(opcionDeUrl('/estadisticas')?.etiqueta).toBe('Más');
     expect(opcionDeUrl('/ajustes')?.etiqueta).toBe('Más');
+    expect(opcionDeUrl('/agentes')?.etiqueta).toBe('Más');
   });
 
   it('no tiene en cuenta los parámetros de la URL', () => {

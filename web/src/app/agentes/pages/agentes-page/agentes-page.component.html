@@ -1,0 +1,128 @@
+<!-- Página de lectura, como Estadísticas: una columna de max-w-3xl (docs/DISENO.md, «Maquetación de página») -->
+<section aria-label="Agentes de Claude" class="flex w-full max-w-3xl flex-col gap-5">
+  <app-enlace-volver ruta="/mas" texto="Volver a Más" class="-mb-3 self-start" />
+
+  <app-cabecera-pagina
+    titulo="Agentes de Claude"
+    descripcion="Lo que ha lanzado la app con Claude y cuánto llevas usado de tu tope de hoy."
+  />
+
+  @if (!info()) {
+    @if (sinConexion()) {
+      <div role="alert" class="rounded-2xl border-2 border-error bg-error-container p-4">
+        <p class="text-on-error-container">No se ha podido hablar con la API.</p>
+        <button
+          mat-button
+          type="button"
+          class="mt-2 [--mat-button-text-container-height:48px]"
+          (click)="reintentarConexion()"
+        >
+          Reintentar
+        </button>
+      </div>
+    } @else {
+      <p role="status" class="text-sm text-on-surface-variant">
+        Comprobando si se puede usar Claude...
+      </p>
+    }
+  } @else if (!disponibles()) {
+    <!-- Desde el móvil o con los agentes apagados: solo la explicación, nada que pulsar -->
+    <p class="agentes__motivo text-on-surface">{{ motivo() }}</p>
+  } @else {
+    <section
+      aria-labelledby="titulo-uso"
+      class="agentes__uso rounded-2xl border border-borde-fino bg-surface-container-lowest p-4 sm:p-5"
+    >
+      <h2 id="titulo-uso" class="mb-2 text-xl font-extrabold">Uso de hoy</h2>
+      @if (errorEstado(); as mensaje) {
+        <p role="alert" class="text-sm font-medium text-error">{{ mensaje }}</p>
+      } @else if (uso(); as texto) {
+        <p class="text-on-surface">{{ texto }}</p>
+        @if (reserva(); as texto) {
+          <p class="mt-1 text-sm text-on-surface-variant">{{ texto }}</p>
+        }
+      } @else {
+        <p class="text-sm text-on-surface-variant">Comprobando el uso de hoy...</p>
+      }
+    </section>
+
+    <section aria-labelledby="titulo-lista" class="agentes__lista flex flex-col gap-3">
+      <h2 id="titulo-lista" class="text-xl font-extrabold">Últimas tareas</h2>
+
+      <!-- Hueco fijo para que la barra no empuje la lista al refrescar -->
+      <div class="-my-2 h-1 shrink-0">
+        @if (cargando()) {
+          <mat-progress-bar mode="indeterminate" aria-label="Cargando las tareas de Claude" />
+        }
+      </div>
+
+      @if (errorHistorial(); as mensaje) {
+        <div role="alert" class="rounded-2xl border-2 border-error bg-error-container p-4">
+          <p class="text-on-error-container">{{ mensaje }}</p>
+          <button
+            mat-button
+            type="button"
+            class="mt-2 [--mat-button-text-container-height:48px]"
+            (click)="reintentarHistorial()"
+          >
+            Reintentar
+          </button>
+        </div>
+      }
+
+      @if (historial(); as lista) {
+        @if (lista.length === 0) {
+          <div
+            class="agentes__vacio rounded-2xl bg-surface-container-lowest px-6 py-10 text-center"
+          >
+            <p class="font-display text-2xl font-extrabold text-on-surface">
+              Todavía no has lanzado ninguna tarea de Claude.
+            </p>
+            <p class="mt-3 font-mono text-sm font-medium text-on-surface-variant">
+              Se lanzan desde la ficha de una candidatura y desde Importación.
+            </p>
+          </div>
+        } @else {
+          <ul
+            class="divide-y divide-borde-fino rounded-2xl border border-borde-fino bg-surface-container-lowest px-4 sm:px-5"
+          >
+            @for (e of lista; track e.id) {
+              <li class="agentes__ejecucion py-3">
+                <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h3 class="font-semibold text-on-surface">{{ nombreTarea[e.tarea] }}</h3>
+                  @if (e.candidaturaId !== null) {
+                    <a
+                      [routerLink]="['/candidaturas', e.candidaturaId]"
+                      class="inline-flex min-h-12 items-center rounded-lg px-1 text-sm font-medium text-primary underline decoration-2 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+                    >
+                      @if (e.candidatura; as c) {
+                        {{ c.puesto }} en {{ c.empresa }}
+                      } @else {
+                        Ver la candidatura
+                      }
+                    </a>
+                  }
+                  <time
+                    [attr.datetime]="e.fechaAlta"
+                    class="font-mono text-sm text-on-surface-variant"
+                    >{{ e.fechaAlta | fechaMadrid: 'dia-hora' }}</time
+                  >
+                </div>
+                <app-estado-ejecucion
+                  [ejecucion]="e"
+                  [compacta]="true"
+                  [topeUsd]="tope()"
+                  [contexto]="e.candidatura?.empresa ?? null"
+                  [permitirReintentar]="ultimas().has(e.id)"
+                  (terminada)="refrescar()"
+                  (reintentada)="refrescar()"
+                  (perdida)="refrescar()"
+                />
+              </li>
+            }
+          </ul>
+        }
+      }
+    </section>
+  }
+</section>

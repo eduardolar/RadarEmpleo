@@ -31,6 +31,9 @@ const URL_AGENTES = `${environment.apiUrl}/api/agentes`;
 /** Cada cuánto se pregunta por las ejecuciones que no han terminado */
 export const INTERVALO_SEGUIMIENTO_MS = 5000;
 
+/** Cuántas enseña la lista de /agentes */
+export const LIMITE_HISTORIAL = 50;
+
 const TERMINALES: ReadonlySet<EstadoEjecucion> = new Set(['Ok', 'Error', 'Cancelada']);
 
 export function esTerminal(ejecucion: Pick<EjecucionAgente, 'estado'>): boolean {
@@ -76,6 +79,16 @@ export class AgentesService {
   private readonly _ejecuciones = signal<ReadonlyMap<number, EjecucionAgente>>(new Map());
   readonly ejecuciones = this._ejecuciones.asReadonly();
 
+  /** Las últimas de /agentes, de la más reciente a la más antigua; null hasta la primera respuesta */
+  private readonly _historial = signal<readonly EjecucionAgente[] | null>(null);
+  readonly historial = this._historial.asReadonly();
+
+  private readonly _cargandoHistorial = signal(false);
+  readonly cargandoHistorial = this._cargandoHistorial.asReadonly();
+
+  private readonly _errorHistorial = signal<string | null>(null);
+  readonly errorHistorial = this._errorHistorial.asReadonly();
+
   private readonly _terminada = new Subject<EjecucionAgente>();
   readonly terminada$ = this._terminada.asObservable();
 
@@ -90,6 +103,7 @@ export class AgentesService {
   private destruido = false;
   private peticionSeguimiento?: Subscription;
   private peticionEstado?: Subscription;
+  private peticionHistorial?: Subscription;
 
   constructor() {
     fromEvent(this.documento, 'visibilitychange')
@@ -101,6 +115,7 @@ export class AgentesService {
       this.pararTemporizador();
       this.peticionSeguimiento?.unsubscribe();
       this.peticionEstado?.unsubscribe();
+      this.peticionHistorial?.unsubscribe();
       this._terminada.complete();
       this._perdida.complete();
     });
@@ -129,6 +144,35 @@ export class AgentesService {
         }
       },
     });
+  }
+
+  /**
+   * Pide las últimas 50 para /agentes. Sin agentes disponibles no pide nada. Mientras vuelve a pedirlas
+   * se conserva la lista anterior (refrescar no la vacía ni hace saltar la página); si falla, también
+   */
+  cargarHistorial(): void {
+    if (!this.disponibles()) {
+      return;
+    }
+    this.peticionHistorial?.unsubscribe();
+    this._cargandoHistorial.set(true);
+    this._errorHistorial.set(null);
+    const params = new HttpParams().set('limite', LIMITE_HISTORIAL);
+    this.peticionHistorial = this.http
+      .get<EjecucionAgente[]>(`${URL_AGENTES}/ejecuciones`, { params })
+      .subscribe({
+        next: (lista) => {
+          this._historial.set(lista);
+          this._cargandoHistorial.set(false);
+        },
+        error: (error: unknown) => {
+          const errorApi = convertirErrorApi(error);
+          if (!this.siRechazados(errorApi)) {
+            this._errorHistorial.set(errorApi.mensaje);
+          }
+          this._cargandoHistorial.set(false);
+        },
+      });
   }
 
   lanzarAnalisis(candidaturaId: number): Observable<EjecucionAgente> {

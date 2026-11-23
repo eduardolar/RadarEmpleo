@@ -506,4 +506,58 @@ describe('AgentesService', () => {
       expect(ultima).toBeNull();
     });
   });
+
+  describe('cargarHistorial', () => {
+    it('sin agentes disponibles no pide nada', () => {
+      conInfo(false);
+      service.cargarHistorial();
+
+      expect(http.match((r) => r.url === URL_EJECUCIONES)).toEqual([]);
+      expect(service.historial()).toBeNull();
+    });
+
+    it('pide las últimas 50 sin filtros y no sigue ninguna', () => {
+      conInfo(true);
+      service.cargarHistorial();
+      expect(service.cargandoHistorial()).toBe(true);
+
+      const peticion = http.expectOne((r) => r.url === URL_EJECUCIONES);
+      expect(peticion.request.params.get('limite')).toBe('50');
+      expect(peticion.request.params.has('tarea')).toBe(false);
+      peticion.flush([crearEjecucion({ id: 2, estado: 'EnCurso' }), crearEjecucion({ id: 1 })]);
+
+      expect(service.historial()?.map((e) => e.id)).toEqual([2, 1]);
+      expect(service.cargandoHistorial()).toBe(false);
+      // El seguimiento lo arma quien las pinta (la tarjeta), no la lista
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+      ninguno(2);
+    });
+
+    it('al refrescar conserva la lista anterior; si falla, deja el mensaje y la lista', () => {
+      conInfo(true);
+      service.cargarHistorial();
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([crearEjecucion({ id: 1 })]);
+
+      service.cargarHistorial();
+      expect(service.historial()?.map((e) => e.id)).toEqual([1]);
+      http
+        .expectOne((r) => r.url === URL_EJECUCIONES)
+        .flush({ title: 'Fallo' }, { status: 500, statusText: 'Error' });
+
+      expect(service.historial()?.map((e) => e.id)).toEqual([1]);
+      expect(service.errorHistorial()).not.toBeNull();
+      expect(service.cargandoHistorial()).toBe(false);
+    });
+
+    it('un 403 deja disponibles a false y no deja mensaje', () => {
+      conInfo(true);
+      service.cargarHistorial();
+      http
+        .expectOne((r) => r.url === URL_EJECUCIONES)
+        .flush(null, { status: 403, statusText: 'Forbidden' });
+
+      expect(service.disponibles()).toBe(false);
+      expect(service.errorHistorial()).toBeNull();
+    });
+  });
 });
