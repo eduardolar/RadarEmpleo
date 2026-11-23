@@ -1086,3 +1086,15 @@ Encontrados por el revisor .NET y el auditor de seguridad en el PR 7. No bloquea
 - La salida teórica (1000 filas con todos los campos al máximo) ronda los 10 MB, frente a `MaximoSalida` de 4 MB.
 - `LeerBytesAsync` carga el registro entero en memoria, sin tope.
 - Añadir `extraer-registro` a `CanalKestrelTests`.
+
+## Pendientes menores de la F7b (PR 8)
+
+Encontrados por el revisor .NET y el tester en el PR 8. Los cuatro primeros hay que resolverlos en el PR 9; el resto no bloquea.
+
+- **PR 9:** la plantilla de Importación hace `track fila.linea` en la lista de «Sin leer», y ahora puede haber líneas repetidas (varias con 0, o dos filas con la misma cita): pasar a `$index`. La vista previa nunca debe usar `Linea` como identificador de fila.
+- **PR 9:** `FilaLote` no tiene sección: la `Seccion` de la fila extraída se pierde, y `ImportacionService.CrearAsync` pone siempre `SeccionOrigen = "Tabla del registro"`. Decidirlo con `OrigenLote.RegistroConClaude`.
+- **PR 9:** `ValidarLote` tiene escritos a mano los años 2000 y 2100: usar `CombinadorLotes.AnioMinimo` y `AnioMaximo` para que no se separen.
+- **PR 9:** `LoteCombinado.Fuera` (las filas que se quedan fuera porque ya están en la tabla o salen dos veces en el texto) no tiene sitio en `VistaPreviaImportacionDto`: decidir cómo se enseña.
+- El recorte a 200 de la cita de una fila sin leer lo hace el manejador sobre el texto sin NFKC: un corte entre una letra y su tilde (NFD) o en medio de un «<<<» deja un principio que ya no encaja, y la fila sale con línea 0 (del lado seguro).
+- Una fila que cita una línea real con datos inventados (la línea «## Septiembre» con la empresa «Omega») entra igual. Comprobación barata posible: que la empresa normalizada aparezca en la línea citada, o al menos un aviso. **Decisión de Eduardo.**
+- Una nota vacía (`""`) llega como `""` y no como null.
