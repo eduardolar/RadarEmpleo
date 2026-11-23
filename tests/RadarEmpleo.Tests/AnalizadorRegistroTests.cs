@@ -594,6 +594,58 @@ public class AnalizadorRegistroTests
     }
 
     [Fact]
+    public void Analizar_ConMarcaBomEnLaCabecera_LasLineasEmpiezanEnUno()
+    {
+        var analisis = AnalizadorRegistro.Analizar("﻿| Fecha | Empresa | Puesto | Estado |\n|---|---|---|---|\n| 2026-09-01 | Acme | Uno | Enviada |\n| ayer | Acme | Dos | Enviada |\n");
+
+        Assert.Equal(3, Assert.Single(analisis.Lote.Filas).Linea);
+        Assert.Equal(4, Assert.Single(analisis.SinLeer).Linea);
+    }
+
+    [Fact]
+    public void Analizar_FinalesDeLineaMezclados_CadaSaltoCuentaUnaLineaYNingunaCeldaLlevaRetornos()
+    {
+        // CRLF, LF y CR sueltos; «\n\r» son dos saltos (LF y luego CR), así que deja una línea vacía en medio.
+        var texto = "# Registro\r\n| Fecha | Empresa | Puesto | Estado |\n|---|---|---|---|\r| 2026-09-01 | Acme | Uno | Enviada |\n\r"
+            + "ENVIADA a Beta\r\n| Fecha | Empresa | Puesto | Estado |\r\n|---|---|---|---|\n| 2026-09-02 | Gamma | Dos | Enviada |\r";
+
+        var analisis = AnalizadorRegistro.Analizar(texto);
+
+        var fila = UnicaFila(analisis);
+        Assert.Equal(4, fila.Linea);
+        Assert.Equal(("Acme", "Uno"), (fila.Empresa, fila.Puesto));
+        Assert.Equal(EstadoCandidatura.Enviada, fila.Estado);
+        Assert.Equal(1, analisis.EnviosEnTexto);
+    }
+
+    [Fact]
+    public void TextoLibre_FinalesDeLineaMezclados_NumeraComoElAnalizadorYQuitaLosRetornos()
+    {
+        var texto = "uno\r\ndos\rtres\n\rcinco\r\n| Fecha | Empresa | Puesto | Estado |\r|---|---|---|---|\n| 2026-09-01 | Acme | Uno | Enviada |\r\nnueve";
+
+        var libre = AnalizadorRegistro.TextoLibre(texto);
+
+        Assert.Equal(
+            [new LineaRegistro(1, "uno"), new LineaRegistro(2, "dos"), new LineaRegistro(3, "tres"), new LineaRegistro(4, ""),
+             new LineaRegistro(5, "cinco"), new LineaRegistro(9, "nueve")],
+            libre.Lineas);
+        Assert.DoesNotContain('\r', libre.Texto);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("﻿")]
+    [InlineData("  \r\n\t\n \r")]
+    public void Analizar_VacioSoloBomOSoloBlancos_SinTablaYSinEnvios(string texto)
+    {
+        var analisis = AnalizadorRegistro.Analizar(texto);
+
+        Assert.False(analisis.TablaEncontrada);
+        Assert.Equal(0, analisis.EnviosEnTexto);
+        Assert.True(AnalizadorRegistro.TextoLibre(texto).Vacio);
+    }
+
+    [Fact]
     public void Analizar_LineasLarguisimasFueraDeLaTabla_NoMolestan()
     {
         var texto = $"{new string('x', 100_000)}\r\n{Cabecera}\r\n| 2026-09-01 | Acme | Uno | Remoto | Enviada | — |\r\n";
