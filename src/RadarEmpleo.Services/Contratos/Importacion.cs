@@ -43,6 +43,9 @@ public static class LimitesLote
 /// <param name="FechaAproximada">El registro solo dice «antes del DD-MM».</param>
 /// <param name="EstadoDeducido">El estado sale de una palabra del medio del texto, no de cómo empieza:
 /// la vista previa avisa para que se compruebe.</param>
+/// <param name="Seccion">Lo que se guarda en <c>SeccionOrigen</c>; null en las de la tabla («Tabla del registro»).</param>
+/// <param name="EmpresaFueraDeLaCita">Solo en las extraídas: la empresa no aparece en la línea citada. La fila entra
+/// igual, con un aviso para que se compruebe.</param>
 public sealed record FilaLote(
     int Linea,
     DateOnly Fecha,
@@ -58,7 +61,9 @@ public sealed record FilaLote(
     MotivoDescarte? MotivoDescarte = null,
     [MaxLength(LimitesLote.MotivoDescarteTexto, ErrorMessage = "El texto del motivo no puede tener más de 1000 caracteres.")] string? MotivoDescarteTexto = null,
     [MaxLength(LimitesLote.Nota, ErrorMessage = "La nota no puede tener más de 5000 caracteres.")] string? Nota = null,
-    bool EstadoDeducido = false);
+    bool EstadoDeducido = false,
+    string? Seccion = null,
+    bool EmpresaFueraDeLaCita = false);
 
 /// <summary>Lote de candidaturas leído del registro. Solo es interno: el servidor lo rehace al aplicar y nunca viaja.</summary>
 public sealed record LoteImportacion(

@@ -189,7 +189,7 @@ public class ImportacionService
 
         var candidatura = Candidatura.Nueva(empresa, fila.Puesto, fecha, Origen.Registro);
         candidatura.ClaveImportacion = clave;
-        candidatura.SeccionOrigen = AnalizadorRegistro.SeccionTabla;
+        candidatura.SeccionOrigen = fila.Seccion ?? AnalizadorRegistro.SeccionTabla;
         candidatura.Enlace = ReglasImportacion.EnlaceParaGuardar(fila.Enlace);
         candidatura.Portal = fila.Portal;
         candidatura.Modalidad = fila.Modalidad;

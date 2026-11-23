@@ -189,6 +189,15 @@ public class ReglasImportacionTests
         Assert.Equal(ResultadoFila.Nueva, fila.Resultado);
     }
 
+    [Fact]
+    public void Comparar_EmpresaFueraDeLaCita_LlevaElAvisoYSigueSiendoNueva()
+    {
+        var fila = Comparar(Fila() with { EmpresaFueraDeLaCita = true });
+
+        Assert.Equal([ReglasImportacion.AvisoEmpresaNoEnLaLinea], fila.Avisos);
+        Assert.Equal(ResultadoFila.Nueva, fila.Resultado);
+    }
+
     [Theory]
     [InlineData("mailto:rrhh@ejemplo.com")]
     [InlineData("no es un enlace")]

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using RadarEmpleo.Domain;
 using RadarEmpleo.Services.Agentes;
 using RadarEmpleo.Services.Contratos;
@@ -24,6 +25,11 @@ public sealed record LoteCombinado(IReadOnlyList<FilaLote> Filas, IReadOnlyList<
 /// <item><b>Manda la tabla</b>: una fila extraída con la misma empresa normalizada que una de la tabla y una fecha a 3 días
 /// o menos se queda fuera con <see cref="AvisoYaEnLaTabla"/>. Eso incluye la misma <see cref="ReglasImportacion.Clave"/>,
 /// que lleva la empresa normalizada y la fecha exacta.</item>
+/// <item><b>La empresa tiene que salir en la línea citada</b>: si no (otra línea, el título, unas siglas), la fila entra
+/// igual con <see cref="FilaLote.EmpresaFueraDeLaCita"/>, que la vista previa enseña como
+/// <see cref="ReglasImportacion.AvisoEmpresaNoEnLaLinea"/>. Se comparan las palabras enteras, sin forma jurídica, tildes
+/// ni signos; si no, la empresa sin espacios (4 caracteres o más) dentro de la línea sin espacios, para «B.B.V.A.».</item>
+/// <item>Las extraídas llevan su sección con el prefijo <see cref="AnalizadorRegistro.SeccionTextoLibre"/>.</item>
 /// <item>Dos extraídas con la misma clave: vale la de la línea más arriba y la otra se queda fuera con
 /// <see cref="AvisoRepetidaEnElTexto"/>.</item>
 /// <item>Las <see cref="ResultadoExtraccionRegistro.SinLeer"/> van a SinLeer con la línea de su cita (recortada a
@@ -51,6 +57,9 @@ public static class CombinadorLotes
 
     private const int LargoCitaEnMotivo = 80;
 
+    /// <summary>Lo mínimo que tiene que medir una empresa sin espacios para buscarla pegada dentro de la línea.</summary>
+    private const int LargoEmpresaPegada = 4;
+
     public static LoteCombinado Combinar(AnalisisRegistro tabla, string registro, ResultadoExtraccionRegistro extraccion)
     {
         var lineas = AnalizadorRegistro.TextoLibre(registro).Lineas
@@ -70,12 +79,13 @@ public static class CombinadorLotes
         var extraidas = new List<FilaLote>();
         foreach (var fila in extraccion.Candidaturas)
         {
-            if (!primeraLinea.TryGetValue(Comparable(fila.Cita), out var linea))
+            var cita = Comparable(fila.Cita);
+            if (!primeraLinea.TryGetValue(cita, out var linea))
                 sinLeer.Add(new FilaSinLeerDto(0, $"{MotivoCitaInexistente}: {Citar(fila.Cita)}"));
             else if (Problema(fila) is { } motivo)
                 sinLeer.Add(new FilaSinLeerDto(linea, motivo));
             else
-                extraidas.Add(AFilaLote(fila, linea));
+                extraidas.Add(AFilaLote(fila, linea, empresaEnLaLinea: EmpresaEnLinea(fila.Empresa, cita)));
         }
 
         var deLaTabla = tabla.Lote.Filas.ToLookup(f => NombresEmpresa.Normalizar(f.Empresa), f => f.Fecha, StringComparer.Ordinal);
@@ -151,7 +161,7 @@ public static class CombinadorLotes
         return demasiadoLargo is null ? null : $"{demasiadoLargo}: demasiado largo para importarlo.";
     }
 
-    private static FilaLote AFilaLote(FilaExtraida f, int linea)
+    private static FilaLote AFilaLote(FilaExtraida f, int linea, bool empresaEnLaLinea)
     {
         var descartada = f.Estado == EstadoCandidatura.Descartada;
         return new FilaLote(
@@ -160,7 +170,39 @@ public static class CombinadorLotes
             Enlace: f.Enlace,
             Estado: f.Estado,
             MotivoDescarte: descartada ? f.MotivoDescarte ?? MotivoDescarte.Otro : null,
-            Nota: f.Nota is null ? null : Recortar(f.Nota, LimitesLote.Nota));
+            Nota: f.Nota is null ? null : Recortar(f.Nota, LimitesLote.Nota),
+            Seccion: string.IsNullOrWhiteSpace(f.Seccion)
+                ? AnalizadorRegistro.SeccionTextoLibre
+                : $"{AnalizadorRegistro.SeccionTextoLibre}: {f.Seccion}",
+            EmpresaFueraDeLaCita: !empresaEnLaLinea);
+    }
+
+    /// <summary>
+    /// Si la empresa sale en la línea citada (ya <see cref="Comparable"/>): las dos sin tildes ni mayúsculas, la empresa sin
+    /// forma jurídica y todo lo que no es letra o dígito como un espacio. Vale con las palabras enteras o, si la empresa
+    /// tiene <see cref="LargoEmpresaPegada"/> caracteres o más, con las dos sin espacios («B.B.V.A.» y «BBVA»). «Grupo» no se
+    /// quita: «Grupo Inditec» en la empresa y solo «Inditec» en la línea no encaja.
+    /// </summary>
+    private static bool EmpresaEnLinea(string empresa, string linea)
+    {
+        var nombre = Palabras(NombresEmpresa.Normalizar(Comparable(empresa)));
+        var texto = Palabras(TextoComparable.Normalizar(linea));
+        if (nombre.Length == 0) return false;
+        if ($" {texto} ".Contains($" {nombre} ", StringComparison.Ordinal)) return true;
+        var pegado = nombre.Replace(" ", "", StringComparison.Ordinal);
+        return pegado.Length >= LargoEmpresaPegada && texto.Replace(" ", "", StringComparison.Ordinal).Contains(pegado, StringComparison.Ordinal);
+    }
+
+    /// <summary>Solo letras y dígitos: lo demás pasa a un espacio, sin repetirlos ni dejarlos en los extremos.</summary>
+    private static string Palabras(string texto)
+    {
+        var resultado = new StringBuilder(texto.Length);
+        foreach (var c in texto)
+        {
+            if (char.IsLetterOrDigit(c)) resultado.Append(c);
+            else if (resultado.Length > 0 && resultado[^1] != ' ') resultado.Append(' ');
+        }
+        return resultado.ToString().TrimEnd();
     }
 
     private static string Citar(string cita) => $"«{Recortar(cita, LargoCitaEnMotivo)}».";

@@ -42,6 +42,12 @@ public static partial class AnalizadorRegistro
     /// <summary>Valor de <see cref="Candidatura.SeccionOrigen"/> de lo importado de la tabla.</summary>
     public const string SeccionTabla = "Tabla del registro";
 
+    /// <summary>
+    /// Principio de <see cref="Candidatura.SeccionOrigen"/> de lo extraído por Claude del texto libre, seguido de «: » y la
+    /// sección que dice Claude. Así una extraída nunca puede pasar por una fila de la tabla.
+    /// </summary>
+    public const string SeccionTextoLibre = "Texto libre del registro";
+
     private const string MarcaEnvioEnTexto = "ENVIADA";
 
     private static readonly string[] ColumnasObligatorias = ["fecha", "empresa", "puesto", "estado"];
