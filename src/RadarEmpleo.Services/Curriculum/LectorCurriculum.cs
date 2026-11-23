@@ -17,6 +17,9 @@ public sealed class LectorCurriculum : ILectorCurriculum
 
     private static readonly string[] CarpetasQueSeSaltan = ["__pycache__"];
 
+    // Estricto: un archivo guardado en Windows-1252 (o con bytes sueltos) no se lee a medias con «�» en las tildes.
+    private static readonly UTF8Encoding Utf8Estricto = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
     private readonly RutasCurriculum _rutas;
 
     public LectorCurriculum(RutasCurriculum rutas) => _rutas = rutas;
@@ -172,11 +175,11 @@ public sealed class LectorCurriculum : ILectorCurriculum
     private static async Task<TextoLeido> LeerConFechaAsync(string ruta, string nombre, CancellationToken cancelacion)
     {
         var bytes = await LeerBytesAsync(ruta, nombre, cancelacion);
-        return new TextoLeido(Decodificar(bytes), File.GetLastWriteTimeUtc(ruta), Hash(bytes));
+        return new TextoLeido(Decodificar(bytes, nombre), File.GetLastWriteTimeUtc(ruta), Hash(bytes));
     }
 
     private static async Task<string> LeerTextoAsync(string ruta, string nombre, CancellationToken cancelacion) =>
-        Decodificar(await LeerBytesAsync(ruta, nombre, cancelacion));
+        Decodificar(await LeerBytesAsync(ruta, nombre, cancelacion), nombre);
 
     /// <summary>
     /// El archivo entero de una vez (el registro ronda los 140 KB), para que el texto y su hash salgan de la
@@ -201,11 +204,23 @@ public sealed class LectorCurriculum : ILectorCurriculum
         }
     }
 
-    /// <summary>UTF-8, o lo que diga su BOM (como al leer con <see cref="StreamReader"/> directamente del archivo).</summary>
-    private static string Decodificar(byte[] bytes)
+    /// <summary>
+    /// UTF-8, o lo que diga su BOM (UTF-16 del Bloc de notas antiguo, por ejemplo). Si no es UTF-8 válido no se adivina
+    /// la codificación ni se cambian las letras raras por «�»: se avisa para que lo guarden en UTF-8.
+    /// </summary>
+    /// <exception cref="ReglaNegocioException">No es UTF-8 válido.</exception>
+    private static string Decodificar(byte[] bytes, string nombre)
     {
-        using var lector = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return lector.ReadToEnd();
+        try
+        {
+            using var lector = new StreamReader(new MemoryStream(bytes), Utf8Estricto, detectEncodingFromByteOrderMarks: true);
+            return lector.ReadToEnd();
+        }
+        catch (DecoderFallbackException)
+        {
+            throw new ReglaNegocioException(
+                $"{nombre} no está guardado en UTF-8 y se perderían las tildes y las eñes. Guárdalo con la codificación UTF-8 y vuelve a intentarlo.");
+        }
     }
 
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
