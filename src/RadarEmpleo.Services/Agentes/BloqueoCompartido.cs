@@ -77,6 +77,11 @@ public sealed class BloqueoCompartido
     private readonly Func<int, DateTime?> _inicioDelProceso;
     private readonly int _pidPropio;
 
+    /// <summary>El último bloqueo de «otro programa» apuntado en el log: cada uno se apunta una vez, no en cada sondeo.</summary>
+    private volatile AvisoOcupado? _ultimoAvisado;
+
+    private sealed record AvisoOcupado(string Quien, int? Pid, DateTime CaducaUtc);
+
     /// <param name="inicioDelProceso">Hora de inicio (UTC) del proceso con ese pid, o null si no existe. Por defecto, la real.</param>
     /// <param name="pidPropio">El pid de esta API (por defecto, el real).</param>
     public BloqueoCompartido(RutasCurriculum rutas, ILogger<BloqueoCompartido> log, Func<int, DateTime?>? inicioDelProceso = null,
@@ -120,14 +125,22 @@ public sealed class BloqueoCompartido
             {
                 // Uno que no es de los conocidos se enseña como «otro programa»; lo que dice el archivo, solo aquí.
                 if (leido is not null && BloqueoEjecucion.NombreVisible(leido.Quien) == BloqueoEjecucion.NombreOtroPrograma)
-                    _log.LogInformation("Bloqueo ocupado por «{Quien}» ({Tarea}, pid {Pid}).",
-                        BloqueoEjecucion.NombreSaneado(leido.Quien), BloqueoEjecucion.NombreSaneado(leido.Tarea), leido.Pid);
+                    AvisarOcupado(leido);
                 return ResultadoBloqueo.Ocupado(BloqueoEjecucion.NombreVisible(leido?.Quien));
             }
             _log.LogInformation("Bloqueo caducado de {Quien} ({Tarea}, pid {Pid}): se borra.",
                 BloqueoEjecucion.NombreSaneado(leido?.Quien), BloqueoEjecucion.NombreSaneado(leido?.Tarea), leido?.Pid);
             if (!Borrar(ruta)) return ResultadoBloqueo.Ocupado(BloqueoEjecucion.NombreVisible(leido?.Quien));
         }
+    }
+
+    private void AvisarOcupado(BloqueoLeido leido)
+    {
+        var aviso = new AvisoOcupado(leido.Quien, leido.Pid, leido.CaducaUtc);
+        if (aviso == _ultimoAvisado) return;
+        _ultimoAvisado = aviso;
+        _log.LogInformation("Bloqueo ocupado por «{Quien}» ({Tarea}, pid {Pid}).",
+            BloqueoEjecucion.NombreSaneado(leido.Quien), BloqueoEjecucion.NombreSaneado(leido.Tarea), leido.Pid);
     }
 
     /// <summary>Al arrancar: borra el bloqueo si es de la app y está caducado (lo dejó una API que se cerró). Devuelve si lo ha borrado.</summary>

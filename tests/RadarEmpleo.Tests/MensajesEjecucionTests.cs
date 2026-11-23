@@ -58,6 +58,12 @@ public class MensajesEjecucionTests
         Assert.DoesNotContain("API", EjecucionAgente.MensajeInterrumpida);
     }
 
+    [Fact]
+    public void MensajeReiniciadaAntesDeEmpezar_HablaDeLaAppYDiceQueHacer()
+    {
+        Assert.Equal("La app se cerró antes de empezar. Vuelve a lanzarla.", EjecucionAgente.MensajeReiniciadaAntesDeEmpezar);
+    }
+
     public static TheoryData<string> Fijos =>
     [
         MensajesEjecucion.NoInstalado, MensajesEjecucion.SalidaNoValida, MensajesEjecucion.ErrorDeClaude, MensajesEjecucion.Inesperado,

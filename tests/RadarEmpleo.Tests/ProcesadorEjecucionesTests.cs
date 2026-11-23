@@ -798,6 +798,47 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     }
 
     [Fact]
+    public void UnBloqueoDeOtroPrograma_SeApuntaEnElLogUnaVezPorBloqueo()
+    {
+        var log = new LogEnMemoria();
+        var bloqueo = new BloqueoCompartido(_rutas, log, InicioDelProceso);
+        var contenido = BloqueoEjecucion.DeLaApp(TareaAgente.ExtraerRegistro, 1, Environment.ProcessId, _reloj.AhoraUtc, TimeSpan.FromMinutes(5));
+        EscribirBloqueo("<b>Raro</b>", Environment.ProcessId, _reloj.AhoraUtc.AddHours(1));
+
+        for (var sondeo = 0; sondeo < 3; sondeo++)
+            Assert.Equal(BloqueoEjecucion.NombreOtroPrograma, bloqueo.Intentar(contenido, _reloj.AhoraUtc).OcupadoPor);
+        var aviso = Assert.Single(log.Mensajes);
+        Assert.Contains("bRaro/b", aviso);
+
+        // Otro bloqueo distinto (otra caducidad) se vuelve a apuntar, también una vez.
+        EscribirBloqueo("<b>Raro</b>", Environment.ProcessId, _reloj.AhoraUtc.AddHours(2));
+        bloqueo.Intentar(contenido, _reloj.AhoraUtc);
+        bloqueo.Intentar(contenido, _reloj.AhoraUtc);
+        Assert.Equal(2, log.Mensajes.Count);
+
+        // Los conocidos no se apuntan: ya se enseñan con su nombre.
+        EscribirBloqueo(BloqueoEjecucion.QuienTareaLunes, Environment.ProcessId, _reloj.AhoraUtc.AddHours(1));
+        bloqueo.Intentar(contenido, _reloj.AhoraUtc);
+        Assert.Equal(2, log.Mensajes.Count);
+    }
+
+    /// <summary>Log que guarda los mensajes de nivel Information o más.</summary>
+    private sealed class LogEnMemoria : Microsoft.Extensions.Logging.ILogger<BloqueoCompartido>
+    {
+        public List<string> Mensajes { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel >= Microsoft.Extensions.Logging.LogLevel.Information) Mensajes.Add(formatter(state, exception));
+        }
+    }
+
+    [Fact]
     public async Task DosEncoladas_VanDeUnaEnUnaYPorOrden()
     {
         // Arranca antes de encolar: al arrancar, lo que ya estaba en cola se cancela.
@@ -1006,7 +1047,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         Assert.Equal(EjecucionAgente.MensajeInterrumpida, curso.Error);
         var cola = await LeerAsync(enCola.Id);
         Assert.Equal(EstadoEjecucion.Cancelada, cola.Estado);
-        Assert.Equal("La API se reinició antes de empezar.", cola.Resumen);
+        Assert.Equal(EjecucionAgente.MensajeReiniciadaAntesDeEmpezar, cola.Resumen);
         Assert.False(File.Exists(RutaBloqueo));
         Assert.False(await _procesador.ProcesarSiguienteAsync(CancellationToken.None));
     }
