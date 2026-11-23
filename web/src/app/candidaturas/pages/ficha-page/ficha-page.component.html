@@ -465,21 +465,10 @@
             }
             @if (bloqueClaude()) {
               <!-- Todo con borde: el relleno de la ficha es el del cambio de estado. La tarjeta sale
-                   donde estaba el botón y su «Cancelar» no hace caso a un doble toque -->
+                   donde estaba el botón y su «Cancelar» no hace caso a un doble toque. Al terminar,
+                   la tarjeta no se mueve: el resumen y lo siguiente (volver a lanzar o descartar)
+                   van debajo, en el orden en que se leen y en el que el foco sigue con Tab -->
               <div class="flex flex-col items-start gap-3">
-                @if (verBotonAnalizar()) {
-                  <button
-                    #botonAnalizar
-                    mat-stroked-button
-                    type="button"
-                    class="min-h-12"
-                    disabledInteractive
-                    [disabled]="lanzandoAnalisis()"
-                    (click)="analizarEncaje()"
-                  >
-                    {{ lanzandoAnalisis() ? 'Lanzando…' : 'Analizar encaje con Claude' }}
-                  </button>
-                }
                 @if (analisis(); as e) {
                   <app-estado-ejecucion
                     class="w-full"
@@ -493,6 +482,19 @@
                 }
                 @if (resumenAnalisis(); as resumen) {
                   <p class="text-sm text-on-surface-variant">{{ resumen }}</p>
+                }
+                @if (verBotonAnalizar()) {
+                  <button
+                    #botonAnalizar
+                    mat-stroked-button
+                    type="button"
+                    class="min-h-12"
+                    disabledInteractive
+                    [disabled]="lanzandoAnalisis()"
+                    (click)="analizarEncaje()"
+                  >
+                    {{ lanzandoAnalisis() ? 'Lanzando…' : 'Analizar encaje con Claude' }}
+                  </button>
                 }
                 @if (proponerDescartar()) {
                   <button
