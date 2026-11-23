@@ -31,6 +31,9 @@ const URL_AGENTES = `${environment.apiUrl}/api/agentes`;
 /** Cada cuánto se pregunta por las ejecuciones que no han terminado */
 export const INTERVALO_SEGUIMIENTO_MS = 5000;
 
+/** Cuántas enseña la lista de /agentes */
+export const LIMITE_HISTORIAL = 50;
+
 const TERMINALES: ReadonlySet<EstadoEjecucion> = new Set(['Ok', 'Error', 'Cancelada']);
 
 export function esTerminal(ejecucion: Pick<EjecucionAgente, 'estado'>): boolean {
@@ -64,6 +67,8 @@ export class AgentesService {
 
   /** La API ha contestado 403: desde aquí no se puede, aunque /api/sistema/info dijera que sí */
   private readonly _rechazados = signal(false);
+  /** Cuántos 403 van: un estado pedido antes del último no vuelve a dar por disponibles los agentes */
+  private rechazos = 0;
 
   readonly disponibles = computed(
     () => this.sistema.info()?.agentesDisponibles === true && !this._rechazados(),
@@ -75,6 +80,16 @@ export class AgentesService {
 
   private readonly _ejecuciones = signal<ReadonlyMap<number, EjecucionAgente>>(new Map());
   readonly ejecuciones = this._ejecuciones.asReadonly();
+
+  /** Las últimas de /agentes, de la más reciente a la más antigua; null hasta la primera respuesta */
+  private readonly _historial = signal<readonly EjecucionAgente[] | null>(null);
+  readonly historial = this._historial.asReadonly();
+
+  private readonly _cargandoHistorial = signal(false);
+  readonly cargandoHistorial = this._cargandoHistorial.asReadonly();
+
+  private readonly _errorHistorial = signal<string | null>(null);
+  readonly errorHistorial = this._errorHistorial.asReadonly();
 
   private readonly _terminada = new Subject<EjecucionAgente>();
   readonly terminada$ = this._terminada.asObservable();
@@ -90,6 +105,7 @@ export class AgentesService {
   private destruido = false;
   private peticionSeguimiento?: Subscription;
   private peticionEstado?: Subscription;
+  private peticionHistorial?: Subscription;
 
   constructor() {
     fromEvent(this.documento, 'visibilitychange')
@@ -101,6 +117,7 @@ export class AgentesService {
       this.pararTemporizador();
       this.peticionSeguimiento?.unsubscribe();
       this.peticionEstado?.unsubscribe();
+      this.peticionHistorial?.unsubscribe();
       this._terminada.complete();
       this._perdida.complete();
     });
@@ -116,8 +133,14 @@ export class AgentesService {
       return;
     }
     this.peticionEstado?.unsubscribe();
+    const rechazosAlPedir = this.rechazos;
     this.peticionEstado = this.http.get<EstadoAgentes>(`${URL_AGENTES}/estado`).subscribe({
       next: (estado) => {
+        // Pedido con la lista y esta dio 403: una API que dice sí y no a la vez no reactiva nada
+        // (si no, la página volvería a pedirlo todo en bucle)
+        if (this.rechazos !== rechazosAlPedir) {
+          return;
+        }
         this._estado.set(estado);
         this._rechazados.set(false);
         this._errorEstado.set(null);
@@ -129,6 +152,35 @@ export class AgentesService {
         }
       },
     });
+  }
+
+  /**
+   * Pide las últimas 50 para /agentes. Sin agentes disponibles no pide nada. Mientras vuelve a pedirlas
+   * se conserva la lista anterior (refrescar no la vacía ni hace saltar la página); si falla, también
+   */
+  cargarHistorial(): void {
+    if (!this.disponibles()) {
+      return;
+    }
+    this.peticionHistorial?.unsubscribe();
+    this._cargandoHistorial.set(true);
+    this._errorHistorial.set(null);
+    const params = new HttpParams().set('limite', LIMITE_HISTORIAL);
+    this.peticionHistorial = this.http
+      .get<EjecucionAgente[]>(`${URL_AGENTES}/ejecuciones`, { params })
+      .subscribe({
+        next: (lista) => {
+          this._historial.set(lista);
+          this._cargandoHistorial.set(false);
+        },
+        error: (error: unknown) => {
+          const errorApi = convertirErrorApi(error);
+          if (!this.siRechazados(errorApi)) {
+            this._errorHistorial.set(errorApi.mensaje);
+          }
+          this._cargandoHistorial.set(false);
+        },
+      });
   }
 
   lanzarAnalisis(candidaturaId: number): Observable<EjecucionAgente> {
@@ -211,6 +263,12 @@ export class AgentesService {
   }
 
   private registrar(ejecucion: EjecucionAgente): void {
+    // De un estado terminal no se sale: una respuesta vieja del seguimiento (que se registra al final de la
+    // vuelta) no puede devolver a «En cola» una que ya se ha cancelado o terminado
+    const previa = this._ejecuciones().get(ejecucion.id);
+    if (previa && esTerminal(previa) && !esTerminal(ejecucion)) {
+      return;
+    }
     this._ejecuciones.update((actuales) => new Map(actuales).set(ejecucion.id, ejecucion));
     // Tras un 403, las respuestas que aún estaban en vuelo no vuelven a armar el seguimiento
     if (!esTerminal(ejecucion)) {
@@ -243,9 +301,12 @@ export class AgentesService {
       return;
     }
     this.consultando = true;
+    // Se registran todas juntas al acabar la vuelta: cada respuesta llega en su propio evento y, una a
+    // una, las que terminan a la vez harían que la pantalla refrescase una vez por cada una
+    const respuestas: EjecucionAgente[] = [];
     const peticiones = [...this.seguidas].map((id) =>
       this.http.get<EjecucionAgente>(`${URL_AGENTES}/ejecuciones/${id}`).pipe(
-        tap((ejecucion) => this.registrar(ejecucion)),
+        tap((ejecucion) => respuestas.push(ejecucion)),
         catchError((error: unknown) => {
           this.alFallarSeguimiento(id, convertirErrorApi(error));
           return of(null);
@@ -256,6 +317,9 @@ export class AgentesService {
       .pipe(
         finalize(() => {
           this.consultando = false;
+          if (!this.destruido) {
+            respuestas.forEach((ejecucion) => this.registrar(ejecucion));
+          }
           this.programar();
         }),
       )
@@ -293,6 +357,7 @@ export class AgentesService {
     if (error.estado !== 403) {
       return false;
     }
+    this.rechazos++;
     this._rechazados.set(true);
     this._estado.set(null);
     this.seguidas.clear();

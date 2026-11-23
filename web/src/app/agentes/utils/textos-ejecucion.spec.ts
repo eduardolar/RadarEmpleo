@@ -1,3 +1,4 @@
+import { crearSistemaInfo } from '../../core/utils/sistema-de-prueba';
 import { EjecucionAgente } from '../interfaces/ejecucion.interface';
 import { crearEjecucion, crearGasto } from './ejecucion-de-prueba';
 import {
@@ -7,8 +8,12 @@ import {
   conPunto,
   duracion,
   ETIQUETA_ESTADO,
+  motivoSinAgentes,
+  NBSP,
   NOMBRE_TAREA,
   relojEnCurso,
+  reservaDelDia,
+  TEXTO_RECHAZADOS,
   textoEstado,
   usoDelDia,
   usoEstimado,
@@ -21,19 +26,26 @@ function texto(cambios: Partial<EjecucionAgente>, tope: number | null = TOPE): s
   return textoEstado(crearEjecucion(cambios), AHORA, tope);
 }
 
+// Los textos esperados llevan un espacio de no separación (U+00A0, `NBSP`) entre la cifra y su unidad
+
 describe('duracion', () => {
+  it('la cifra y su unidad van con un espacio de no separación', () => {
+    expect(duracion(80)).toBe(`1${NBSP}min 20${NBSP}s`);
+    expect(usoDelDia(crearGasto({ gastadoUsd: 0.42 }))).toContain(`3${NBSP}%`);
+  });
+
   it.each([
-    [0, '0 s'],
-    [59, '59 s'],
-    [59.9, '59 s'],
-    [60, '1 min'],
-    [80, '1 min 20 s'],
-    [300, '5 min'],
-    [3599, '59 min 59 s'],
-    [3600, '1 h'],
-    [3720, '1 h 2 min'],
-    [3725, '1 h 2 min'],
-    [-5, '0 s'],
+    [0, '0 s'],
+    [59, '59 s'],
+    [59.9, '59 s'],
+    [60, '1 min'],
+    [80, '1 min 20 s'],
+    [300, '5 min'],
+    [3599, '59 min 59 s'],
+    [3600, '1 h'],
+    [3720, '1 h 2 min'],
+    [3725, '1 h 2 min'],
+    [-5, '0 s'],
   ])('%s s es «%s»', (segundos, esperado) => {
     expect(duracion(segundos)).toBe(esperado);
   });
@@ -47,10 +59,10 @@ describe('duracion', () => {
 describe('usoEstimado', () => {
   it('con el coste, el porcentaje redondeado del tope de hoy', () => {
     expect(usoEstimado(crearEjecucion({ estado: 'Ok', costeUsd: 0.18 }), TOPE)).toBe(
-      'uso estimado: 1 % del tope de hoy',
+      'uso estimado: 1 % del tope de hoy',
     );
     expect(usoEstimado(crearEjecucion({ estado: 'Ok', costeUsd: 2.4 }), TOPE)).toBe(
-      'uso estimado: 16 % del tope de hoy',
+      'uso estimado: 16 % del tope de hoy',
     );
   });
 
@@ -63,7 +75,7 @@ describe('usoEstimado', () => {
     });
 
     expect(usoEstimado(ejecucion, TOPE)).toBe(
-      'uso estimado: no se sabe, como mucho el 3 % del tope de hoy',
+      'uso estimado: no se sabe, como mucho el 3 % del tope de hoy',
     );
   });
 
@@ -75,14 +87,14 @@ describe('usoEstimado', () => {
     });
 
     expect(usoEstimado(ejecucion, TOPE)).toBe(
-      'uso estimado: no se sabe, como mucho el 3 % del tope de hoy',
+      'uso estimado: no se sabe, como mucho el 3 % del tope de hoy',
     );
   });
 
   it('en curso, como mucho su presupuesto', () => {
     const ejecucion = crearEjecucion({ estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z' });
 
-    expect(usoEstimado(ejecucion, TOPE)).toBe('uso estimado: como mucho el 4 % del tope de hoy');
+    expect(usoEstimado(ejecucion, TOPE)).toBe('uso estimado: como mucho el 4 % del tope de hoy');
   });
 
   it('coste 0 (una oferta cerrada no llama a Claude): no ha gastado nada', () => {
@@ -93,16 +105,16 @@ describe('usoEstimado', () => {
 
   it('por debajo del 1 % dice «menos del 1 %», nunca «0 %»', () => {
     expect(usoEstimado(crearEjecucion({ estado: 'Ok', costeUsd: 0.05 }), TOPE)).toBe(
-      'uso estimado: menos del 1 % del tope de hoy',
+      'uso estimado: menos del 1 % del tope de hoy',
     );
   });
 
   it('«100 %» solo con el tope entero; justo por debajo se queda en 99', () => {
     expect(usoEstimado(crearEjecucion({ estado: 'Ok', costeUsd: 15 }), TOPE)).toBe(
-      'uso estimado: 100 % del tope de hoy',
+      'uso estimado: 100 % del tope de hoy',
     );
     expect(usoEstimado(crearEjecucion({ estado: 'Ok', costeUsd: 14.95 }), TOPE)).toBe(
-      'uso estimado: 99 % del tope de hoy',
+      'uso estimado: 99 % del tope de hoy',
     );
   });
 
@@ -123,19 +135,67 @@ describe('usoEstimado', () => {
 describe('usoDelDia', () => {
   it('el porcentaje del tope usado hoy', () => {
     expect(usoDelDia(crearGasto({ gastadoUsd: 0.42 }))).toBe(
-      'Uso estimado de tu suscripción hoy: 3 % del tope',
+      'Uso estimado de tu suscripción hoy: 3 % del tope',
     );
   });
 
   it('sin nada usado lo dice así; con muy poco, «menos del 1 %»', () => {
     expect(usoDelDia(crearGasto())).toBe('Hoy aún no has usado Claude');
     expect(usoDelDia(crearGasto({ gastadoUsd: 0.01 }))).toBe(
-      'Uso estimado de tu suscripción hoy: menos del 1 % del tope',
+      'Uso estimado de tu suscripción hoy: menos del 1 % del tope',
     );
   });
 
   it('sin tope no dice nada', () => {
     expect(usoDelDia(crearGasto({ topeUsd: 0 }))).toBeNull();
+  });
+
+  it('sin nada gastado pero con algo en marcha no dice que no has usado Claude', () => {
+    expect(usoDelDia(crearGasto({ reservadoUsd: 0.5 }))).toBe(
+      'Hoy aún no has gastado nada; Claude tiene trabajo en marcha',
+    );
+  });
+});
+
+describe('reservaDelDia', () => {
+  it('lo reservado como cota, redondeado hacia arriba y sin USD', () => {
+    expect(reservaDelDia(crearGasto({ reservadoUsd: 0.5 }))).toBe(
+      'Reservado para lo que está en marcha: hasta el 4 % del tope de hoy',
+    );
+    expect(reservaDelDia(crearGasto({ reservadoUsd: 0.01 }))).toBe(
+      'Reservado para lo que está en marcha: hasta el 1 % del tope de hoy',
+    );
+  });
+
+  it('sin nada reservado o sin tope no dice nada', () => {
+    expect(reservaDelDia(crearGasto())).toBeNull();
+    expect(reservaDelDia(crearGasto({ reservadoUsd: 0.5, topeUsd: 0 }))).toBeNull();
+  });
+});
+
+describe('motivoSinAgentes', () => {
+  // Lo que da /api/sistema/info por cada canal (SistemaController): por el remoto, agentesHabilitados
+  // siempre es false aunque estén encendidos en el PC
+  const PC_APAGADOS = crearSistemaInfo({ agentesHabilitados: false, desdeElPc: true });
+  const PC_ENCENDIDOS = crearSistemaInfo({ agentesHabilitados: true, desdeElPc: true });
+  const MOVIL = crearSistemaInfo({ agentesHabilitados: false, desdeElPc: false });
+  const DEMO = crearSistemaInfo({ modo: 'Demo', agentesHabilitados: false });
+  const SOLO_PC =
+    'Los agentes de Claude solo se pueden usar desde el PC donde está instalada la app.';
+
+  it('desde el móvil, solo desde el PC (no «apagados»), estén como estén', () => {
+    expect(motivoSinAgentes(MOVIL)).toBe(SOLO_PC);
+  });
+
+  it('en el PC con los agentes apagados, dónde se encienden', () => {
+    expect(motivoSinAgentes(PC_APAGADOS)).toBe(
+      'Los agentes de Claude están apagados en la configuración de la app. Se encienden allí, no desde esta pantalla; en Ajustes puedes ver si están encendidos.',
+    );
+  });
+
+  it('en la demo lo dice así; en el PC, encendidos pero rechazados (403), que se vuelva a comprobar', () => {
+    expect(motivoSinAgentes(DEMO)).toBe('En la demo no se usa Claude: los agentes están apagados.');
+    expect(motivoSinAgentes(PC_ENCENDIDOS)).toBe(TEXTO_RECHAZADOS);
   });
 });
 
@@ -163,10 +223,10 @@ describe('textoEstado', () => {
   });
 
   it.each([
-    ['AnalizarEncaje', 'Analizando el encaje… · 1 min 20 s (máximo 5 min)'],
-    ['ExtraerRegistro', 'Leyendo el registro… · 1 min 20 s (máximo 5 min)'],
-    ['Rastreo', 'Rastreando ofertas… · 1 min 20 s (máximo 5 min)'],
-    ['RellenarEnvio', 'Preparando el envío… · 1 min 20 s (máximo 5 min)'],
+    ['AnalizarEncaje', 'Analizando el encaje… · 1 min 20 s (máximo 5 min)'],
+    ['ExtraerRegistro', 'Leyendo el registro… · 1 min 20 s (máximo 5 min)'],
+    ['Rastreo', 'Rastreando ofertas… · 1 min 20 s (máximo 5 min)'],
+    ['RellenarEnvio', 'Preparando el envío… · 1 min 20 s (máximo 5 min)'],
   ] as const)('en curso (%s): lo que hace y el tiempo con su máximo', (tarea, esperado) => {
     expect(texto({ estado: 'EnCurso', tarea, inicio: '2026-11-23T10:00:00Z' })).toBe(esperado);
   });
@@ -190,7 +250,7 @@ describe('textoEstado', () => {
       costeUsd: 0.18,
     });
 
-    expect(resultado).toBe('Hecha en 2 min 10 s · uso estimado: 1 % del tope de hoy');
+    expect(resultado).toBe('Hecha en 2 min 10 s · uso estimado: 1 % del tope de hoy');
   });
 
   it('hecha sin gastar nada', () => {
@@ -201,7 +261,7 @@ describe('textoEstado', () => {
       costeUsd: 0,
     });
 
-    expect(resultado).toBe('Hecha en 12 s · no ha gastado nada de tu tope de hoy');
+    expect(resultado).toBe('Hecha en 12 s · no ha gastado nada de tu tope de hoy');
   });
 
   it('hecha sin coste conocido: no se sabe, como mucho el presupuesto', () => {
@@ -213,7 +273,7 @@ describe('textoEstado', () => {
     });
 
     expect(resultado).toBe(
-      'Hecha en 59 s · uso estimado: no se sabe, como mucho el 4 % del tope de hoy',
+      'Hecha en 59 s · uso estimado: no se sabe, como mucho el 4 % del tope de hoy',
     );
   });
 
@@ -223,7 +283,7 @@ describe('textoEstado', () => {
       null,
     );
 
-    expect(resultado).toBe('Hecha en 2 min 10 s.');
+    expect(resultado).toBe('Hecha en 2 min 10 s.');
   });
 
   it('hecha con una fecha inválida no pinta «NaN»', () => {
@@ -236,8 +296,8 @@ describe('textoEstado', () => {
     expect(texto({ estado: 'Error', error: 'Claude ha devuelto un error.' })).toBe(
       'No ha salido. Claude ha devuelto un error.',
     );
-    expect(texto({ estado: 'Error', error: 'Ha tardado más de 5 min y la he parado.' })).toBe(
-      'No ha salido. Ha tardado más de 5 min y la he parado.',
+    expect(texto({ estado: 'Error', error: 'Ha tardado más de 5 min y la he parado.' })).toBe(
+      'No ha salido. Ha tardado más de 5 min y la he parado.',
     );
     expect(texto({ estado: 'Error', error: 'No encuentro Claude Code en este PC' })).toBe(
       'No ha salido. No encuentro Claude Code en este PC.',
@@ -246,15 +306,42 @@ describe('textoEstado', () => {
     expect(texto({ estado: 'Error', error: '  ' })).toBe('No ha salido.');
   });
 
+  it('error en la lista (compacta): solo el motivo, la insignia ya dice «No ha salido»', () => {
+    const compacta = (cambios: Partial<EjecucionAgente>) =>
+      textoEstado(crearEjecucion(cambios), AHORA, TOPE, { compacta: true });
+
+    expect(compacta({ estado: 'Error', error: 'No encuentro Claude Code en este PC' })).toBe(
+      'No encuentro Claude Code en este PC.',
+    );
+    expect(compacta({ estado: 'Error' })).toBe('Sin más detalle.');
+    expect(compacta({ estado: 'Error', error: '  ' })).toBe('Sin más detalle.');
+  });
+
+  it('de otro día, el uso es «del tope diario» y no «del tope de hoy»', () => {
+    const deOtroDia = (cambios: Partial<EjecucionAgente>) =>
+      textoEstado(crearEjecucion(cambios), AHORA, TOPE, { deHoy: false });
+    const empezada = { inicio: '2026-11-20T10:00:00Z', fin: '2026-11-20T10:02:10Z' };
+
+    expect(deOtroDia({ estado: 'Ok', ...empezada, costeUsd: 0.15 })).toBe(
+      `Hecha en 2${NBSP}min 10${NBSP}s · uso estimado: 1${NBSP}% del tope diario`,
+    );
+    expect(deOtroDia({ estado: 'Ok', ...empezada, costeUsd: 0 })).toBe(
+      `Hecha en 2${NBSP}min 10${NBSP}s · no ha gastado nada de tu tope diario`,
+    );
+    expect(deOtroDia({ estado: 'Cancelada', ...empezada, costeEstimado: true })).toBe(
+      `Cancelada antes de terminar · uso estimado: no se sabe, como mucho el 4${NBSP}% del tope diario`,
+    );
+  });
+
   it('cancelada sin empezar: no ha gastado nada; empezada, con su uso si se sabe', () => {
     expect(texto({ estado: 'Cancelada' })).toBe('Cancelada antes de empezar. No ha gastado nada.');
     expect(texto({ estado: 'Cancelada', inicio: '2026-11-23T10:00:00Z', costeUsd: 0.15 })).toBe(
-      'Cancelada antes de terminar · uso estimado: 1 % del tope de hoy',
+      'Cancelada antes de terminar · uso estimado: 1 % del tope de hoy',
     );
     expect(
       texto({ estado: 'Cancelada', inicio: '2026-11-23T10:00:00Z', costeEstimado: true }),
     ).toBe(
-      'Cancelada antes de terminar · uso estimado: no se sabe, como mucho el 4 % del tope de hoy',
+      'Cancelada antes de terminar · uso estimado: no se sabe, como mucho el 4 % del tope de hoy',
     );
     expect(texto({ estado: 'Cancelada', inicio: '2026-11-23T10:00:00Z' })).toBe(
       'Cancelada antes de terminar.',
@@ -335,7 +422,7 @@ describe('relojEnCurso', () => {
     crearEjecucion({ estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z', ...cambios });
 
   it('el tiempo que lleva y el máximo', () => {
-    expect(relojEnCurso(enCurso(), AHORA)).toBe('1 min 20 s (máximo 5 min)');
+    expect(relojEnCurso(enCurso(), AHORA)).toBe('1 min 20 s (máximo 5 min)');
   });
 
   it('null fuera de en curso, cancelándose, sin inicio o con una fecha inválida', () => {

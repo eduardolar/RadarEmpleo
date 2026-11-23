@@ -1,8 +1,10 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SistemaService } from '../../../core/services/sistema.service';
 import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
+import { FechaActualService } from '../../../shared/services/fecha-actual.service';
 import { EjecucionAgente } from '../../interfaces/ejecucion.interface';
 import { AgentesService, INTERVALO_SEGUIMIENTO_MS } from '../../services/agentes.service';
 import { crearEjecucion, crearEstadoAgentes } from '../../utils/ejecucion-de-prueba';
@@ -21,12 +23,20 @@ describe('EstadoEjecucion', () => {
   let fixture: ComponentFixture<EstadoEjecucion>;
   let http: HttpTestingController;
 
+  // Sin el temporizador de medianoche del de verdad: los tests cuentan los temporizadores
+  const fechaActual = signal(AHORA);
+
   beforeEach(() => {
+    fechaActual.set(AHORA);
     vi.useFakeTimers();
     vi.setSystemTime(AHORA);
     TestBed.configureTestingModule({
       imports: [EstadoEjecucion],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: FechaActualService, useValue: { ahora: fechaActual } },
+      ],
     });
     http = TestBed.inject(HttpTestingController);
   });
@@ -46,7 +56,12 @@ describe('EstadoEjecucion', () => {
 
   function crear(
     ejecucion: EjecucionAgente,
-    entradas: { compacta?: boolean; topeUsd?: number | null; contexto?: string } = {},
+    entradas: {
+      compacta?: boolean;
+      topeUsd?: number | null;
+      contexto?: string;
+      permitirReintentar?: boolean;
+    } = {},
   ): HTMLElement {
     fixture = TestBed.createComponent(EstadoEjecucion);
     fixture.componentRef.setInput('ejecucion', ejecucion);
@@ -259,6 +274,27 @@ describe('EstadoEjecucion', () => {
       expect(boton('Reintentar')!.getAttribute('aria-label')).toBe(
         'Reintentar: Análisis del encaje · Acme',
       );
+    });
+
+    it('compacta: al pasar la medianoche, lo de ayer ya es «del tope diario»', () => {
+      crear(crearEjecucion({ estado: 'Ok', inicio: '2026-11-23T10:00:00Z', costeUsd: 0.15 }), {
+        compacta: true,
+        topeUsd: 15,
+      });
+      expect(texto()).toContain('del tope de hoy');
+
+      fechaActual.set(new Date('2026-11-24T08:00:00Z'));
+      pintar();
+      expect(texto()).toContain('del tope diario');
+    });
+
+    it('con permitirReintentar a false no ofrece reintentar, pero sí cancelar', () => {
+      crear(crearEjecucion({ estado: 'Error' }), { permitirReintentar: false });
+      expect(boton('Reintentar')).toBeUndefined();
+      fixture.destroy();
+
+      crear(crearEjecucion(), { permitirReintentar: false });
+      expect(boton('Cancelar')).toBeDefined();
     });
   });
 

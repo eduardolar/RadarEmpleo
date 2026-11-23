@@ -559,6 +559,8 @@ public sealed class AgentesApiTests
         Assert.Equal(disponibles, info.GetProperty("agentesDisponibles").GetBoolean());
         // Por el móvil no se dice si están habilitados.
         Assert.Equal(agentes && canal == CanalPeticion.Local, info.GetProperty("agentesHabilitados").GetBoolean());
+        // Para que el móvil no diga «apagados» cuando solo es que no es el PC.
+        Assert.Equal(canal == CanalPeticion.Local, info.GetProperty("desdeElPc").GetBoolean());
     }
 
     [Theory]

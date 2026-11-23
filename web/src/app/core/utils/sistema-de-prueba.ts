@@ -8,6 +8,7 @@ export function crearSistemaInfo(cambios: Partial<SistemaInfo> = {}): SistemaInf
     agentesHabilitados: false,
     version: '0.1.0',
     agentesDisponibles: false,
+    desdeElPc: true,
     ...cambios,
   };
 }

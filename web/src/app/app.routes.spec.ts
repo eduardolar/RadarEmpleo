@@ -6,6 +6,7 @@ import { Title } from '@angular/platform-browser';
 import { provideRouter, Router, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
+import { crearEstadoAgentes } from './agentes/utils/ejecucion-de-prueba';
 import { routes } from './app.routes';
 import { crearDetalle } from './candidaturas/utils/candidatura-de-prueba';
 import { crearSistemaInfo } from './core/utils/sistema-de-prueba';
@@ -51,6 +52,14 @@ describe('Navegación', () => {
       avisos: [],
     });
     http.expectOne('/api/rastreos').flush([]);
+  }
+
+  // Más pregunta a /api/sistema/info si hay agentes, para enseñar su tarjeta
+  async function abrirMas(agentesDisponibles = false): Promise<RouterTestingHarness> {
+    const harness = await RouterTestingHarness.create('/mas');
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ agentesDisponibles }));
+    await harness.fixture.whenStable();
+    return harness;
   }
 
   it('«/» redirige a «/inicio» y su enlace lleva aria-current="page"', async () => {
@@ -103,7 +112,7 @@ describe('Navegación', () => {
   });
 
   it('desde Más se llega a la importación, que resalta Más y pide la vista previa', async () => {
-    const harness = await RouterTestingHarness.create('/mas');
+    const harness = await abrirMas();
     const pagina = harness.routeNativeElement!;
 
     pagina.querySelector<HTMLAnchorElement>('main a[href="/importacion"]')!.click();
@@ -121,7 +130,7 @@ describe('Navegación', () => {
   });
 
   it('desde Más se llega al perfil, que resalta Más y lo pide', async () => {
-    const harness = await RouterTestingHarness.create('/mas');
+    const harness = await abrirMas();
     const pagina = harness.routeNativeElement!;
 
     pagina.querySelector<HTMLAnchorElement>('main a[href="/perfil"]')!.click();
@@ -147,7 +156,7 @@ describe('Navegación', () => {
   });
 
   it('desde Más se llega a las estadísticas, que resaltan Más y las piden', async () => {
-    const harness = await RouterTestingHarness.create('/mas');
+    const harness = await abrirMas();
     const pagina = harness.routeNativeElement!;
 
     pagina.querySelector<HTMLAnchorElement>('main a[href="/estadisticas"]')!.click();
@@ -171,7 +180,7 @@ describe('Navegación', () => {
   });
 
   it('desde Más se llega a los ajustes, que resaltan Más', async () => {
-    const harness = await RouterTestingHarness.create('/mas');
+    const harness = await abrirMas();
     const pagina = harness.routeNativeElement!;
 
     pagina.querySelector<HTMLAnchorElement>('main a[href="/ajustes"]')!.click();
@@ -179,11 +188,35 @@ describe('Navegación', () => {
 
     expect(TestBed.inject(Router).url).toBe('/ajustes');
     expect(TestBed.inject(Title).getTitle()).toBe('Ajustes · RadarEmpleo');
-    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
-    await harness.fixture.whenStable();
+    // Más ya la pidió: Ajustes no la repite
 
     expect(pagina.querySelector('h1')?.textContent).toContain('Ajustes');
     expect(pagina.textContent).toContain('Apagados');
+    const activos = pagina.querySelectorAll('a[aria-current="page"]');
+    expect(activos).toHaveLength(2);
+    activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/mas'));
+  });
+
+  it('sin agentes, Más no enseña su tarjeta', async () => {
+    const harness = await abrirMas();
+
+    expect(harness.routeNativeElement!.querySelector('main a[href="/agentes"]')).toBeNull();
+  });
+
+  it('con agentes, desde Más se llega a los agentes, que resaltan Más y piden la lista y el uso', async () => {
+    const harness = await abrirMas(true);
+    const pagina = harness.routeNativeElement!;
+
+    pagina.querySelector<HTMLAnchorElement>('main a[href="/agentes"]')!.click();
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/agentes');
+    expect(TestBed.inject(Title).getTitle()).toBe('Agentes · RadarEmpleo');
+    http.expectOne('/api/agentes/estado').flush(crearEstadoAgentes());
+    http.expectOne((r) => r.url === '/api/agentes/ejecuciones').flush([]);
+    await harness.fixture.whenStable();
+
+    expect(pagina.querySelector('h1')?.textContent).toContain('Agentes de Claude');
     const activos = pagina.querySelectorAll('a[aria-current="page"]');
     expect(activos).toHaveLength(2);
     activos.forEach((enlace) => expect(enlace.getAttribute('href')).toBe('/mas'));

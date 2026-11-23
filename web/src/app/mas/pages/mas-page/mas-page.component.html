@@ -1,7 +1,14 @@
 <!-- Página de rejilla: alineada a la izquierda con el título, como Tablero y Rastreos, y con un ancho
      máximo para que las tarjetas no se estiren (docs/DISENO.md, «Maquetación de página») -->
 <section class="flex w-full max-w-4xl flex-col gap-6">
-  <app-cabecera-pagina titulo="Más" descripcion="Perfil, estadísticas, importación y ajustes." />
+  <app-cabecera-pagina
+    titulo="Más"
+    [descripcion]="
+      conAgentes()
+        ? 'Perfil, estadísticas, importación, ajustes y agentes.'
+        : 'Perfil, estadísticas, importación y ajustes.'
+    "
+  />
 
   <ul class="grid gap-4 sm:grid-cols-2">
     <li class="flex">
@@ -58,6 +65,28 @@
         </svg>
       </app-tarjeta-enlace>
     </li>
+    @if (conAgentes()) {
+      <li class="flex">
+        <app-tarjeta-enlace
+          class="flex-1"
+          ruta="/agentes"
+          titulo="Agentes de Claude"
+          descripcion="Cuánto llevas usado hoy y qué ha hecho Claude."
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            class="h-6 w-6"
+          >
+            <!-- La terminal con su orden: los agentes son Claude trabajando en la línea de comandos -->
+            <rect x="3" y="4" width="18" height="16" rx="1" />
+            <path stroke-linecap="square" d="m7 9 3 3-3 3M13 15h4" />
+          </svg>
+        </app-tarjeta-enlace>
+      </li>
+    }
   </ul>
 
   <p class="font-mono text-sm text-on-surface-variant">

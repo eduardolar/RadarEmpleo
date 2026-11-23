@@ -8,6 +8,8 @@ export interface SistemaInfo {
    * modo Local. Desde el móvil es false y no se enseñan los botones (ni se pide /api/agentes/estado)
    */
   agentesDisponibles: boolean;
+  /** Si la petición llega por el endpoint «Local» (el PC): por el móvil, false */
+  desdeElPc: boolean;
 }
 
 /** Local: el PC de Eduardo. Demo: datos inventados y agentes desactivados */

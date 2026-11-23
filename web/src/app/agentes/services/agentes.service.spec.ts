@@ -139,6 +139,19 @@ describe('AgentesService', () => {
       expect(service.puedeLanzar()).toBe(true);
     });
 
+    it('un estado pedido antes de un 403 que contesta después no vuelve a dar disponibles', () => {
+      service.cargarEstado();
+      service.cargarHistorial();
+      const estado = http.expectOne(URL_ESTADO);
+      http
+        .expectOne((r) => r.url === URL_EJECUCIONES)
+        .flush(null, { status: 403, statusText: 'Forbidden' });
+      estado.flush(crearEstadoAgentes());
+
+      expect(service.disponibles()).toBe(false);
+      expect(service.estado()).toBeNull();
+    });
+
     it('un error que no es 403 conserva el estado anterior', () => {
       const estado = crearEstadoAgentes();
       service.cargarEstado();
@@ -367,6 +380,43 @@ describe('AgentesService', () => {
       seguimiento(2).flush(crearEjecucion({ id: 2, candidaturaId: 13, estado: 'Ok' }));
     });
 
+    it('las que terminan en la misma vuelta se registran y avisan juntas, al llegar la última', () => {
+      const terminadas: number[] = [];
+      service.terminada$.subscribe((e) => terminadas.push(e.id));
+      lanzar(crearEjecucion({ id: 1, candidaturaId: 12 }));
+      lanzar(crearEjecucion({ id: 2, candidaturaId: 13 }));
+
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+      seguimiento(1).flush(crearEjecucion({ id: 1, estado: 'Ok' }));
+      expect(terminadas).toEqual([]);
+      expect(service.ejecuciones().get(1)?.estado).toBe('EnCola');
+
+      seguimiento(2).flush(crearEjecucion({ id: 2, candidaturaId: 13, estado: 'Ok' }));
+      expect(terminadas).toEqual([1, 2]);
+      expect(service.ejecuciones().get(1)?.estado).toBe('Ok');
+    });
+
+    it('una respuesta vieja de la vuelta no devuelve a «En cola» una que se ha cancelado entretanto', () => {
+      const terminadas: number[] = [];
+      service.terminada$.subscribe((e) => terminadas.push(e.id));
+      lanzar(crearEjecucion({ id: 1, candidaturaId: 12 }));
+      lanzar(crearEjecucion({ id: 2, candidaturaId: 13 }));
+
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+      seguimiento(1).flush(crearEjecucion({ id: 1, estado: 'EnCola' }));
+      service.cancelar(crearEjecucion({ id: 1 })).subscribe();
+      http
+        .expectOne(`${URL_EJECUCIONES}/1/cancelar`)
+        .flush(crearEjecucion({ id: 1, estado: 'Cancelada' }));
+      seguimiento(2).flush(crearEjecucion({ id: 2, candidaturaId: 13, estado: 'EnCurso' }));
+
+      expect(service.ejecuciones().get(1)?.estado).toBe('Cancelada');
+      expect(terminadas).toEqual([1]);
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+      ninguno(1);
+      seguimiento(2).flush(crearEjecucion({ id: 2, candidaturaId: 13, estado: 'Ok' }));
+    });
+
     it('no solapa peticiones: si la API tarda, espera a la respuesta y otros 5 s', () => {
       lanzar();
       vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
@@ -504,6 +554,60 @@ describe('AgentesService', () => {
       peticion.flush([]);
 
       expect(ultima).toBeNull();
+    });
+  });
+
+  describe('cargarHistorial', () => {
+    it('sin agentes disponibles no pide nada', () => {
+      conInfo(false);
+      service.cargarHistorial();
+
+      expect(http.match((r) => r.url === URL_EJECUCIONES)).toEqual([]);
+      expect(service.historial()).toBeNull();
+    });
+
+    it('pide las últimas 50 sin filtros y no sigue ninguna', () => {
+      conInfo(true);
+      service.cargarHistorial();
+      expect(service.cargandoHistorial()).toBe(true);
+
+      const peticion = http.expectOne((r) => r.url === URL_EJECUCIONES);
+      expect(peticion.request.params.get('limite')).toBe('50');
+      expect(peticion.request.params.has('tarea')).toBe(false);
+      peticion.flush([crearEjecucion({ id: 2, estado: 'EnCurso' }), crearEjecucion({ id: 1 })]);
+
+      expect(service.historial()?.map((e) => e.id)).toEqual([2, 1]);
+      expect(service.cargandoHistorial()).toBe(false);
+      // El seguimiento lo arma quien las pinta (la tarjeta), no la lista
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+      ninguno(2);
+    });
+
+    it('al refrescar conserva la lista anterior; si falla, deja el mensaje y la lista', () => {
+      conInfo(true);
+      service.cargarHistorial();
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([crearEjecucion({ id: 1 })]);
+
+      service.cargarHistorial();
+      expect(service.historial()?.map((e) => e.id)).toEqual([1]);
+      http
+        .expectOne((r) => r.url === URL_EJECUCIONES)
+        .flush({ title: 'Fallo' }, { status: 500, statusText: 'Error' });
+
+      expect(service.historial()?.map((e) => e.id)).toEqual([1]);
+      expect(service.errorHistorial()).not.toBeNull();
+      expect(service.cargandoHistorial()).toBe(false);
+    });
+
+    it('un 403 deja disponibles a false y no deja mensaje', () => {
+      conInfo(true);
+      service.cargarHistorial();
+      http
+        .expectOne((r) => r.url === URL_EJECUCIONES)
+        .flush(null, { status: 403, statusText: 'Forbidden' });
+
+      expect(service.disponibles()).toBe(false);
+      expect(service.errorHistorial()).toBeNull();
     });
   });
 });

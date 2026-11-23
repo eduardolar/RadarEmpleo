@@ -19,6 +19,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { filter, fromEvent, Observable } from 'rxjs';
 import { ErrorApi } from '../../../core/interfaces/error-api.interface';
+import { FechaActualService } from '../../../shared/services/fecha-actual.service';
+import { diaMadrid } from '../../../shared/utils/fechas-madrid';
 import {
   EjecucionAgente,
   EstadoEjecucion as EstadoDeLaApi,
@@ -90,6 +92,7 @@ export class EstadoEjecucion {
   private readonly documento = inject(DOCUMENT);
   private readonly elemento = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly fechaActual = inject(FechaActualService);
 
   readonly ejecucion = input.required<EjecucionAgente>();
   /** Para la lista de /agentes: en una línea, sin marco, sin barra y sin anunciar los cambios */
@@ -98,6 +101,8 @@ export class EstadoEjecucion {
   readonly topeUsd = input<number | null>(null);
   /** Lo que la distingue de otras iguales en la pantalla (la empresa), para los nombres accesibles */
   readonly contexto = input<string | null>(null);
+  /** En /agentes solo la última de cada tarea y candidatura ofrece «Reintentar»: las viejas no */
+  readonly permitirReintentar = input(true);
 
   /** La enseñada ha terminado (Ok, Error o Cancelada) tras llegar sin terminar: sale una vez */
   readonly terminada = output<EjecucionAgente>();
@@ -165,7 +170,19 @@ export class EstadoEjecucion {
     if (this.sinRastro()) {
       return this.compacta() ? TEXTO_PERDIDA_CORTO : TEXTO_PERDIDA;
     }
-    return textoEstado(this.actual(), null, this.tope());
+    return textoEstado(this.actual(), null, this.tope(), {
+      compacta: this.compacta(),
+      deHoy: this.deHoy(),
+    });
+  });
+
+  /** En la lista salen las de otros días: su uso no es «del tope de hoy» */
+  private readonly deHoy = computed(() => {
+    if (!this.compacta()) {
+      return true;
+    }
+    const e = this.actual();
+    return diaMadrid(e.inicio ?? e.fechaAlta) === diaMadrid(this.fechaActual.ahora());
   });
 
   // Si hay reloj no depende de la hora, solo de la ejecución
@@ -187,7 +204,11 @@ export class EstadoEjecucion {
     () => !this.sinRastro() && this.agentes.disponibles() && this.actual().puedeCancelar,
   );
   protected readonly puedeReintentar = computed(
-    () => !this.sinRastro() && this.agentes.disponibles() && this.actual().puedeReintentar,
+    () =>
+      this.permitirReintentar() &&
+      !this.sinRastro() &&
+      this.agentes.disponibles() &&
+      this.actual().puedeReintentar,
   );
 
   protected readonly enCurso = computed(() => this.estadoVisible() === 'EnCurso');

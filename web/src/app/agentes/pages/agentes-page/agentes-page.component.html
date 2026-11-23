@@ -1,0 +1,200 @@
+<!-- Página de lectura, como Estadísticas: una columna de max-w-3xl (docs/DISENO.md, «Maquetación de página») -->
+<section aria-label="Agentes de Claude" class="flex w-full max-w-3xl flex-col gap-5">
+  <app-enlace-volver ruta="/mas" texto="Volver a Más" class="-mb-3 self-start" />
+
+  <app-cabecera-pagina
+    titulo="Agentes de Claude"
+    descripcion="Cuánto llevas usado hoy de tu tope y qué ha hecho Claude: lo que salió bien y lo que no."
+  />
+
+  @if (!info()) {
+    @if (sinConexion()) {
+      <div role="alert" class="rounded-2xl border-2 border-error bg-error-container p-4">
+        <p class="text-on-error-container">No se ha podido hablar con la API.</p>
+        <button
+          mat-button
+          type="button"
+          class="mt-2 [--mat-button-text-container-height:48px]"
+          (click)="reintentarConexion()"
+        >
+          Reintentar
+        </button>
+      </div>
+    } @else {
+      <p role="status" class="text-sm text-on-surface-variant">
+        Comprobando si Claude está disponible…
+      </p>
+    }
+  } @else if (!disponibles()) {
+    <!-- Desde el móvil o con los agentes apagados: solo la explicación, nada que pulsar. Un panel
+         sereno con una «i», no un aviso: no es un error -->
+    <div class="flex items-start gap-3 rounded-2xl bg-surface-container-lowest p-4 sm:p-5">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        class="mt-0.5 h-5 w-5 shrink-0 text-on-surface-variant"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path stroke-linecap="square" d="M12 11v6M12 7.5v.01" />
+      </svg>
+      <div class="min-w-0">
+        <p class="agentes__motivo text-on-surface">{{ motivo() }}</p>
+        @if (rechazados()) {
+          <button
+            mat-button
+            type="button"
+            class="mt-2 [--mat-button-text-container-height:48px]"
+            (click)="volverAComprobar()"
+          >
+            Volver a comprobar
+          </button>
+        }
+      </div>
+    </div>
+  } @else {
+    <section
+      aria-labelledby="titulo-uso"
+      class="agentes__uso rounded-2xl border border-borde-fino bg-surface-container-lowest p-4 sm:p-5"
+    >
+      <h2 id="titulo-uso" class="mb-3 text-xl font-extrabold">Uso de hoy</h2>
+      @if (errorEstado(); as mensaje) {
+        <div role="alert">
+          <p class="text-sm font-medium text-error">{{ mensaje }}</p>
+          <button
+            mat-button
+            type="button"
+            class="mt-2 [--mat-button-text-container-height:48px]"
+            (click)="refrescar()"
+          >
+            Reintentar
+          </button>
+        </div>
+      } @else if (uso(); as texto) {
+        <!-- La frase del uso, en grande y en tinta (nada de rojo ni ámbar): se lee de un vistazo sin
+             parecer un aviso -->
+        <p class="text-lg leading-snug font-semibold text-on-surface tabular-nums">{{ texto }}</p>
+        @if (reserva(); as texto) {
+          <p class="mt-1 text-sm text-on-surface-variant">{{ texto }}</p>
+        }
+      } @else {
+        <p class="text-sm text-on-surface-variant">Calculando el uso de hoy…</p>
+      }
+    </section>
+
+    <section aria-labelledby="titulo-lista" class="agentes__lista flex flex-col gap-3">
+      <h2 id="titulo-lista" class="text-xl font-extrabold">Últimas tareas</h2>
+
+      <!-- Hueco fijo para que la barra no empuje la lista al refrescar -->
+      <div class="-my-2 h-1 shrink-0">
+        @if (cargando()) {
+          <mat-progress-bar mode="indeterminate" aria-label="Cargando las tareas de Claude" />
+        }
+      </div>
+
+      @if (errorHistorial(); as mensaje) {
+        <div role="alert" class="rounded-2xl border-2 border-error bg-error-container p-4">
+          <p class="text-on-error-container">{{ mensaje }}</p>
+          <button
+            mat-button
+            type="button"
+            class="mt-2 [--mat-button-text-container-height:48px]"
+            (click)="refrescar()"
+          >
+            Reintentar
+          </button>
+        </div>
+      }
+
+      @if (historial(); as lista) {
+        @if (lista.length === 0) {
+          <!-- Sin marco (no es el estado vacío principal de la página: va bajo «Uso de hoy») y con la
+               terminal en un bloque de tinta, esperando la primera orden -->
+          <div
+            class="agentes__vacio flex flex-col items-center rounded-2xl bg-surface-container-lowest px-6 py-10 text-center"
+          >
+            <svg aria-hidden="true" viewBox="0 0 72 72" class="mb-5 h-16 w-16">
+              <rect x="6" y="6" width="64" height="64" rx="5" class="fill-on-surface" />
+              <rect
+                x="2"
+                y="2"
+                width="64"
+                height="64"
+                rx="5"
+                class="fill-tinta-noche stroke-trazo"
+                stroke-width="3"
+              />
+              <path
+                d="m16 24 10 10-10 10"
+                fill="none"
+                class="stroke-tinta-clara"
+                stroke-width="4"
+                stroke-linecap="square"
+              />
+              <path d="M32 46h18" class="stroke-fosforito" stroke-width="4" />
+            </svg>
+            <p class="max-w-md font-display text-2xl font-extrabold text-on-surface">
+              Todavía no has lanzado ninguna tarea de Claude.
+            </p>
+            <p class="mt-3 font-mono text-sm font-medium text-on-surface-variant">
+              Se lanzan desde la ficha de una candidatura o desde Importación.
+            </p>
+            <div class="mt-6 flex flex-wrap justify-center gap-3">
+              <a mat-stroked-button routerLink="/tablero">Ir al Tablero</a>
+              <a mat-stroked-button routerLink="/importacion">Ir a Importación</a>
+            </div>
+          </div>
+        } @else {
+          <ul
+            class="divide-y divide-borde-fino rounded-2xl border border-borde-fino bg-surface-container-lowest px-4 sm:px-5"
+          >
+            @for (e of lista; track e.id) {
+              <!-- Arriba, la tarea y su fecha en la misma línea (la fecha a la derecha, como un
+                   registro); debajo, la candidatura. El enlace crece solo hacia abajo hasta los
+                   48 px de toque: un ::before que subiera taparía la tarea y la fecha, y uno que
+                   bajara taparía los botones de la fila. Con -mb-2 pisa el relleno vacío de arriba
+                   de la fila de estado (que se pinta debajo del enlace) y no deja tanto hueco -->
+              <li class="agentes__ejecucion pt-3 pb-1">
+                <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                  <h3 class="font-semibold text-on-surface">{{ nombreTarea[e.tarea] }}</h3>
+                  <time
+                    [attr.datetime]="e.fechaAlta"
+                    class="font-mono text-sm text-on-surface-variant"
+                    >{{ e.fechaAlta | fechaMadrid: 'dia-hora' }}</time
+                  >
+                </div>
+                @if (e.candidaturaId !== null) {
+                  <a
+                    [routerLink]="['/candidaturas', e.candidaturaId]"
+                    class="-mx-1 mt-1 -mb-2 inline-flex min-h-12 max-w-full items-start rounded-lg px-1 pt-0.5 text-sm font-medium text-primary underline decoration-2 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+                    [attr.aria-label]="
+                      e.candidatura ? null : 'Ver la candidatura: ' + nombreTarea[e.tarea]
+                    "
+                  >
+                    @if (e.candidatura; as c) {
+                      {{ c.puesto }} en {{ c.empresa }}
+                    } @else {
+                      Ver la candidatura
+                    }
+                  </a>
+                }
+                <app-estado-ejecucion
+                  [ejecucion]="e"
+                  [compacta]="true"
+                  [topeUsd]="tope()"
+                  [contexto]="e.candidatura?.empresa ?? null"
+                  [permitirReintentar]="ultimas().has(e.id)"
+                  (terminada)="pedirRefresco()"
+                  (reintentada)="pedirRefresco()"
+                  (perdida)="pedirRefresco()"
+                />
+              </li>
+            }
+          </ul>
+        }
+      }
+    </section>
+  }
+</section>
