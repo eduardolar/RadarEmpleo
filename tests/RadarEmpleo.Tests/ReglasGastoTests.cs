@@ -5,12 +5,15 @@ namespace RadarEmpleo.Tests;
 /// <summary><see cref="ReglasGasto"/>: lo que cuenta cada ejecución y el gasto del día de Madrid.</summary>
 public class ReglasGastoTests
 {
+    /// <summary>Una hora fija (16/11/2026, 13:00 de Madrid): lejos de medianoche y de los cambios de hora.</summary>
+    private static readonly DateTime Ahora = new(2026, 11, 16, 12, 0, 0, DateTimeKind.Utc);
+
     private static EjecucionAgente Ejecucion(DateTime? inicio, EstadoEjecucion estado, decimal? coste = null, decimal presupuesto = 0.50m)
     {
-        var e = EjecucionAgente.Nueva(TareaAgente.AnalizarEncaje, "{}", presupuesto, 300, null, inicio ?? DateTime.UtcNow);
+        var e = EjecucionAgente.Nueva(TareaAgente.AnalizarEncaje, "{}", presupuesto, 300, null, inicio ?? Ahora);
         if (inicio is null)
         {
-            if (estado == EstadoEjecucion.Cancelada) e.PedirCancelacion(DateTime.UtcNow);
+            if (estado == EstadoEjecucion.Cancelada) e.PedirCancelacion(Ahora);
             return e;
         }
         e.Empezar(inicio.Value, null, null);
@@ -25,13 +28,13 @@ public class ReglasGastoTests
     [Fact]
     public void GastoComputable_ConCoste_EsEseCoste()
     {
-        Assert.Equal(0.18m, ReglasGasto.GastoComputable(Ejecucion(DateTime.UtcNow, EstadoEjecucion.Ok, 0.18m)));
+        Assert.Equal(0.18m, ReglasGasto.GastoComputable(Ejecucion(Ahora, EstadoEjecucion.Ok, 0.18m)));
     }
 
     [Fact]
     public void GastoComputable_EmpezadaSinCoste_EsElPresupuesto()
     {
-        Assert.Equal(0.50m, ReglasGasto.GastoComputable(Ejecucion(DateTime.UtcNow, EstadoEjecucion.Error)));
+        Assert.Equal(0.50m, ReglasGasto.GastoComputable(Ejecucion(Ahora, EstadoEjecucion.Error)));
     }
 
     [Fact]
