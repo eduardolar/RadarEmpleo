@@ -151,22 +151,20 @@ public class ConstructorArgumentosTests
         Assert.Throws<ArgumentException>(() => ConstructorArgumentos.Construir(DefinicionesTareas.Rastreo, Esquema, Valores(informe: nombre)));
     }
 
-    [Theory]
+    [TheorySoloWindows("las carpetas con unidad (C:\\, D:\\) solo son rutas absolutas en Windows")]
     [InlineData(@"C:\Users\x\AppData\Local\RadarEmpleo", "//c/Users/x/AppData/Local/RadarEmpleo")]
     [InlineData(@"D:\datos\", "//d/datos")]
     public void RutaRegla_DaLaFormaQueEntiendeClaude(string carpeta, string regla)
     {
-        if (!OperatingSystem.IsWindows()) return;
         Assert.Equal(regla, ConstructorArgumentos.RutaRegla(carpeta));
     }
 
-    [Theory]
+    [TheorySoloWindows("las carpetas con unidad (C:\\) y las UNC solo son rutas absolutas en Windows")]
     [InlineData(@"C:\datos,Bash(x)")]
     [InlineData(@"C:\da(tos)")]
     [InlineData(@"\\servidor\recurso\datos")]
     public void RutaRegla_ConAlgoQueRomperiaLaLista_Lanza(string carpeta)
     {
-        if (!OperatingSystem.IsWindows()) return;
         Assert.Throws<ArgumentException>(() => ConstructorArgumentos.RutaRegla(carpeta));
     }
 

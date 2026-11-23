@@ -365,10 +365,9 @@ public sealed class LectorCurriculumTests : IDisposable
         Assert.Equal("CV_NET_MarcoTalento.pdf", leido.NombreArchivo);
     }
 
-    [Fact]
+    [FactSoloWindows("los enlaces duros se crean con mklink y se detectan con la API de Windows")]
     public void LeerDocumento_EnlaceDuroHaciaDocumentosPersonales_LanzaValidacionYNoDejaElArchivoAbierto()
     {
-        if (!OperatingSystem.IsWindows()) return;
         var dni = Crear("Documentos personales/DNI.pdf", "dni");
         var falso = Path.Combine(_carpeta, Semana, "CV_falso.pdf");
         Directory.CreateDirectory(Path.GetDirectoryName(falso)!);
@@ -379,10 +378,9 @@ public sealed class LectorCurriculumTests : IDisposable
         File.Delete(falso); // si se hubiera quedado abierto, no se podría borrar
     }
 
-    [Fact]
+    [FactSoloWindows("los enlaces duros se crean con mklink y se detectan con la API de Windows")]
     public void LeerDocumentosDisponibles_UnEnlaceDuro_NoSeSugiere()
     {
-        if (!OperatingSystem.IsWindows()) return; // la comprobación de enlaces duros es solo de Windows
         var dni = Crear("Documentos personales/DNI.pdf", "dni");
         Crear(Semana + "/CV_NET_MarcoTalento.pdf");
         RutaSeguraTests.Mklink("/H", Path.Combine(_carpeta, Semana, "CV_falso.pdf"), dni);

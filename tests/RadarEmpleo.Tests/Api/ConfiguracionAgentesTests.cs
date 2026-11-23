@@ -109,10 +109,9 @@ public sealed class ConfiguracionAgentesTests : IDisposable
         }
     }
 
-    [Fact]
+    [FactSoloWindows("la carpeta del perfil registrado sale del registro de Windows")]
     public void CarpetasDatosPosibles_ConUserprofileCambiado_SigueIncluyendoLaDelPerfilRegistrado()
     {
-        if (!OperatingSystem.IsWindows()) return;
         var antes = Environment.GetEnvironmentVariable("USERPROFILE");
         var real = ConfiguracionAgentes.CarpetasDatosPosibles();
         try

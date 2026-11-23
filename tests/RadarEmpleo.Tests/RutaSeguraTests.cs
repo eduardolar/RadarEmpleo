@@ -132,11 +132,9 @@ public sealed class RutaSeguraTests : IDisposable
     public void Resolver_RutaDemasiadoLarga_LaRechaza() =>
         AssertNoValida(_raiz, "Candidaturas/" + new string('a', 500) + ".pdf");
 
-    [Fact]
+    [FactSoloWindows("en Linux las mayúsculas cuentan y es otra carpeta")]
     public void Resolver_CarpetaPermitidaConOtrasMayusculasEnWindows_LaAcepta()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         Assert.StartsWith(_raiz, RutaSegura.Resolver(_raiz, "candidaturas/" + Semana + "/CV_MarcoTalento.pdf"));
     }
 
@@ -255,32 +253,26 @@ public sealed class RutaSeguraTests : IDisposable
         Assert.Equal("Candidaturas/" + Semana + "/CV_MarcoTalento.pdf", RutaSegura.ComprobarAbierto(_raiz, abierto));
     }
 
-    [Fact]
+    [FactSoloWindows("la comprobación del archivo abierto es solo de Windows (la app solo corre en Windows)")]
     public void ComprobarAbierto_AbiertoAtravesDeUnaUnionHaciaFuera_LoRechaza()
     {
-        if (!OperatingSystem.IsWindows()) return; // la comprobación del archivo abierto es solo de Windows (la app solo corre en Windows)
-
         // Lo que pasaría si cambian la carpeta por una unión justo entre Resolver y abrir el archivo.
         CrearUnion(Path.Combine(_raiz, "Candidaturas", "Semana trampa"), _fuera);
 
         AssertAbiertoNoValido(Path.Combine(_raiz, "Candidaturas", "Semana trampa", "secreto.pdf"));
     }
 
-    [Fact]
+    [FactSoloWindows("la comprobación del archivo abierto es solo de Windows (la app solo corre en Windows)")]
     public void ComprobarAbierto_AbiertoAtravesDeUnaUnionHaciaDocumentosPersonales_LoRechaza()
     {
-        if (!OperatingSystem.IsWindows()) return; // la comprobación del archivo abierto es solo de Windows (la app solo corre en Windows)
-
         CrearUnion(Path.Combine(_raiz, "Candidaturas", "Semana trampa"), Path.Combine(_raiz, "Documentos personales"));
 
         AssertAbiertoNoValido(Path.Combine(_raiz, "Candidaturas", "Semana trampa", "DNI.pdf"));
     }
 
-    [Fact]
+    [FactSoloWindows("la comprobación de enlaces duros es solo de Windows")]
     public void ComprobarAbierto_ArchivoConUnEnlaceDuro_LoRechazaAunqueLaRutaSeaBuena()
     {
-        if (!OperatingSystem.IsWindows()) return; // la comprobación de enlaces duros es solo de Windows
-
         // «CV_falso.pdf» es otro nombre del mismo archivo que «Documentos personales\DNI.pdf».
         var falso = Path.Combine(_raiz, "Candidaturas", Semana, "CV_falso.pdf");
         Mklink("/H", falso, Path.Combine(_raiz, "Documentos personales", "DNI.pdf"));

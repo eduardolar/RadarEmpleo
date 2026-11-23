@@ -319,10 +319,9 @@ public sealed class DocumentosApiTests : IDisposable
         Assert.True(problema.GetProperty("errors").TryGetProperty("rutaRelativa", out _));
     }
 
-    [Fact]
+    [FactSoloWindows("los enlaces duros se crean con mklink y se detectan con la API de Windows")]
     public async Task EnlaceDuro_AlVincularDa400YSiSeCambiaDespuesElArchivoDa404()
     {
-        if (!OperatingSystem.IsWindows()) return;
         Directory.CreateDirectory(Ruta("Documentos personales"));
         var dni = Ruta(@"Documentos personales\DNI.pdf");
         File.WriteAllText(dni, "dni");

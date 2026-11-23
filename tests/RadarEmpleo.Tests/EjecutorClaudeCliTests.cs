@@ -172,18 +172,16 @@ public sealed class EjecutorClaudeCliTests : IDisposable
         await ComprobarMuertosAsync(pid, int.Parse(File.ReadAllText(Ruta("hijo.txt"))));
     }
 
-    [Fact]
+    [FactSoloWindows("el Job Object que mata al hijo solo existe en Windows, donde la app lanza los agentes")]
     public async Task UnHijoQueSeQuedaConLaSalida_MuereAlSalirElPrincipalYNoSeEspera()
     {
-        // El Job Object solo existe en Windows, que es donde la app lanza los agentes: en Linux (el CI) no hay nada que probar.
-        if (!OperatingSystem.IsWindows()) return;
         var cronometro = Stopwatch.StartNew();
         var respuesta = await Ejecutar(Ejecutor("--sim:modo=hijoysale", $"--sim:pidhijo={Ruta("hijo.txt")}"), Peticion());
 
         Assert.True(respuesta.Correcta);
         // Sin cerrar el Job antes de leer, la lectura esperaría al hijo (o a los 10 s de margen).
         Assert.True(cronometro.Elapsed < TimeSpan.FromSeconds(8), $"Ha tardado {cronometro.Elapsed}.");
-        if (OperatingSystem.IsWindows()) await ComprobarMuertosAsync(int.Parse(File.ReadAllText(Ruta("hijo.txt"))));
+        await ComprobarMuertosAsync(int.Parse(File.ReadAllText(Ruta("hijo.txt"))));
     }
 
     [Fact]
