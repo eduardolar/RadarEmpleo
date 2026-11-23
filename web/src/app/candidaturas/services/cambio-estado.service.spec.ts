@@ -161,6 +161,9 @@ describe('CambioEstadoService', () => {
       service.mover(CANDIDATURA, 'Descartada', undefined, undefined, 'Cerrada');
 
       expect(datosDelDialogo().motivo).toBe('Cerrada');
+      expect(abrirDialogo.mock.calls[0][1].autoFocus).toBe(
+        'mat-radio-button.mat-mdc-radio-checked input',
+      );
     });
 
     it('si se cancela no se toca nada', () => {

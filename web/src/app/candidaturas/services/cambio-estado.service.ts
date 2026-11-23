@@ -107,8 +107,14 @@ export class CambioEstadoService {
         width: '32rem',
         maxWidth: '95vw',
         disableClose: true,
-        // Cerrar solo pide un comentario opcional: con el foco en él, el móvil sacaría el teclado
-        autoFocus: destino === 'Descartada' ? 'first-tabbable' : 'first-heading',
+        // Cerrar solo pide un comentario opcional: con el foco en él, el móvil sacaría el teclado. Con el
+        // motivo ya elegido, el foco va a ese y no al primero de la lista
+        autoFocus:
+          destino !== 'Descartada'
+            ? 'first-heading'
+            : motivo
+              ? 'mat-radio-button.mat-mdc-radio-checked input'
+              : 'first-tabbable',
       })
       .afterClosed()
       .subscribe((peticion) => {

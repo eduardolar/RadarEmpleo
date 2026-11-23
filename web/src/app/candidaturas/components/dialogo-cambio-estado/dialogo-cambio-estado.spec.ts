@@ -89,6 +89,9 @@ describe('DialogoCambioEstado', () => {
 
     const marcado = elemento().querySelector('mat-radio-button.mat-mdc-radio-checked');
     expect(marcado?.textContent).toContain('Oferta cerrada');
+    // El selector con el que CambioEstadoService le lleva el foco al abrir
+    const foco = elemento().querySelector('mat-radio-button.mat-mdc-radio-checked input');
+    expect(foco?.closest('mat-radio-button')?.textContent).toContain('Oferta cerrada');
     await enviar();
 
     expect(cerrar).toHaveBeenCalledWith({
