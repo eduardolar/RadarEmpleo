@@ -263,6 +263,12 @@ export class AgentesService {
   }
 
   private registrar(ejecucion: EjecucionAgente): void {
+    // De un estado terminal no se sale: una respuesta vieja del seguimiento (que se registra al final de la
+    // vuelta) no puede devolver a «En cola» una que ya se ha cancelado o terminado
+    const previa = this._ejecuciones().get(ejecucion.id);
+    if (previa && esTerminal(previa) && !esTerminal(ejecucion)) {
+      return;
+    }
     this._ejecuciones.update((actuales) => new Map(actuales).set(ejecucion.id, ejecucion));
     // Tras un 403, las respuestas que aún estaban en vuelo no vuelven a armar el seguimiento
     if (!esTerminal(ejecucion)) {
