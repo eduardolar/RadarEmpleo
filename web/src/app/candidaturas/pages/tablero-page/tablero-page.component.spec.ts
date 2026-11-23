@@ -58,6 +58,7 @@ describe('TableroPageComponent', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     http.verify();
@@ -374,23 +375,25 @@ describe('TableroPageComponent', () => {
 
       it('el aviso ofrece «Deshacer», que llama a la API y devuelve la tarjeta a su columna', async () => {
         await cargarTablero([TARJETA]);
+        // Con reloj simulado no se puede usar whenStable: el pintado espera también a un temporizador
+        vi.useFakeTimers();
         soltar(TARJETA, 'Preparada', 'Enviada', true);
         cambioDeEstado().flush(crearDetalle({ id: 1, estado: 'Enviada' }));
         lista().flush([{ ...TARJETA, estado: 'Enviada' }]);
-        await fixture.whenStable();
+        await vi.advanceTimersByTimeAsync(1);
         expect(columnaDe()).toBe('Enviada');
 
         const [mensaje, deshacer] = avisos.deshacible.mock.calls[0] as [string, () => boolean];
         expect(mensaje).toContain('pasa a Enviada');
         // Pasada la pausa del doble clic, que también frena el deshacer
-        await new Promise((listo) => setTimeout(listo, 510));
+        await vi.advanceTimersByTimeAsync(501);
         (document.activeElement as HTMLElement | null)?.blur();
         deshacer();
         const peticion = http.expectOne('/api/candidaturas/1/estado/deshacer');
         expect(peticion.request.body).toEqual({ cambioId: 1 });
         peticion.flush(crearDetalle({ id: 1, estado: 'Preparada' }));
         lista().flush([TARJETA]);
-        await fixture.whenStable();
+        await vi.advanceTimersByTimeAsync(1);
 
         expect(columnaDe()).toBe('Preparada');
         expect(avisos.exito).toHaveBeenCalledWith('Cambio deshecho.');

@@ -23,7 +23,8 @@ public sealed class ManejadorAnalizarEncajeTests : IDisposable
     private const string Enlace = "https://empleo.ejemplo.es/ofertas/analista-1";
 
     private readonly string _raiz = Path.Combine(Path.GetTempPath(), $"radar-encaje-{Guid.NewGuid():N}");
-    private readonly RelojFijo _reloj = new(DateTime.UtcNow);
+    /// <summary>18/11/2026 a las 12:00 de Madrid: una hora fija, lejos de medianoche y de los cambios de hora.</summary>
+    private readonly RelojFijo _reloj = new(new DateTime(2026, 11, 18, 11, 0, 0, DateTimeKind.Utc));
     private readonly TestDbContextFactory _factory;
     private readonly RutasCurriculum _rutas;
     private readonly EjecutorClaudeFalso _claude;

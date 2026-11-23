@@ -56,17 +56,14 @@ public sealed class AgentesApiTests
         return await respuesta.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    private static async Task<JsonElement> EsperarAsync(HttpClient http, int id, string estado)
-    {
-        var limite = DateTime.UtcNow.AddSeconds(20);
-        while (true)
-        {
-            var ejecucion = await http.GetFromJsonAsync<JsonElement>($"/api/agentes/ejecuciones/{id}");
-            if (ejecucion.GetProperty("estado").GetString() == estado) return ejecucion;
-            if (DateTime.UtcNow > limite) throw new TimeoutException($"La ejecución {id} sigue en {ejecucion.GetProperty("estado")}.");
-            await Task.Delay(50);
-        }
-    }
+    /// <summary>
+    /// Espera a que el procesador de la API, que trabaja en segundo plano, deje la ejecución en ese estado: solo se ve
+    /// por la API, así que se pregunta hasta que se cumple.
+    /// </summary>
+    private static Task<JsonElement> EsperarAsync(HttpClient http, int id, string estado) =>
+        Esperar.HastaAsync(() => http.GetFromJsonAsync<JsonElement>($"/api/agentes/ejecuciones/{id}"),
+            e => e.GetProperty("estado").GetString() == estado,
+            e => $"La ejecución {id} sigue en {e.GetProperty("estado")} y se esperaba {estado}.");
 
     public static TheoryData<string, string> Endpoints => new()
     {
@@ -203,12 +200,14 @@ public sealed class AgentesApiTests
         EstadoCandidatura estado = EstadoCandidatura.Detectada)
     {
         await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
+        // Con la hora de la API (la real o la del reloj fijo del test), no con la del sistema.
+        var ahora = fabrica.Services.GetRequiredService<IClock>().AhoraUtc;
         var nombre = $"Empresa Ficticia {Guid.NewGuid():N}";
         var candidatura = Candidatura.Nueva(new Empresa { Nombre = nombre, NombreNormalizado = nombre.ToLowerInvariant() },
-            "Analista de datos", DateTime.UtcNow, Origen.Manual);
+            "Analista de datos", ahora, Origen.Manual);
         candidatura.Enlace = enlace;
         if (estado != EstadoCandidatura.Detectada)
-            candidatura.CambiarEstado(estado, DateTime.UtcNow, Origen.Manual,
+            candidatura.CambiarEstado(estado, ahora, Origen.Manual,
                 estado == EstadoCandidatura.Descartada ? MotivoDescarte.Experiencia : null);
         db.Candidaturas.Add(candidatura);
         await db.SaveChangesAsync();
