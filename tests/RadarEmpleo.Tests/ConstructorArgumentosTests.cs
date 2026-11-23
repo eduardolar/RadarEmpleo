@@ -78,7 +78,21 @@ public class ConstructorArgumentosTests
         Assert.Throws<ArgumentException>(() => ConstructorArgumentos.Construir(DefinicionesTareas.AnalizarEncaje, "{no", Valores()));
     }
 
-    public static TheoryData<TareaAgente> Tareas => [TareaAgente.AnalizarEncaje, TareaAgente.ExtraerRegistro, TareaAgente.Rastreo];
+    private static readonly TareaAgente[] TodasLasTareas = [TareaAgente.AnalizarEncaje, TareaAgente.ExtraerRegistro, TareaAgente.Rastreo];
+
+    public static TheoryData<TareaAgente> Tareas => new(TodasLasTareas);
+
+    /// <summary>Las tareas que tienen <c>Read</c>: las que necesitan las denegaciones de lectura.</summary>
+    public static TheoryData<TareaAgente> TareasQueLeen => new(TodasLasTareas.Where(Lee));
+
+    private static bool Lee(TareaAgente tarea) =>
+        (Valor(Construir(DefinicionesTareas.De(tarea)!), "--tools") ?? "").Contains("Read", StringComparison.Ordinal);
+
+    [Fact]
+    public void AlMenosUnaTareaLee_ParaQueSeCompruebenLasDenegaciones()
+    {
+        Assert.Contains(TodasLasTareas, Lee);
+    }
 
     [Theory]
     [MemberData(nameof(Tareas))]
@@ -111,11 +125,10 @@ public class ConstructorArgumentosTests
     }
 
     [Theory]
-    [MemberData(nameof(Tareas))]
+    [MemberData(nameof(TareasQueLeen))]
     public void LasQueLeenDeniegaLaConfiguracionDeClaudeLaCarpetaDeDatosYAppsettings(TareaAgente tarea)
     {
         var argumentos = Construir(DefinicionesTareas.De(tarea)!);
-        if (!(Valor(argumentos, "--tools") ?? "").Contains("Read", StringComparison.Ordinal)) return;
         var denegadas = Valor(argumentos, "--disallowedTools")!.Split(',');
 
         Assert.Contains("Read(~/.claude/**)", denegadas);

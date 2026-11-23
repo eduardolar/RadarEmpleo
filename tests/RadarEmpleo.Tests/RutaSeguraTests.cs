@@ -335,7 +335,7 @@ public sealed class RutaSeguraTests : IDisposable
         using var proceso = Process.Start(inicio)!;
         proceso.StandardOutput.ReadToEnd();
         proceso.StandardError.ReadToEnd();
-        proceso.WaitForExit();
+        Assert.True(proceso.WaitForExit(10_000), "mklink no ha terminado en 10 s.");
         Assert.Equal(0, proceso.ExitCode);
     }
 }

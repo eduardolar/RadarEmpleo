@@ -71,7 +71,8 @@ internal static class RequisitosSistema
         }
         finally
         {
-            Directory.Delete(carpeta, recursive: true);
+            // Si no se puede borrar (un antivirus con el archivo abierto), que no tape el resultado de la sonda.
+            try { Directory.Delete(carpeta, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
     }
 }
