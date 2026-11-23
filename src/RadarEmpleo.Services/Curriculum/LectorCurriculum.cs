@@ -17,8 +17,13 @@ public sealed class LectorCurriculum : ILectorCurriculum
 
     private static readonly string[] CarpetasQueSeSaltan = ["__pycache__"];
 
-    // Estricto: un archivo guardado en Windows-1252 (o con bytes sueltos) no se lee a medias con «�» en las tildes.
+    // Todas estrictas: un archivo guardado en Windows-1252 (o con bytes sueltos, o una mitad de par UTF-16 suelta) no se
+    // lee a medias con «�» en las tildes. No se usa StreamReader: al ver un BOM cambia a su codificación, que no es estricta.
     private static readonly UTF8Encoding Utf8Estricto = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+    private static readonly UnicodeEncoding Utf16LeEstricto = new(bigEndian: false, byteOrderMark: false, throwOnInvalidBytes: true);
+    private static readonly UnicodeEncoding Utf16BeEstricto = new(bigEndian: true, byteOrderMark: false, throwOnInvalidBytes: true);
+    private static readonly UTF32Encoding Utf32LeEstricto = new(bigEndian: false, byteOrderMark: false, throwOnInvalidCharacters: true);
+    private static readonly UTF32Encoding Utf32BeEstricto = new(bigEndian: true, byteOrderMark: false, throwOnInvalidCharacters: true);
 
     private readonly RutasCurriculum _rutas;
 
@@ -205,21 +210,37 @@ public sealed class LectorCurriculum : ILectorCurriculum
     }
 
     /// <summary>
-    /// UTF-8, o lo que diga su BOM (UTF-16 del Bloc de notas antiguo, por ejemplo). Si no es UTF-8 válido no se adivina
-    /// la codificación ni se cambian las letras raras por «�»: se avisa para que lo guarden en UTF-8.
+    /// UTF-8, o lo que diga su BOM (UTF-16 del Bloc de notas antiguo, o UTF-32), igual que detectaba StreamReader. Si no es
+    /// válido en esa codificación no se adivina otra ni se cambian las letras raras por «�»: se avisa para que lo guarden en UTF-8.
     /// </summary>
-    /// <exception cref="ReglaNegocioException">No es UTF-8 válido.</exception>
-    private static string Decodificar(byte[] bytes, string nombre)
+    /// <exception cref="ReglaNegocioException">No es texto válido en su codificación.</exception>
+    private static string Decodificar(byte[] bytes, string nombre) =>
+        DecodificarEstricto(bytes) ?? throw new ReglaNegocioException(MensajeNoUtf8(nombre));
+
+    /// <summary>El aviso de un archivo que no se puede leer sin estropear las letras.</summary>
+    private static string MensajeNoUtf8(string nombre) =>
+        $"{nombre} no está guardado en UTF-8 y se perderían las tildes y las eñes. Guárdalo con la codificación UTF-8 y vuelve a intentarlo.";
+
+    /// <summary>El texto sin su BOM, o null si no es válido en la codificación que toca.</summary>
+    private static string? DecodificarEstricto(byte[] bytes)
     {
+        // UTF-32 LE antes que UTF-16 LE: su BOM empieza igual (FF FE).
+        var (codificacion, salto) = bytes switch
+        {
+            [0xEF, 0xBB, 0xBF, ..] => ((Encoding)Utf8Estricto, 3),
+            [0xFF, 0xFE, 0x00, 0x00, ..] => (Utf32LeEstricto, 4),
+            [0x00, 0x00, 0xFE, 0xFF, ..] => (Utf32BeEstricto, 4),
+            [0xFF, 0xFE, ..] => (Utf16LeEstricto, 2),
+            [0xFE, 0xFF, ..] => (Utf16BeEstricto, 2),
+            _ => (Utf8Estricto, 0)
+        };
         try
         {
-            using var lector = new StreamReader(new MemoryStream(bytes), Utf8Estricto, detectEncodingFromByteOrderMarks: true);
-            return lector.ReadToEnd();
+            return codificacion.GetString(bytes, salto, bytes.Length - salto);
         }
         catch (DecoderFallbackException)
         {
-            throw new ReglaNegocioException(
-                $"{nombre} no está guardado en UTF-8 y se perderían las tildes y las eñes. Guárdalo con la codificación UTF-8 y vuelve a intentarlo.");
+            return null;
         }
     }
 
