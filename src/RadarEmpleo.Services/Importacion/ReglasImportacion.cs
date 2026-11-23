@@ -19,6 +19,7 @@ public static class ReglasImportacion
     public const string AvisoFechaAproximada = "La fecha es aproximada.";
     public const string AvisoEnlaceNoValido = "El enlace no es válido: se importará sin enlace.";
     public const string AvisoEstadoDeducido = "Estado deducido del texto: compruébalo.";
+    public const string AvisoEmpresaNoEnLaLinea = "Revisa la empresa: no aparece en la línea.";
 
     /// <summary>
     /// Clave de idempotencia: <c>empresa normalizada|puesto normalizado|AAAA-MM-DD</c>. Se guarda al
@@ -98,6 +99,7 @@ public static class ReglasImportacion
         var avisos = new List<string>();
         if (fila.FechaAproximada) avisos.Add(AvisoFechaAproximada);
         if (fila.EstadoDeducido) avisos.Add(AvisoEstadoDeducido);
+        if (fila.EmpresaFueraDeLaCita) avisos.Add(AvisoEmpresaNoEnLaLinea);
         if (!string.IsNullOrWhiteSpace(fila.Enlace) && EnlaceParaGuardar(fila.Enlace) is null) avisos.Add(AvisoEnlaceNoValido);
         return avisos;
     }

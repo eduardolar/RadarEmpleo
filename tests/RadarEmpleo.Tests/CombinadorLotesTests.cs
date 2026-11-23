@@ -22,8 +22,9 @@ public class CombinadorLotesTests
         """;
 
     private static FilaExtraida Extraida(string cita, string empresa = "Gamma", string puesto = "Backend", string fecha = "2026-09-12",
-        EstadoCandidatura estado = EstadoCandidatura.Enviada, MotivoDescarte? motivo = null, string? nota = null, string? enlace = null) =>
-        new("Septiembre", DateOnly.ParseExact(fecha, "yyyy-MM-dd", CultureInfo.InvariantCulture), false, empresa, puesto, estado, enlace, Modalidad.Remoto, null, motivo, nota, cita);
+        EstadoCandidatura estado = EstadoCandidatura.Enviada, MotivoDescarte? motivo = null, string? nota = null, string? enlace = null,
+        string seccion = "Septiembre") =>
+        new(seccion, DateOnly.ParseExact(fecha, "yyyy-MM-dd", CultureInfo.InvariantCulture), false, empresa, puesto, estado, enlace, Modalidad.Remoto, null, motivo, nota, cita);
 
     private static LoteCombinado Combinar(string registro, params FilaExtraida[] filas) =>
         Combinar(registro, filas, []);
@@ -66,6 +67,73 @@ public class CombinadorLotesTests
         Assert.Equal("Por correo.", fila.Nota);
         Assert.Equal("javascript:alert(1)", fila.Enlace); // tal cual: lo decide ReglasImportacion
         Assert.Null(fila.MotivoDescarte);
+        Assert.Equal("Texto libre del registro: Septiembre", fila.Seccion);
+        Assert.False(fila.EmpresaFueraDeLaCita);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Combinar_SeccionVacia_LlevaTextoLibreDelRegistro(string seccion)
+    {
+        var fila = Assert.Single(Combinar("# Notas\n- Gamma: enviada.\n", Extraida("- Gamma: enviada.", seccion: seccion)).Filas);
+
+        Assert.Equal(AnalizadorRegistro.SeccionTextoLibre, fila.Seccion);
+    }
+
+    [Fact]
+    public void Combinar_SeccionQueImitaLaTabla_LlevaElPrefijo()
+    {
+        var fila = Assert.Single(Combinar("# Notas\n- Gamma: enviada.\n",
+            Extraida("- Gamma: enviada.", seccion: AnalizadorRegistro.SeccionTabla)).Filas);
+
+        Assert.Equal($"Texto libre del registro: {AnalizadorRegistro.SeccionTabla}", fila.Seccion);
+    }
+
+    [Fact]
+    public void Combinar_FilasDeLaTabla_SinSeccionNiMarca()
+    {
+        var lote = Combinar(Tabla, Extraida("- Gamma: enviada el 2026-09-12."));
+
+        Assert.All(lote.Filas.Take(2), f => Assert.Equal((null, false), (f.Seccion, f.EmpresaFueraDeLaCita)));
+    }
+
+    [Theory]
+    [InlineData("Acme S.L.", "- acme: enviada.")]
+    [InlineData("Telefónica", "- TELEFONICA: enviada.")]
+    [InlineData("Peña Ingeniería", "- PEÑA INGENIERIA, enviada.")]
+    [InlineData("BBVA", "- B.B.V.A.: enviada.")]
+    [InlineData("Inditec Sistemas", "- Inditec-Sistemas: enviada.")]
+    [InlineData("Inditec-Sistemas", "- Inditec Sistemas: enviada.")]
+    [InlineData("Inditec", "- Grupo Inditec: enviada.")]
+    [InlineData("Gamma", "- Ｇａｍｍａ: enviada.")]
+    public void Combinar_EmpresaEnLaLinea_EntraSinMarca(string empresa, string linea)
+    {
+        var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(linea, empresa: empresa)).Filas);
+
+        Assert.False(fila.EmpresaFueraDeLaCita);
+    }
+
+    [Theory]
+    [InlineData("Omega", "## Septiembre")]                                  // inventada sobre un título
+    [InlineData("Grupo Inditec", "- Inditec: enviada.")]                    // «Grupo» no se quita
+    [InlineData("BBVA", "- Banco Bilbao Vizcaya Argentaria: enviada.")]     // siglas de un nombre largo
+    [InlineData("EY", "- Hablé con they de RR. HH.: enviada.")]             // siglas cortas pegadas a otra palabra
+    public void Combinar_EmpresaQueNoEstaEnLaLinea_EntraMarcada(string empresa, string linea)
+    {
+        var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(linea, empresa: empresa)).Filas);
+
+        Assert.True(fila.EmpresaFueraDeLaCita);
+        Assert.Equal(2, fila.Linea);
+    }
+
+    [Fact]
+    public void Combinar_EmpresaSoloEnElTitulo_EntraMarcada()
+    {
+        var fila = Assert.Single(Combinar("### Gamma\n- Enviada el 2026-09-12 por correo.\n",
+            Extraida("- Enviada el 2026-09-12 por correo.")).Filas);
+
+        Assert.True(fila.EmpresaFueraDeLaCita);
     }
 
     [Fact]

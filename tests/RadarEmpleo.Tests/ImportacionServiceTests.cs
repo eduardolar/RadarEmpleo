@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using RadarEmpleo.Domain;
 using RadarEmpleo.Services;
@@ -654,6 +655,240 @@ public class ImportacionServiceTests : ArnesSqliteTests
         Assert.Equal(new ResultadoAplicacionDto(8, 0, 0, 0, false), resultado);
         await using var db = CreateContext();
         Assert.Equal(8, await db.Candidaturas.CountAsync());
+    }
+
+    // ---------------------------------------------------------------- con la extracción de Claude
+
+    private const string LineaGamma = "- Gamma: ENVIADA el 2026-09-12 por correo.";
+
+    /// <summary>Línea 3: Acme en la tabla; línea 5: el título de la sección; línea 6: Gamma en el texto libre.</summary>
+    private void UsarTablaYTextoLibre(string tabla = "| 2026-09-01 | Acme | Backend | Remoto | Enviada | — |") =>
+        _lector.Texto = $"{Cabecera}\n{tabla}\n\n## Notas sueltas\n{LineaGamma}\n";
+
+    private static FilaExtraida Extraida(string empresa = "Gamma", string cita = LineaGamma, string fecha = "2026-09-12",
+        EstadoCandidatura estado = EstadoCandidatura.Enviada, MotivoDescarte? motivo = null, string? nota = null, string seccion = "Notas sueltas") =>
+        new(seccion, DateOnly.Parse(fecha, System.Globalization.CultureInfo.InvariantCulture), false, empresa, "Sin indicar", estado, null,
+            Modalidad.NoIndicada, null, motivo, nota, cita);
+
+    /// <summary>Una ejecución en la BD, empezada con el hash del registro de ahora (o <paramref name="hash"/>) y terminada así.</summary>
+    private async Task<int> SembrarEjecucionAsync(Action<EjecucionAgente> terminar, TareaAgente tarea = TareaAgente.ExtraerRegistro,
+        string? hash = null)
+    {
+        var ejecucion = EjecucionAgente.Nueva(tarea, "{}", 1m, 300, null, Reloj.AhoraUtc);
+        ejecucion.Empezar(Reloj.AhoraUtc, hash ?? _lector.Hash, null);
+        terminar(ejecucion);
+        await using var db = CreateContext();
+        db.EjecucionesAgente.Add(ejecucion);
+        await db.SaveChangesAsync();
+        return ejecucion.Id;
+    }
+
+    private Task<int> SembrarExtraccionAsync(params FilaExtraida[] filas) =>
+        SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x", Guardado(filas), null, null));
+
+    private static string Guardado(params FilaExtraida[] filas) =>
+        JsonSerializer.Serialize(new ResultadoExtraccionRegistro(filas, [], []), FabricaApi.Json);
+
+    private static AplicarImportacionRequest PeticionConClaude(VistaPreviaImportacionDto vista) =>
+        new(OrigenLote.RegistroConClaude, vista.EjecucionId, vista.HashRegistro, vista.Filas
+            .Where(f => f.Resultado is ResultadoFila.Nueva or ResultadoFila.AvanzaEstado).Select(f => f.Clave).ToList());
+
+    [Fact]
+    public async Task PrevisualizarExtraccion_Ok_UneTablaYTextoLibreConOrigenEjecucionYHash()
+    {
+        UsarTablaYTextoLibre();
+        var id = await SembrarExtraccionAsync(Extraida());
+
+        var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
+
+        Assert.Equal((OrigenLote.RegistroConClaude, id, _lector.Hash), (vista.Origen, vista.EjecucionId, vista.HashRegistro));
+        Assert.Equal(["Acme", "Gamma"], vista.Filas.Select(f => f.Empresa));
+        Assert.All(vista.Filas, f => Assert.Equal(ResultadoFila.Nueva, f.Resultado));
+        Assert.Empty(vista.Filas[1].Avisos);
+        Assert.Empty(vista.SinLeer);
+        Assert.Empty(vista.Fuera);
+        await using var db = CreateContext();
+        Assert.Equal(0, await db.Candidaturas.CountAsync());
+    }
+
+    [Fact]
+    public async Task PrevisualizarExtraccion_NoExiste_DaNull()
+    {
+        UsarTablaYTextoLibre();
+
+        Assert.Null(await _importacion.PrevisualizarExtraccionAsync(999));
+    }
+
+    [Theory]
+    [InlineData("error")]
+    [InlineData("otraTarea")]
+    [InlineData("sinResultado")]
+    [InlineData("resultadoRoto")]
+    public async Task PrevisualizarExtraccion_EnErrorOTareaDistintaOSinResultado_Da409(string caso)
+    {
+        UsarTablaYTextoLibre();
+        var id = caso switch
+        {
+            "error" => await SembrarEjecucionAsync(e => e.Fallar(Reloj.AhoraUtc, "Falló.")),
+            "otraTarea" => await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x", Guardado(Extraida()), null, null),
+                TareaAgente.AnalizarEncaje),
+            "sinResultado" => await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x", null, null, null)),
+            _ => await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x", """{"candidaturas":[null],"dudas":[],"sinLeer":[]}""", null, null))
+        };
+
+        var error = await Assert.ThrowsAsync<ReglaNegocioException>(() => _importacion.PrevisualizarExtraccionAsync(id));
+
+        Assert.Equal(ImportacionService.MensajeNoEsExtraccion, error.Message);
+    }
+
+    [Fact]
+    public async Task PrevisualizarExtraccion_RegistroCambiadoTrasExtraer_Da409ConSuMensaje()
+    {
+        UsarTablaYTextoLibre();
+        var id = await SembrarExtraccionAsync(Extraida());
+        UsarTablaYTextoLibre("| 2026-09-02 | Acme | Backend | Remoto | Enviada | — |");
+
+        var error = await Assert.ThrowsAsync<ReglaNegocioException>(() => _importacion.PrevisualizarExtraccionAsync(id));
+
+        Assert.Equal(ImportacionService.MensajeExtraccionCambiada, error.Message);
+    }
+
+    [Fact]
+    public async Task PrevisualizarExtraccion_SinTabla_EnsenaSoloLasExtraidas()
+    {
+        _lector.Texto = $"## Notas sueltas\n{LineaGamma}\n";
+        var id = await SembrarExtraccionAsync(Extraida());
+
+        var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
+
+        Assert.Equal("Gamma", Assert.Single(vista.Filas).Empresa);
+    }
+
+    [Fact]
+    public async Task PrevisualizarExtraccion_LasQueYaEstanEnLaTabla_VanEnFuera()
+    {
+        UsarTablaYTextoLibre();
+        var id = await SembrarExtraccionAsync(Extraida(empresa: "ACME S.L.", fecha: "2026-09-02"));
+
+        var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
+
+        Assert.Equal("Acme", Assert.Single(vista.Filas).Empresa);
+        var fuera = Assert.Single(vista.Fuera);
+        Assert.Equal((6, CombinadorLotes.AvisoYaEnLaTabla), (fuera.Linea, fuera.Aviso));
+    }
+
+    [Fact]
+    public async Task PrevisualizarExtraccion_EnviosEnTextoEnCero()
+    {
+        UsarTablaYTextoLibre();
+        var id = await SembrarExtraccionAsync(Extraida());
+
+        Assert.Equal(1, (await _importacion.PrevisualizarTablaAsync()).Resumen.EnviosEnTexto);
+        Assert.Equal(0, (await _importacion.PrevisualizarExtraccionAsync(id))!.Resumen.EnviosEnTexto);
+    }
+
+    [Fact]
+    public async Task Aplicar_RegistroConClaudeSinEjecucion_LanzaValidacion()
+    {
+        UsarTablaYTextoLibre();
+
+        var ex = await Assert.ThrowsAsync<ValidacionException>(() =>
+            _importacion.AplicarAsync(new AplicarImportacionRequest(OrigenLote.RegistroConClaude, null, _lector.Hash, [])));
+
+        Assert.Equal("ejecucionId", ex.Campo);
+    }
+
+    [Fact]
+    public async Task Aplicar_RegistroConClaudeConEjecucionEnErrorOQueNoExiste_Da409YNoCreaNada()
+    {
+        UsarTablaYTextoLibre();
+        var id = await SembrarEjecucionAsync(e => e.Fallar(Reloj.AhoraUtc, "Falló."));
+        var claves = ReglasImportacion.Comparar(AnalizadorRegistro.Analizar(_lector.Texto).Lote.Filas, []).Select(f => f.Clave).ToList();
+
+        foreach (var ejecucion in new[] { id, 999 })
+        {
+            var error = await Assert.ThrowsAsync<ReglaNegocioException>(() =>
+                _importacion.AplicarAsync(new AplicarImportacionRequest(OrigenLote.RegistroConClaude, ejecucion, _lector.Hash, claves)));
+            Assert.Equal(ImportacionService.MensajeNoEsExtraccion, error.Message);
+        }
+        await using var db = CreateContext();
+        Assert.Equal(0, await db.Candidaturas.CountAsync());
+    }
+
+    [Fact]
+    public async Task Aplicar_RegistroConClaudeConElRegistroCambiadoTrasLaExtraccion_Da409()
+    {
+        UsarTablaYTextoLibre();
+        var id = await SembrarExtraccionAsync(Extraida());
+        var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
+        UsarTablaYTextoLibre("| 2026-09-02 | Acme | Backend | Remoto | Enviada | — |");
+
+        // Con el hash nuevo (como si viniera de otra vista previa) salta el de la extracción.
+        var error = await Assert.ThrowsAsync<ReglaNegocioException>(() =>
+            _importacion.AplicarAsync(PeticionConClaude(vista) with { HashRegistro = _lector.Hash }));
+
+        Assert.Equal(ImportacionService.MensajeExtraccionCambiada, error.Message);
+        await using var db = CreateContext();
+        Assert.Equal(0, await db.Candidaturas.CountAsync());
+    }
+
+    [Fact]
+    public async Task Aplicar_RegistroConClaudeConLaClaveDeUnaFueraODeUnaSinLeer_LanzaValidacionYNoCreaNada()
+    {
+        UsarTablaYTextoLibre();
+        var fuera = Extraida(empresa: "ACME S.L.", fecha: "2026-09-02");
+        var sinLeer = Extraida(empresa: "Omega", cita: "- Omega: inventada.");
+        var id = await SembrarExtraccionAsync(Extraida(), fuera, sinLeer);
+        var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
+        Assert.Single(vista.Fuera);
+        Assert.Single(vista.SinLeer);
+
+        foreach (var fila in new[] { fuera, sinLeer })
+        {
+            var peticion = PeticionConClaude(vista);
+            var ex = await Assert.ThrowsAsync<ValidacionException>(() => _importacion.AplicarAsync(
+                peticion with { Claves = [.. peticion.Claves, ReglasImportacion.Clave(fila.Empresa, fila.Puesto, fila.Fecha)] }));
+            Assert.Equal("claves", ex.Campo);
+        }
+        await using var db = CreateContext();
+        Assert.Equal(0, await db.Candidaturas.CountAsync());
+    }
+
+    [Fact]
+    public async Task Aplicar_RegistroConClaude_CreaLasDeLaTablaYLasExtraidasConSuSeccion()
+    {
+        UsarTablaYTextoLibre();
+        var id = await SembrarExtraccionAsync(Extraida(), Extraida(empresa: "Omega", cita: "## Notas sueltas", seccion: ""));
+        var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
+        Assert.Equal([ReglasImportacion.AvisoEmpresaNoEnLaLinea], Assert.Single(vista.Filas, f => f.Empresa == "Omega").Avisos);
+
+        var resultado = await _importacion.AplicarAsync(PeticionConClaude(vista));
+        var otraVez = await _importacion.AplicarAsync(PeticionConClaude((await _importacion.PrevisualizarExtraccionAsync(id))!));
+
+        Assert.Equal(3, resultado.Creadas);
+        Assert.Equal((0, 3), (otraVez.Creadas, otraVez.SinCambios));
+        await using var db = CreateContext();
+        var secciones = await db.Candidaturas.Include(c => c.Empresa).OrderBy(c => c.Id)
+            .Select(c => new { c.Empresa.Nombre, c.SeccionOrigen, c.Origen }).ToListAsync();
+        // Las extraídas van por línea: Omega cita el título (línea 5) y Gamma la línea 6.
+        Assert.Equal(["Acme", "Omega", "Gamma"], secciones.Select(c => c.Nombre));
+        Assert.Equal([AnalizadorRegistro.SeccionTabla, AnalizadorRegistro.SeccionTextoLibre, "Texto libre del registro: Notas sueltas"],
+            secciones.Select(c => c.SeccionOrigen));
+        Assert.All(secciones, c => Assert.Equal(Origen.Registro, c.Origen));
+    }
+
+    [Fact]
+    public async Task Aplicar_ExtraidaDescartadaConNota_LaNotaSaleUnaSolaVez()
+    {
+        _lector.Texto = $"## Notas sueltas\n{LineaGamma}\n";
+        var id = await SembrarExtraccionAsync(Extraida(estado: EstadoCandidatura.Descartada, motivo: MotivoDescarte.Salario, nota: "Piden 20.000 €."));
+
+        await _importacion.AplicarAsync(PeticionConClaude((await _importacion.PrevisualizarExtraccionAsync(id))!));
+
+        var ficha = await FichaAsync("Sin indicar");
+        Assert.Equal((EstadoCandidatura.Descartada, MotivoDescarte.Salario), (ficha.Estado, ficha.MotivoDescarte));
+        Assert.Null(ficha.MotivoDescarteTexto);
+        Assert.Equal("Piden 20.000 €.", Assert.Single(ficha.Notas).Texto);
     }
 
     private sealed class LectorFalso : ILectorCurriculum

@@ -67,7 +67,14 @@ public sealed class SoloPcConAgentesAttribute : Attribute, IAuthorizationFilter
         var motivo = http.RequestServices.GetRequiredService<DisponibilidadAgentes>().Motivo(http);
         if (motivo is null) return;
 
-        contexto.Result = new ObjectResult(new ProblemDetails
+        contexto.Result = Prohibido(motivo);
+    }
+
+    /// <summary>
+    /// El 403 del filtro, para los endpoints que solo lo exigen según lo que piden (aplicar una extracción de Claude).
+    /// </summary>
+    public static ObjectResult Prohibido(string motivo) =>
+        new(new ProblemDetails
         {
             Status = StatusCodes.Status403Forbidden,
             Title = "No tienes permiso para hacer esto.",
@@ -78,5 +85,4 @@ public sealed class SoloPcConAgentesAttribute : Attribute, IAuthorizationFilter
             StatusCode = StatusCodes.Status403Forbidden,
             ContentTypes = { "application/problem+json" }
         };
-    }
 }

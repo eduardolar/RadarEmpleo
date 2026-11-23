@@ -1,13 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using RadarEmpleo.Data;
 using RadarEmpleo.Domain;
+using RadarEmpleo.Services.Agentes;
 using RadarEmpleo.Services.Contratos;
 using RadarEmpleo.Services.Curriculum;
 
 namespace RadarEmpleo.Services.Importacion;
 
 /// <summary>
-/// Importación del registro: vista previa (no escribe nada) y aplicar. El registro nunca se escribe.
+/// Importación del registro: vista previa (no escribe nada) de la tabla o de la tabla más una extracción de Claude
+/// (ExtraerRegistro), y aplicar. El registro nunca se escribe.
 /// Aplicar no se fía del cliente: vuelve a leer el registro, exige que sea el de la vista previa (por su hash),
 /// rehace el lote y lo compara otra vez, porque desde la vista previa han podido cambiar las candidaturas. Solo
 /// actúa sobre las claves pedidas. No borra nada ni toca datos o notas existentes.
@@ -24,6 +26,12 @@ public class ImportacionService
     public const string MensajeRegistroCambiado = "El registro ha cambiado desde que lo leíste. Vuelvo a leerlo.";
 
     public const string MensajeSinTabla = "No se encuentra la tabla en el registro: tiene que tener las columnas Fecha, Empresa, Puesto y Estado.";
+
+    /// <summary>El registro de ahora no es el que leyó Claude en la extracción.</summary>
+    public const string MensajeExtraccionCambiada = "El registro ha cambiado desde la extracción. Vuelve a extraer con Claude.";
+
+    /// <summary>La ejecución no es una ExtraerRegistro terminada bien, o lo que guardó no se puede leer.</summary>
+    public const string MensajeNoEsExtraccion = "Esa extracción no ha terminado bien. Vuelve a extraer con Claude.";
 
     private readonly IDbContextFactory<AppDbContext> _factory;
     private readonly ILectorCurriculum _lector;
@@ -45,25 +53,32 @@ public class ImportacionService
     public async Task<VistaPreviaImportacionDto> PrevisualizarTablaAsync()
     {
         var leido = await _lector.LeerRegistroConFechaAsync();
-        var analisis = AnalizarTabla(leido.Texto);
+        var lote = Montar(leido.Texto, null);
 
         await using var db = await _factory.CreateDbContextAsync();
-        var filas = ReglasImportacion.Comparar(analisis.Lote.Filas, await LeerExistentesAsync(db));
+        return await VistaPreviaAsync(db, OrigenLote.Tabla, leido.Hash, null, lote);
+    }
 
-        return new VistaPreviaImportacionDto(
-            OrigenLote.Tabla,
-            leido.Hash,
-            null,
-            ReglasImportacion.Resumir(filas, analisis.SinLeer.Count, analisis.EnviosEnTexto),
-            filas,
-            analisis.SinLeer,
-            []);
+    /// <summary>
+    /// Une la tabla del registro y lo que una ExtraerRegistro ha leído del texto libre (<see cref="CombinadorLotes"/>), y lo
+    /// compara con lo que ya hay en la app. Sin tabla, solo las extraídas. Devuelve null si la ejecución no existe.
+    /// </summary>
+    /// <exception cref="ReglaNegocioException">Falta la carpeta o el registro; la ejecución no es una extracción terminada
+    /// bien, o el registro ha cambiado desde que la hizo.</exception>
+    public async Task<VistaPreviaImportacionDto?> PrevisualizarExtraccionAsync(int ejecucionId)
+    {
+        var leido = await _lector.LeerRegistroConFechaAsync();
+        await using var db = await _factory.CreateDbContextAsync();
+        if (await LeerExtraccionAsync(db, ejecucionId, leido.Hash) is not { } extraccion) return null;
+
+        return await VistaPreviaAsync(db, OrigenLote.RegistroConClaude, leido.Hash, ejecucionId, Montar(leido.Texto, extraccion));
     }
 
     /// <summary>
     /// Rehace el lote con el registro actual, que tiene que ser el de la vista previa
     /// (<see cref="AplicarImportacionRequest.HashRegistro"/>; si no, 409 <see cref="MensajeRegistroCambiado"/>): el texto
-    /// y el hash salen de la misma lectura. Crea las nuevas y avanza las que cambian de estado entre las
+    /// y el hash salen de la misma lectura. Con <see cref="OrigenLote.RegistroConClaude"/>, también con la extracción, que
+    /// tiene que seguir valiendo para ese registro (si no, 409). Crea las nuevas y avanza las que cambian de estado entre las
     /// <see cref="AplicarImportacionRequest.Claves"/>, en un solo guardado: o entra todo o no entra nada. Si otra
     /// aplicación se adelanta (salta el índice único de la clave, o el control de concurrencia de una candidatura que
     /// cambia de estado), no se guarda nada y se lanza <see cref="ReglaNegocioException"/> (409). Si solo choca una
@@ -71,21 +86,27 @@ public class ImportacionService
     /// saltan y se cuentan. El radar se exporta después de guardar: si falla, lo importado sigue siendo válido.
     /// </summary>
     /// <exception cref="ValidacionException">Origen, ejecución o claves no válidos.</exception>
-    /// <exception cref="ReglaNegocioException">El registro ha cambiado o ya no tiene la tabla, o otra aplicación ha
-    /// guardado antes alguna de las filas.</exception>
+    /// <exception cref="ReglaNegocioException">El registro ha cambiado o ya no tiene la tabla, la extracción no vale, o
+    /// otra aplicación ha guardado antes alguna de las filas.</exception>
     public async Task<ResultadoAplicacionDto> AplicarAsync(AplicarImportacionRequest peticion)
     {
         var origen = peticion.Origen ?? throw new ValidacionException("Falta el origen.", "origen");
         ValidacionException.ExigirDefinido(origen, "origen");
-        if (peticion.EjecucionId is not null)
+        if (origen == OrigenLote.Tabla && peticion.EjecucionId is not null)
             throw new ValidacionException("Con la tabla no va ninguna ejecución.", "ejecucionId");
+        if (origen == OrigenLote.RegistroConClaude && peticion.EjecucionId is null)
+            throw new ValidacionException("Falta la extracción de Claude.", "ejecucionId");
 
         var leido = await _lector.LeerRegistroConFechaAsync();
         if (!string.Equals(peticion.HashRegistro, leido.Hash, StringComparison.Ordinal))
             throw new ReglaNegocioException(MensajeRegistroCambiado);
 
-        var filas = ValidarLote(AnalizarTabla(leido.Texto).Lote.Filas);
         await using var db = await _factory.CreateDbContextAsync();
+        // Una ejecución que no existe aquí es un 409: la vista previa la tenía, así que ya no vale.
+        var extraccion = peticion.EjecucionId is { } id
+            ? await LeerExtraccionAsync(db, id, leido.Hash) ?? throw new ReglaNegocioException(MensajeNoEsExtraccion)
+            : null;
+        var filas = ValidarLote(Montar(leido.Texto, extraccion).Filas);
 
         var comparadas = ReglasImportacion.Comparar(filas, await LeerExistentesAsync(db));
         var claves = peticion.Claves.ToHashSet(StringComparer.Ordinal);
@@ -120,11 +141,52 @@ public class ImportacionService
 
     // ---------------------------------------------------------------- auxiliares
 
-    /// <summary>El análisis del registro, o 409 si no tiene la tabla.</summary>
-    private static AnalisisRegistro AnalizarTabla(string registro)
+    /// <summary>El lote que monta el servidor: las filas, las que no se han leído, las que se quedan fuera y los envíos en texto.</summary>
+    private sealed record LoteServidor(
+        IReadOnlyList<FilaLote> Filas, IReadOnlyList<FilaSinLeerDto> SinLeer, IReadOnlyList<FilaFueraDelLote> Fuera, int EnviosEnTexto);
+
+    /// <summary>
+    /// La tabla del registro (409 si no la tiene) o, con una extracción, la tabla más lo extraído. Con la extracción, los envíos
+    /// en texto van a 0: esas líneas ya las ha leído Claude.
+    /// </summary>
+    private static LoteServidor Montar(string registro, ResultadoExtraccionRegistro? extraccion)
     {
         var analisis = AnalizadorRegistro.Analizar(registro);
-        return analisis.TablaEncontrada ? analisis : throw new ReglaNegocioException(MensajeSinTabla);
+        if (extraccion is not null)
+        {
+            var combinado = CombinadorLotes.Combinar(analisis, registro, extraccion);
+            return new LoteServidor(combinado.Filas, combinado.SinLeer, combinado.Fuera, 0);
+        }
+        return analisis.TablaEncontrada
+            ? new LoteServidor(analisis.Lote.Filas, analisis.SinLeer, [], analisis.EnviosEnTexto)
+            : throw new ReglaNegocioException(MensajeSinTabla);
+    }
+
+    private static async Task<VistaPreviaImportacionDto> VistaPreviaAsync(AppDbContext db, OrigenLote origen, string hash, int? ejecucionId,
+        LoteServidor lote)
+    {
+        var filas = ReglasImportacion.Comparar(lote.Filas, await LeerExistentesAsync(db));
+        return new VistaPreviaImportacionDto(origen, hash, ejecucionId,
+            ReglasImportacion.Resumir(filas, lote.SinLeer.Count, lote.EnviosEnTexto), filas, lote.SinLeer, lote.Fuera);
+    }
+
+    /// <summary>
+    /// Lo que guardó una ExtraerRegistro, o null si la ejecución no existe. 409 con <see cref="MensajeNoEsExtraccion"/> si es
+    /// de otra tarea, no ha terminado en Ok o no se puede leer, y con <see cref="MensajeExtraccionCambiada"/> si leyó otro
+    /// registro (su <see cref="EjecucionAgente.HashRegistroAntes"/>, que es el del texto del prompt, no es el de ahora).
+    /// </summary>
+    private static async Task<ResultadoExtraccionRegistro?> LeerExtraccionAsync(AppDbContext db, int id, string hashActual)
+    {
+        var ejecucion = await db.EjecucionesAgente.AsNoTracking()
+            .Where(e => e.Id == id)
+            .Select(e => new { e.Tarea, e.Estado, e.HashRegistroAntes, e.ResultadoJson })
+            .FirstOrDefaultAsync();
+        if (ejecucion is null) return null;
+        if (ejecucion.Tarea != TareaAgente.ExtraerRegistro || ejecucion.Estado != EstadoEjecucion.Ok)
+            throw new ReglaNegocioException(MensajeNoEsExtraccion);
+        if (!string.Equals(ejecucion.HashRegistroAntes, hashActual, StringComparison.Ordinal))
+            throw new ReglaNegocioException(MensajeExtraccionCambiada);
+        return ManejadorExtraerRegistro.LeerGuardado(ejecucion.ResultadoJson) ?? throw new ReglaNegocioException(MensajeNoEsExtraccion);
     }
 
     /// <summary>
@@ -189,7 +251,7 @@ public class ImportacionService
 
         var candidatura = Candidatura.Nueva(empresa, fila.Puesto, fecha, Origen.Registro);
         candidatura.ClaveImportacion = clave;
-        candidatura.SeccionOrigen = AnalizadorRegistro.SeccionTabla;
+        candidatura.SeccionOrigen = fila.Seccion ?? AnalizadorRegistro.SeccionTabla;
         candidatura.Enlace = ReglasImportacion.EnlaceParaGuardar(fila.Enlace);
         candidatura.Portal = fila.Portal;
         candidatura.Modalidad = fila.Modalidad;
