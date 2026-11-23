@@ -38,7 +38,10 @@ public sealed class DisponibilidadAgentes(IClasificadorCanal clasificador, IOpti
 
     /// <summary>Lo que <c>/api/sistema/info</c> puede decir de <c>Agentes:Habilitado</c>: por el remoto, siempre false.</summary>
     public bool HabilitadosVisibles(HttpContext http) =>
-        clasificador.Canal(http) == CanalPeticion.Local && agentes.Value.Habilitado;
+        DesdeElPc(http) && agentes.Value.Habilitado;
+
+    /// <summary>Si la petición llega por el endpoint «Local» (el PC) y no por el remoto (el móvil).</summary>
+    public bool DesdeElPc(HttpContext http) => clasificador.Canal(http) == CanalPeticion.Local;
 
     private static bool DesdeRadarEmpleo(HttpRequest peticion, bool desarrollo)
     {

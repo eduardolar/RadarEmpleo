@@ -12,7 +12,11 @@ namespace RadarEmpleo.Api.Controllers;
 /// <param name="Version">Versión de la API.</param>
 /// <param name="AgentesDisponibles">Si se pueden lanzar agentes desde esta petición: por el endpoint «Local», con los
 /// agentes habilitados y en modo Local. Desde el móvil es false, y el front no enseña los botones.</param>
-public sealed record SistemaInfoDto(ModoEjecucion Modo, bool AgentesHabilitados, string Version, bool AgentesDisponibles);
+/// <param name="DesdeElPc">Si la petición llega por el endpoint «Local». Con él, el móvil explica que los agentes son
+/// solo del PC en vez de decir que están apagados (por el remoto <paramref name="AgentesHabilitados"/> siempre es false).
+/// No dice nada de la configuración: el móvil ya sabe por dónde entra.</param>
+public sealed record SistemaInfoDto(ModoEjecucion Modo, bool AgentesHabilitados, string Version, bool AgentesDisponibles,
+    bool DesdeElPc);
 
 [ApiController]
 [Route("api/sistema")]
@@ -24,7 +28,8 @@ public class SistemaController(IOptions<OpcionesRadar> radar, DisponibilidadAgen
     /// <summary>Modo de ejecución, si los agentes están habilitados (y disponibles desde aquí) y versión de la API.</summary>
     [HttpGet("info")]
     public SistemaInfoDto Info() =>
-        new(radar.Value.Modo, disponibilidad.HabilitadosVisibles(HttpContext), VersionApi, disponibilidad.Motivo(HttpContext) is null);
+        new(radar.Value.Modo, disponibilidad.HabilitadosVisibles(HttpContext), VersionApi, disponibilidad.Motivo(HttpContext) is null,
+            disponibilidad.DesdeElPc(HttpContext));
 
     private static string LeerVersion()
     {

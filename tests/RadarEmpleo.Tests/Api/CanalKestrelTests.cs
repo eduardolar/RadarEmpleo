@@ -56,6 +56,7 @@ public sealed class CanalKestrelTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/api/agentes/estado")).StatusCode);
         var info = await http.GetFromJsonAsync<JsonElement>("/api/sistema/info");
         Assert.True(info.GetProperty("agentesDisponibles").GetBoolean());
+        Assert.True(info.GetProperty("desdeElPc").GetBoolean());
         // Pasa el filtro: 404 porque la ejecución no existe.
         Assert.Equal(HttpStatusCode.NotFound, (await http.PostAsync("/api/agentes/ejecuciones/1/cancelar",
             new StringContent("{}", Encoding.UTF8, "application/json"))).StatusCode);
@@ -74,6 +75,8 @@ public sealed class CanalKestrelTests : IDisposable
             new StringContent("{}", Encoding.UTF8, "text/plain"))).StatusCode);
         var info = await http.GetFromJsonAsync<JsonElement>("/api/sistema/info");
         Assert.False(info.GetProperty("agentesDisponibles").GetBoolean());
+        Assert.False(info.GetProperty("desdeElPc").GetBoolean());
+        Assert.False(info.GetProperty("agentesHabilitados").GetBoolean());
     }
 
     [Fact]
