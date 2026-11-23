@@ -212,6 +212,20 @@ public sealed class RastreosServiceTests : ArnesSqliteTests, IDisposable
     }
 
     [Fact]
+    public async Task Escanear_InformeQueNoEsUtf8_AvisaDeQueHayQueGuardarloEnUtf8YLeeElRegistro()
+    {
+        File.WriteAllBytes(Path.Combine(_carpeta, "rastreos", "rastreo_2026-11-09.md"), [.. "# Rastreo en M"u8, 0xE1, .. "laga\n"u8]);
+
+        var resultado = await _rastreos.EscanearAsync();
+
+        Assert.Equal(1, resultado.RastreosNuevos);
+        var aviso = Assert.Single(resultado.Avisos);
+        Assert.Contains("rastreo_2026-11-09.md", aviso);
+        Assert.Contains("UTF-8", aviso);
+        Assert.DoesNotContain("en un momento", aviso);
+    }
+
+    [Fact]
     public async Task Escanear_InformeJson_SeAvisaYNoSeLee()
     {
         File.WriteAllText(Path.Combine(_carpeta, "rastreos", "rastreo_2026-11-16.json"), "{}");

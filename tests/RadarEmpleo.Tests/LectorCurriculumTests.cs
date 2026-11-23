@@ -186,7 +186,9 @@ public sealed class LectorCurriculumTests : IDisposable
     [Theory]
     [InlineData("utf-16")]
     [InlineData("utf-16BE")]
-    public async Task LeerRegistroAsync_Utf16ConBom_LoLeeConSusTildes(string codificacion)
+    [InlineData("utf-32")]
+    [InlineData("utf-32BE")]
+    public async Task LeerRegistroAsync_Utf16OUtf32ConBom_LoLeeConSusTildes(string codificacion)
     {
         var texto = "| Fecha | Empresa |\r\n| 2026-09-01 | Señor Pérez |\r\n";
         await File.WriteAllTextAsync(_registro, texto, Encoding.GetEncoding(codificacion));
@@ -201,7 +203,14 @@ public sealed class LectorCurriculumTests : IDisposable
         // Un byte suelto que nunca es UTF-8, en medio de texto bueno.
         { [.. "Acme "u8, 0xFF, .. " Uno"u8] },
         // Una «é» cortada al final (le falta el segundo byte).
-        { [.. "Caf"u8, 0xC3] }
+        { [.. "Caf"u8, 0xC3] },
+        // Con BOM UTF-8 delante y el resto en Windows-1252 (lo que deja un editor que «convierte» a medias).
+        { [0xEF, 0xBB, 0xBF, .. "Se"u8, 0xF1, .. "or"u8] },
+        // UTF-16 LE y BE con una mitad de par suelta (U+D800) entre dos letras.
+        { [0xFF, 0xFE, 0x41, 0x00, 0x00, 0xD8, 0x42, 0x00] },
+        { [0xFE, 0xFF, 0x00, 0x41, 0xD8, 0x00, 0x00, 0x42] },
+        // UTF-32 LE con un carácter fuera de Unicode (0x00110000).
+        { [0xFF, 0xFE, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x00] }
     };
 
     [Theory]
@@ -237,7 +246,7 @@ public sealed class LectorCurriculumTests : IDisposable
     }
 
     [Fact]
-    public async Task LeerInformesRastreoAsync_UnoQueNoEsUtf8_SeApuntaComoNoLeidoYSeLeenLosDemas()
+    public async Task LeerInformesRastreoAsync_UnoQueNoEsUtf8_SeApuntaAparteDeLosQueNoSeAbrenYSeLeenLosDemas()
     {
         await File.WriteAllBytesAsync(Crear("rastreos/rastreo_2026-11-09.md"), [0x73, 0x65, 0xF1, 0x6F, 0x72]);
         Crear("rastreos/rastreo_2026-11-16.md", "dos");
@@ -245,7 +254,8 @@ public sealed class LectorCurriculumTests : IDisposable
         var informes = await _lector.LeerInformesRastreoAsync();
 
         Assert.Equal("rastreos/rastreo_2026-11-16.md", Assert.Single(informes.Informes).RutaRelativa);
-        Assert.Equal(["rastreos/rastreo_2026-11-09.md"], informes.NoLeidos);
+        Assert.Equal(["rastreos/rastreo_2026-11-09.md"], informes.NoUtf8);
+        Assert.Empty(informes.NoLeidos);
     }
 
     public static TheoryData<byte[], string> CasiVacios => new()
