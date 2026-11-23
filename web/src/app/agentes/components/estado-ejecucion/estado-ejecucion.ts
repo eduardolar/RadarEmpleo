@@ -40,6 +40,9 @@ import {
 /** Cada cuánto avanza el tiempo de lo que va en curso */
 export const INTERVALO_RELOJ_MS = 1000;
 
+/** Más que los dos toques de un doble toque (el sistema suele admitir hasta 500 ms) */
+export const PAUSA_CANCELAR_MS = 600;
+
 /** Lo que pinta la insignia: un estado de la API o que ya no se encuentra */
 type EstadoVisible = EstadoDeLaApi | 'Perdida';
 
@@ -103,6 +106,11 @@ export class EstadoEjecucion {
   readonly contexto = input<string | null>(null);
   /** En /agentes solo la última de cada tarea y candidatura ofrece «Reintentar»: las viejas no */
   readonly permitirReintentar = input(true);
+  /**
+   * Donde «Cancelar la tarea» puede salir justo donde estaba el botón que la lanzó (o donde estaba
+   * «Reintentar»): durante un momento tras enseñar otra ejecución no hace caso, y un doble toque no la cancela
+   */
+  readonly protegerDobleToque = input(false);
 
   /** La enseñada ha terminado (Ok, Error o Cancelada) tras llegar sin terminar: sale una vez */
   readonly terminada = output<EjecucionAgente>();
@@ -223,6 +231,7 @@ export class EstadoEjecucion {
   private vistaEnMapa: number | null = null;
   /** La última por la que ha salido `terminada`, para que no salga dos veces */
   private avisadaId: number | null = null;
+  private enPausaCancelar = false;
 
   constructor() {
     this.visible.set(this.documento.visibilityState !== 'hidden');
@@ -276,6 +285,16 @@ export class EstadoEjecucion {
       });
     });
 
+    effect((alLimpiar) => {
+      this.base();
+      if (!this.protegerDobleToque()) {
+        return;
+      }
+      this.enPausaCancelar = true;
+      const pausa = setTimeout(() => (this.enPausaCancelar = false), PAUSA_CANCELAR_MS);
+      alLimpiar(() => clearTimeout(pausa));
+    });
+
     // Un reloj de 1 s solo mientras hay tiempo que enseñar y la pestaña está a la vista
     effect((alLimpiar) => {
       if (!this.hayReloj() || !this.visible()) {
@@ -313,7 +332,15 @@ export class EstadoEjecucion {
     });
   }
 
+  /** Para quien la enseña en lugar del botón pulsado: el foco no se queda en <body> */
+  enfocar(): void {
+    this.tarjeta().nativeElement.focus();
+  }
+
   protected cancelar(): void {
+    if (this.enPausaCancelar) {
+      return;
+    }
     this.ejecutar('cancelar', (e) => this.agentes.cancelar(e));
   }
 
