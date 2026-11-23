@@ -84,6 +84,24 @@ describe('DialogoCambioEstado', () => {
     });
   });
 
+  it('con el motivo ya elegido sale marcado y se descarta sin tocar nada más', async () => {
+    await crear({ ...DESCARTAR, motivo: 'Cerrada' });
+
+    const marcado = elemento().querySelector('mat-radio-button.mat-mdc-radio-checked');
+    expect(marcado?.textContent).toContain('Oferta cerrada');
+    // El selector con el que CambioEstadoService le lleva el foco al abrir
+    const foco = elemento().querySelector('mat-radio-button.mat-mdc-radio-checked input');
+    expect(foco?.closest('mat-radio-button')?.textContent).toContain('Oferta cerrada');
+    await enviar();
+
+    expect(cerrar).toHaveBeenCalledWith({
+      estado: 'Descartada',
+      comentario: null,
+      motivoDescarte: 'Cerrada',
+      motivoDescarteTexto: null,
+    });
+  });
+
   it('si falta el motivo, el error se anuncia y el foco va a los motivos', async () => {
     await crear(DESCARTAR);
 

@@ -4,6 +4,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
+import { EjecucionAgente } from '../../../agentes/interfaces/ejecucion.interface';
+import {
+  AgentesService,
+  INTERVALO_SEGUIMIENTO_MS,
+} from '../../../agentes/services/agentes.service';
+import { crearEjecucion, crearEstadoAgentes } from '../../../agentes/utils/ejecucion-de-prueba';
+import { SistemaService } from '../../../core/services/sistema.service';
+import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import { DialogoRecordatorio } from '../../../recordatorios/components/dialogo-recordatorio/dialogo-recordatorio';
 import { crearRecordatorio } from '../../../recordatorios/utils/recordatorio-de-prueba';
 import { AccionAviso, AvisosService } from '../../../shared/services/avisos.service';
@@ -32,7 +40,8 @@ describe('FichaPageComponent', () => {
     origen: 'Manual',
   };
 
-  async function crear(detalle: Partial<CandidaturaDetalle>): Promise<void> {
+  /** Con `conAgentes`, /api/sistema/info se queda sin responder: lo responde `conAgentes()` */
+  async function crear(detalle: Partial<CandidaturaDetalle>, conAgentes = false): Promise<void> {
     abrirDialogo = vi.fn(() => ({ afterClosed: () => of(undefined) }));
     avisos = { exito: vi.fn(), error: vi.fn(), deshacible: vi.fn() };
     TestBed.configureTestingModule({
@@ -58,6 +67,9 @@ describe('FichaPageComponent', () => {
         ...detalle,
       }),
     );
+    if (!conAgentes) {
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
+    }
     await fixture.whenStable();
   }
 
@@ -322,6 +334,7 @@ describe('FichaPageComponent', () => {
     http
       .expectOne('/api/candidaturas/99')
       .flush({ title: 'No se ha encontrado.' }, { status: 404, statusText: 'Not Found' });
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
     await fixture.whenStable();
 
     expect(elemento().textContent).toContain('Esta candidatura no existe o se ha borrado.');
@@ -758,6 +771,287 @@ describe('FichaPageComponent', () => {
       opcionesDelMenu()[1].click();
 
       expect(seccion().querySelectorAll('app-tarjeta-recordatorio')).toHaveLength(1);
+    });
+  });
+
+  describe('analizar el encaje con Claude', () => {
+    const URL_EJECUCIONES = '/api/agentes/ejecuciones';
+    const analisis = (cambios: Partial<EjecucionAgente> = {}) =>
+      crearEjecucion({ id: 5, candidaturaId: 1, ...cambios });
+
+    const AHORA = new Date('2026-11-23T10:01:20Z');
+
+    /**
+     * Como al entrar en frío (F5): la ficha pide /api/sistema/info, luego el estado y la última. Con reloj
+     * simulado desde aquí: el seguimiento pide cada 5 s
+     */
+    async function conAgentes(ultima: EjecucionAgente | null = null, id = 1): Promise<void> {
+      vi.useFakeTimers();
+      vi.setSystemTime(AHORA);
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ agentesDisponibles: true }));
+      await pasan(0);
+      http.expectOne('/api/agentes/estado').flush(crearEstadoAgentes());
+      const ultimas = http.expectOne((r) => r.url === URL_EJECUCIONES);
+      expect(ultimas.request.params.toString()).toBe(
+        `tarea=AnalizarEncaje&limite=1&candidaturaId=${id}`,
+      );
+      ultimas.flush(ultima ? [ultima] : []);
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    function botonTexto(texto: string): HTMLButtonElement | undefined {
+      return [...elemento().querySelectorAll('button')].find((b) => b.textContent?.includes(texto));
+    }
+
+    const botonAnalizar = () =>
+      botonTexto('Analizar encaje con Claude') ?? botonTexto('Volver a analizar el encaje');
+    const tarjeta = () => elemento().querySelector('app-estado-ejecucion');
+
+    async function lanzar(): Promise<void> {
+      botonAnalizar()!.click();
+      const peticion = http.expectOne('/api/agentes/analizar/1');
+      expect(peticion.request.body).toEqual({});
+      peticion.flush(analisis());
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    async function seguimiento(id: number, respuesta: EjecucionAgente | null): Promise<void> {
+      await pasan(INTERVALO_SEGUIMIENTO_MS);
+      const peticion = http.expectOne(`${URL_EJECUCIONES}/${id}`);
+      if (respuesta) {
+        peticion.flush(respuesta);
+      } else {
+        peticion.flush({ detail: 'No existe.' }, { status: 404, statusText: 'Not Found' });
+      }
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    it('sin agentes disponibles no sale; con ellos va con borde y el único relleno es el del estado', async () => {
+      await crear({ estado: 'Enviada', encaje: 'SinValorar' }, true);
+      expect(botonAnalizar()).toBeUndefined();
+
+      await conAgentes();
+
+      expect(botonAnalizar()!.textContent!.trim()).toBe('Analizar encaje con Claude');
+      expect(botonAnalizar()!.hasAttribute('mat-stroked-button')).toBe(true);
+      const gasto = elemento().querySelector(
+        `#${botonAnalizar()!.getAttribute('aria-describedby')}`,
+      );
+      expect(gasto?.textContent?.trim()).toBe('Gasta un poco de tu tope diario de Claude.');
+      expect(elemento().querySelectorAll('[mat-flat-button]')).toHaveLength(1);
+    });
+
+    it.each(['Descartada', 'Cerrada'] as const)('en una %s no sale', async (estado) => {
+      await crear({ estado, motivoDescarte: estado === 'Descartada' ? 'Ingles' : null }, true);
+      await conAgentes();
+
+      expect(botonAnalizar()).toBeUndefined();
+    });
+
+    it('al pulsar, la tarjeta sale en su sitio con el foco y un doble toque no la cancela', async () => {
+      await crear({ estado: 'Enviada', empresa: 'Acme' }, true);
+      await conAgentes();
+
+      await lanzar();
+
+      expect(botonAnalizar()).toBeUndefined();
+      expect(document.activeElement?.getAttribute('aria-label')).toBe(
+        'Tarea de Claude: Análisis del encaje · Acme',
+      );
+      botonTexto('Cancelar la tarea')!.click();
+      http.expectNone(`${URL_EJECUCIONES}/5/cancelar`);
+    });
+
+    it('al terminar en Ok recarga la ficha, avisa con el encaje y vuelve el botón con el foco', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes();
+      await lanzar();
+
+      await seguimiento(5, analisis({ estado: 'Ok', resumen: 'Encaje medio. Sin pega.' }));
+      http
+        .expectOne('/api/candidaturas/1')
+        .flush(crearDetalle({ id: 1, estado: 'Enviada', encaje: 'Medio' }));
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(avisos.exito).toHaveBeenCalledWith('Encaje actualizado: Alto → Medio.');
+      expect(elemento().textContent).toContain('Encaje medio. Sin pega.');
+      expect(botonAnalizar()!.textContent!.trim()).toBe('Volver a analizar el encaje');
+      expect(document.activeElement).toBe(botonAnalizar());
+    });
+
+    it('si al terminar el foco no estaba en la tarjeta (leyendo otra cosa), no se mueve', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes();
+      await lanzar();
+      (document.activeElement as HTMLElement).blur();
+
+      await seguimiento(5, analisis({ estado: 'Ok' }));
+      http.expectOne('/api/candidaturas/1').flush(crearDetalle({ id: 1, estado: 'Enviada' }));
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(document.activeElement).toBe(document.body);
+    });
+
+    it('con la oferta cerrada no recarga ni descarta: propone descartar con el motivo ya elegido', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes();
+      await lanzar();
+
+      await seguimiento(5, analisis({ estado: 'Ok', estadoOferta: 'Cerrada' }));
+
+      http.expectNone('/api/candidaturas/1');
+      expect(avisos.exito).toHaveBeenCalledWith(
+        'La oferta de Acme ya no está publicada. ¿La descartas?',
+        {
+          texto: 'Descartar',
+          alPulsar: expect.any(Function),
+        },
+      );
+      expect(botonAnalizar()).toBeUndefined();
+      const descartar = botonTexto('Descartar: oferta cerrada')!;
+      expect(descartar.classList).toContain('boton-peligro-borde');
+      expect(document.activeElement).toBe(descartar);
+
+      descartar.click();
+      expect(abrirDialogo.mock.calls[0][1].data).toMatchObject({
+        destino: 'Descartada',
+        motivo: 'Cerrada',
+      });
+      http.expectNone('/api/candidaturas/1/estado');
+
+      // «Descartar» del aviso abre el mismo diálogo
+      await pasan(500);
+      (avisos.exito.mock.calls[0][1] as AccionAviso).alPulsar();
+      expect(abrirDialogo).toHaveBeenCalledTimes(2);
+      expect(abrirDialogo.mock.calls[1][1].data).toMatchObject({ motivo: 'Cerrada' });
+    });
+
+    it('«Descartar» del aviso, ya en otra ficha, abre el diálogo de la candidatura de la oferta', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes();
+      await lanzar();
+      await seguimiento(5, analisis({ estado: 'Ok', estadoOferta: 'Cerrada' }));
+
+      fixture.componentRef.setInput('id', 2);
+      await pasan(0);
+      http
+        .expectOne('/api/candidaturas/2')
+        .flush(crearDetalle({ id: 2, empresa: 'Otra', puesto: 'Otro puesto' }));
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+      await pasan(MARGEN_PINTADO_MS);
+
+      (avisos.exito.mock.calls[0][1] as AccionAviso).alPulsar();
+      expect(abrirDialogo.mock.calls[0][1].data).toMatchObject({
+        empresa: 'Acme',
+        destino: 'Descartada',
+        motivo: 'Cerrada',
+      });
+    });
+
+    it('con un 403 de otra visita pregunta el estado una sola vez y, si contesta, retoma', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      vi.useFakeTimers();
+      vi.setSystemTime(AHORA);
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ agentesDisponibles: true }));
+      await pasan(0);
+      http
+        .expectOne('/api/agentes/estado')
+        .flush({ detail: 'No.' }, { status: 403, statusText: 'Forbidden' });
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+      await pasan(MARGEN_PINTADO_MS);
+      expect(botonAnalizar()).toBeUndefined();
+
+      // Otra visita a la ficha, con la info ya cargada
+      fixture.destroy();
+      const cargarEstado = vi.spyOn(TestBed.inject(AgentesService), 'cargarEstado');
+      fixture = TestBed.createComponent(FichaPageComponent);
+      fixture.componentRef.setInput('id', 1);
+      await pasan(0);
+      http.expectOne('/api/candidaturas/1').flush(crearDetalle({ id: 1, estado: 'Enviada' }));
+      http.expectOne('/api/agentes/estado').flush(crearEstadoAgentes());
+      await pasan(MARGEN_PINTADO_MS);
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([analisis()]);
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(cargarEstado).toHaveBeenCalledTimes(1);
+      expect(tarjeta()).not.toBeNull();
+
+      // Volver a guardar la misma info no repite la consulta de la última
+      TestBed.inject(SistemaService).cargarInfo();
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ agentesDisponibles: true }));
+      await pasan(MARGEN_PINTADO_MS);
+      http.expectNone((r) => r.url === URL_EJECUCIONES);
+    });
+
+    it('al entrar en frío (F5) pide la info, el estado y la última, y retoma la que sigue en marcha', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes(analisis({ estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z' }));
+
+      expect(tarjeta()).not.toBeNull();
+      expect(botonAnalizar()).toBeUndefined();
+    });
+
+    it('al entrar, una ya terminada no sale ni avisa', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes(analisis({ estado: 'Ok' }));
+
+      expect(tarjeta()).toBeNull();
+      expect(botonAnalizar()).toBeDefined();
+      expect(avisos.exito).not.toHaveBeenCalled();
+    });
+
+    it('si la API ya no la encuentra, vuelve el botón de lanzar', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes();
+      await lanzar();
+
+      await seguimiento(5, null);
+
+      expect(botonAnalizar()).toBeDefined();
+    });
+
+    it('tras reintentar desde la tarjeta sigue a la nueva hasta el final', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes();
+      await lanzar();
+      await seguimiento(5, analisis({ estado: 'Error', error: 'Se interrumpió.' }));
+      expect(botonAnalizar()).toBeUndefined();
+
+      botonTexto('Reintentar')!.click();
+      http.expectOne(`${URL_EJECUCIONES}/5/reintentar`).flush(analisis({ id: 6 }));
+      await seguimiento(6, analisis({ id: 6, estado: 'Ok' }));
+
+      http.expectOne('/api/candidaturas/1').flush(crearDetalle({ id: 1, encaje: 'Alto' }));
+      await pasan(MARGEN_PINTADO_MS);
+      expect(avisos.exito).toHaveBeenCalledWith('Encaje sin cambios: Alto.');
+    });
+
+    it('en una ficha descartada, la tarjeta que acaba en error no ofrece «Reintentar»', async () => {
+      await crear({ estado: 'Descartada', motivoDescarte: 'Ingles' }, true);
+      await conAgentes(analisis());
+
+      await seguimiento(5, analisis({ estado: 'Error', error: 'Se interrumpió.' }));
+
+      expect(tarjeta()).not.toBeNull();
+      expect(botonTexto('Reintentar')).toBeUndefined();
+    });
+
+    it('si se cambia de ficha antes de que conteste, la tarjeta de la otra no se lleva el foco', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes();
+      botonAnalizar()!.click();
+      fixture.componentRef.setInput('id', 2);
+      await pasan(0);
+      http.expectOne('/api/candidaturas/2').flush(crearDetalle({ id: 2, estado: 'Enviada' }));
+      http.expectOne('/api/agentes/analizar/1').flush(analisis());
+      await pasan(MARGEN_PINTADO_MS);
+
+      const ultimas = http.expectOne((r) => r.url === URL_EJECUCIONES);
+      ultimas.flush([analisis({ id: 9, candidaturaId: 2 })]);
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(tarjeta()).not.toBeNull();
+      expect(document.activeElement?.closest('app-estado-ejecucion')).toBeNull();
     });
   });
 });

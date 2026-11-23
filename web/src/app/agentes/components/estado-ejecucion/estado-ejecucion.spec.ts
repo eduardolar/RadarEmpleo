@@ -14,7 +14,7 @@ import {
   TEXTO_PERDIDA,
   TEXTO_PERDIDA_CORTO,
 } from '../../utils/textos-ejecucion';
-import { EstadoEjecucion, INTERVALO_RELOJ_MS } from './estado-ejecucion';
+import { EstadoEjecucion, INTERVALO_RELOJ_MS, PAUSA_CANCELAR_MS } from './estado-ejecucion';
 
 const URL_EJECUCIONES = '/api/agentes/ejecuciones';
 const AHORA = new Date('2026-11-23T10:01:20Z');
@@ -61,6 +61,7 @@ describe('EstadoEjecucion', () => {
       topeUsd?: number | null;
       contexto?: string;
       permitirReintentar?: boolean;
+      protegerDobleToque?: boolean;
     } = {},
   ): HTMLElement {
     fixture = TestBed.createComponent(EstadoEjecucion);
@@ -517,6 +518,43 @@ describe('EstadoEjecucion', () => {
       http.expectOne(`${URL_EJECUCIONES}/2`).flush(crearEjecucion({ id: 2, estado: 'Ok' }));
       pintar();
       expect(insignia()).toBe('Hecha');
+    });
+  });
+
+  describe('con protegerDobleToque', () => {
+    beforeEach(() => conAgentes());
+
+    it('al aparecer, «Cancelar» no hace caso hasta pasado un doble toque', () => {
+      crear(crearEjecucion(), { protegerDobleToque: true });
+
+      boton('Cancelar')!.click();
+      vi.advanceTimersByTime(PAUSA_CANCELAR_MS - 1);
+      boton('Cancelar')!.click();
+      http.expectNone(`${URL_EJECUCIONES}/1/cancelar`);
+
+      vi.advanceTimersByTime(1);
+      boton('Cancelar')!.click();
+      http
+        .expectOne(`${URL_EJECUCIONES}/1/cancelar`)
+        .flush(crearEjecucion({ estado: 'Cancelada' }));
+    });
+
+    it('tras reintentar, el «Cancelar» de la nueva tampoco cuenta el segundo toque', () => {
+      crear(crearEjecucion({ estado: 'Error', error: 'Se interrumpió.' }), {
+        protegerDobleToque: true,
+      });
+      vi.advanceTimersByTime(PAUSA_CANCELAR_MS);
+      boton('Reintentar')!.click();
+      http.expectOne(`${URL_EJECUCIONES}/1/reintentar`).flush(crearEjecucion({ id: 2 }));
+      pintar();
+
+      boton('Cancelar')!.click();
+      http.expectNone(`${URL_EJECUCIONES}/2/cancelar`);
+      vi.advanceTimersByTime(PAUSA_CANCELAR_MS);
+      boton('Cancelar')!.click();
+      http
+        .expectOne(`${URL_EJECUCIONES}/2/cancelar`)
+        .flush(crearEjecucion({ id: 2, estado: 'Cancelada' }));
     });
   });
 

@@ -11,6 +11,7 @@ import {
   CambiarEstado,
   CandidaturaResumen,
   EstadoCandidatura,
+  MotivoDescarte,
 } from '../interfaces/candidatura.interface';
 import { ETIQUETAS_ESTADO } from '../utils/etiquetas';
 import { esEstadoFinal } from '../utils/transiciones-permitidas';
@@ -73,13 +74,14 @@ export class CambioEstadoService {
 
   /**
    * `alTerminar` deja a quien mueve reaccionar a cómo acabó (p. ej. colocar el foco), y `alDeshacer`, a que
-   * se deshaga desde el aviso
+   * se deshaga desde el aviso. `motivo` sale ya elegido en el diálogo de descartar (se puede cambiar)
    */
   mover(
     candidatura: CandidaturaQueSeMueve,
     destino: EstadoCandidatura,
     alTerminar?: (resultado: ResultadoMovimiento) => void,
     alDeshacer?: AlDeshacer,
+    motivo?: MotivoDescarte,
   ): void {
     const { id } = candidatura;
     if (this.idsEnCurso.has(id) || this._idsEnPausa().has(id)) {
@@ -100,12 +102,19 @@ export class CambioEstadoService {
           puesto: candidatura.puesto,
           actual: candidatura.estado,
           destino,
+          motivo,
         },
         width: '32rem',
         maxWidth: '95vw',
         disableClose: true,
-        // Cerrar solo pide un comentario opcional: con el foco en él, el móvil sacaría el teclado
-        autoFocus: destino === 'Descartada' ? 'first-tabbable' : 'first-heading',
+        // Cerrar solo pide un comentario opcional: con el foco en él, el móvil sacaría el teclado. Con el
+        // motivo ya elegido, el foco va a ese y no al primero de la lista
+        autoFocus:
+          destino !== 'Descartada'
+            ? 'first-heading'
+            : motivo
+              ? 'mat-radio-button.mat-mdc-radio-checked input'
+              : 'first-tabbable',
       })
       .afterClosed()
       .subscribe((peticion) => {

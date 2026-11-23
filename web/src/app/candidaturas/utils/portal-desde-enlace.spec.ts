@@ -8,6 +8,15 @@ describe('portalDesdeEnlace', () => {
     expect(portalDesdeEnlace('  https://www.tecnoempleo.com/oferta  ')).toBe('Tecnoempleo');
   });
 
+  it('reconoce los sistemas de selección de las webs de empleo de las empresas', () => {
+    expect(portalDesdeEnlace('https://job-boards.greenhouse.io/acme/jobs/123')).toBe('Greenhouse');
+    expect(portalDesdeEnlace('https://boards.greenhouse.io/acme/jobs/123')).toBe('Greenhouse');
+    expect(portalDesdeEnlace('https://jobs.lever.co/acme/1a2b')).toBe('Lever');
+    expect(portalDesdeEnlace('https://jobs.ashbyhq.com/acme/1a2b')).toBe('Ashby');
+    expect(portalDesdeEnlace('https://apply.workable.com/acme/j/AB12/')).toBe('Workable');
+    expect(portalDesdeEnlace('https://falsolever.co/acme/1')).toBeNull();
+  });
+
   it('no adivina con webs de empresas, dominios parecidos o textos que no son enlaces', () => {
     expect(portalDesdeEnlace('https://careers.acme.com/jobs/1')).toBeNull();
     expect(portalDesdeEnlace('https://falsolinkedin.com/jobs')).toBeNull();
