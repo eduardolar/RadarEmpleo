@@ -146,6 +146,68 @@ public sealed class ImportacionApiTests : IDisposable
         Assert.Contains("tabla", problema.GetProperty("detail").GetString());
     }
 
+    [Theory]
+    [InlineData("utf-8-bom")]
+    [InlineData("utf-16")]
+    [InlineData("utf-16BE")]
+    public async Task Previsualizar_RegistroConBom_DaElMismoLoteQueSinBom(string codificacion)
+    {
+        var sinBom = (await VistaPreviaAsync())["lote"]!.ToJsonString();
+        var texto = await File.ReadAllTextAsync(RutaRegistro);
+        var conBom = codificacion == "utf-8-bom" ? new UTF8Encoding(encoderShouldEmitUTF8Identifier: true) : Encoding.GetEncoding(codificacion);
+        await File.WriteAllTextAsync(RutaRegistro, texto, conBom);
+
+        Assert.Equal(sinBom, (await VistaPreviaAsync())["lote"]!.ToJsonString());
+    }
+
+    [Fact]
+    public async Task Previsualizar_RegistroEnWindows1252_Devuelve409QueDiceQueNoEsUtf8()
+    {
+        // «| 2026-09-01 | Señor | Uno | Enviada |» con la «ñ» de Windows-1252 (0xF1), tras una cabecera válida.
+        await File.WriteAllBytesAsync(RutaRegistro,
+            [.. "| Fecha | Empresa | Puesto | Estado |\n|---|---|---|---|\n| 2026-09-01 | Se"u8, 0xF1, .. "or | Uno | Enviada |\n"u8]);
+
+        var problema = await LeerProblemaAsync(await PrevisualizarAsync(), HttpStatusCode.Conflict);
+
+        var detalle = problema.GetProperty("detail").GetString();
+        Assert.Contains("UTF-8", detalle);
+        Assert.Contains(RutasCurriculum.ArchivoRegistro, detalle);
+        Assert.DoesNotContain(_fabrica.CarpetaCurriculum, detalle);
+    }
+
+    [Theory]
+    [InlineData(new byte[0])]
+    [InlineData(new byte[] { 0xEF, 0xBB, 0xBF })]
+    [InlineData(new byte[] { 0x20, 0x0D, 0x0A, 0x0A, 0x0D, 0x09 })]
+    public async Task Previsualizar_RegistroVacioSoloBomOSoloBlancos_Devuelve409DeSinTabla(byte[] bytes)
+    {
+        await File.WriteAllBytesAsync(RutaRegistro, bytes);
+
+        var problema = await LeerProblemaAsync(await PrevisualizarAsync(), HttpStatusCode.Conflict);
+
+        Assert.Contains("tabla", problema.GetProperty("detail").GetString());
+    }
+
+    [FactSoloWindows("solo Windows impide abrir un archivo que otro tiene sin compartir")]
+    public async Task Previsualizar_RegistroAbiertoEnExclusiva_Devuelve409DeReintentarYNo500()
+    {
+        await using var exclusivo = new FileStream(RutaRegistro, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        var problema = await LeerProblemaAsync(await PrevisualizarAsync(), HttpStatusCode.Conflict);
+
+        var detalle = problema.GetProperty("detail").GetString();
+        Assert.Contains("Vuelve a intentarlo", detalle);
+        Assert.DoesNotContain(_fabrica.CarpetaCurriculum, detalle);
+    }
+
+    [Fact]
+    public async Task Previsualizar_RegistroAbiertoPorUnEditorQueLoComparte_Devuelve200()
+    {
+        await using var editor = new FileStream(RutaRegistro, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+
+        Assert.Equal(8, (await VistaPreviaAsync())["resumen"]!["nuevas"]!.GetValue<int>());
+    }
+
     [Fact]
     public async Task Aplicar_DosVeces_LaPrimeraCreaYLaSegundaDaCero()
     {

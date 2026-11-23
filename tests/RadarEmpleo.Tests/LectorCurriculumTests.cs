@@ -169,6 +169,176 @@ public sealed class LectorCurriculumTests : IDisposable
         await Assert.ThrowsAsync<ReglaNegocioException>(() => lector.LeerRegistroAsync());
     }
 
+    // ---------------------------------------------------------------- codificación y contenido raro del registro
+
+    [Fact]
+    public async Task LeerRegistroConFechaAsync_ConBomUtf8_QuitaLaMarcaYElHashEsElDeLosBytes()
+    {
+        var texto = "| Fecha | Empresa |\n|---|---|\n";
+        await File.WriteAllTextAsync(_registro, texto, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+        var leido = await _lector.LeerRegistroConFechaAsync();
+
+        Assert.Equal(texto, leido.Texto);
+        Assert.Equal(await _lector.LeerHashAsync(ArchivoVigilado.Registro), leido.Hash);
+    }
+
+    [Theory]
+    [InlineData("utf-16")]
+    [InlineData("utf-16BE")]
+    [InlineData("utf-32")]
+    [InlineData("utf-32BE")]
+    public async Task LeerRegistroAsync_Utf16OUtf32ConBom_LoLeeConSusTildes(string codificacion)
+    {
+        var texto = "| Fecha | Empresa |\r\n| 2026-09-01 | Señor Pérez |\r\n";
+        await File.WriteAllTextAsync(_registro, texto, Encoding.GetEncoding(codificacion));
+
+        Assert.Equal(texto, await _lector.LeerRegistroAsync());
+    }
+
+    public static TheoryData<byte[]> NoUtf8 => new()
+    {
+        // «Málaga, señor» guardado en Windows-1252.
+        { [0x4D, 0xE1, 0x6C, 0x61, 0x67, 0x61, 0x2C, 0x20, 0x73, 0x65, 0xF1, 0x6F, 0x72] },
+        // Un byte suelto que nunca es UTF-8, en medio de texto bueno.
+        { [.. "Acme "u8, 0xFF, .. " Uno"u8] },
+        // Una «é» cortada al final (le falta el segundo byte).
+        { [.. "Caf"u8, 0xC3] },
+        // Con BOM UTF-8 delante y el resto en Windows-1252 (lo que deja un editor que «convierte» a medias).
+        { [0xEF, 0xBB, 0xBF, .. "Se"u8, 0xF1, .. "or"u8] },
+        // UTF-16 LE y BE con una mitad de par suelta (U+D800) entre dos letras.
+        { [0xFF, 0xFE, 0x41, 0x00, 0x00, 0xD8, 0x42, 0x00] },
+        { [0xFE, 0xFF, 0x00, 0x41, 0xD8, 0x00, 0x00, 0x42] },
+        // UTF-32 LE con un carácter fuera de Unicode (0x00110000).
+        { [0xFF, 0xFE, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x00] }
+    };
+
+    [Theory]
+    [MemberData(nameof(NoUtf8))]
+    public async Task LeerRegistroAsync_NoEsUtf8Valido_LanzaReglaNegocioQueLoDiceSinLaRuta(byte[] bytes)
+    {
+        await File.WriteAllBytesAsync(_registro, bytes);
+
+        var ex = await Assert.ThrowsAsync<ReglaNegocioException>(() => _lector.LeerRegistroAsync());
+
+        Assert.Contains(RutasCurriculum.ArchivoRegistro, ex.Message);
+        Assert.Contains("UTF-8", ex.Message);
+        Assert.DoesNotContain(_carpeta, ex.Message);
+    }
+
+    [Fact]
+    public async Task LeerRegistroConFechaAsync_NoEsUtf8Valido_LanzaReglaNegocioYElHashSiSeCalcula()
+    {
+        await File.WriteAllBytesAsync(_registro, [0x4D, 0xE1, 0x6C, 0x61, 0x67, 0x61]);
+
+        await Assert.ThrowsAsync<ReglaNegocioException>(() => _lector.LeerRegistroConFechaAsync());
+        // El hash no decodifica: el aviso de «ha cambiado» sigue funcionando con un archivo así.
+        Assert.Matches("^[0-9a-f]{64}$", await _lector.LeerHashAsync(ArchivoVigilado.Registro));
+    }
+
+    [Fact]
+    public async Task LeerPerfilAsync_NoEsUtf8Valido_LanzaReglaNegocioConSuNombre()
+    {
+        await File.WriteAllBytesAsync(Path.Combine(_carpeta, RutasCurriculum.ArchivoPerfil), [0x73, 0x65, 0xF1, 0x6F, 0x72]);
+
+        var ex = await Assert.ThrowsAsync<ReglaNegocioException>(() => _lector.LeerPerfilAsync());
+        Assert.Contains(RutasCurriculum.ArchivoPerfil, ex.Message);
+    }
+
+    [Fact]
+    public async Task LeerInformesRastreoAsync_UnoQueNoEsUtf8_SeApuntaAparteDeLosQueNoSeAbrenYSeLeenLosDemas()
+    {
+        await File.WriteAllBytesAsync(Crear("rastreos/rastreo_2026-11-09.md"), [0x73, 0x65, 0xF1, 0x6F, 0x72]);
+        Crear("rastreos/rastreo_2026-11-16.md", "dos");
+
+        var informes = await _lector.LeerInformesRastreoAsync();
+
+        Assert.Equal("rastreos/rastreo_2026-11-16.md", Assert.Single(informes.Informes).RutaRelativa);
+        Assert.Equal(["rastreos/rastreo_2026-11-09.md"], informes.NoUtf8);
+        Assert.Empty(informes.NoLeidos);
+    }
+
+    public static TheoryData<byte[], string> CasiVacios => new()
+    {
+        { [], "" },
+        { [0xEF, 0xBB, 0xBF], "" },
+        { [0xFF, 0xFE], "" },
+        { "  \r\n\t\n \r"u8.ToArray(), "  \r\n\t\n \r" }
+    };
+
+    [Theory]
+    [MemberData(nameof(CasiVacios))]
+    public async Task LeerRegistroAsync_VacioSoloBomOSoloBlancos_DevuelveElTextoSinLanzar(byte[] bytes, string esperado)
+    {
+        await File.WriteAllBytesAsync(_registro, bytes);
+
+        Assert.Equal(esperado, await _lector.LeerRegistroAsync());
+    }
+
+    [Fact]
+    public async Task LeerRegistroAsync_FinalesDeLineaMezclados_LosDejaTalCual()
+    {
+        var texto = "uno\r\ndos\nañadido\rtres\n\rcuatro";
+        await File.WriteAllTextAsync(_registro, texto, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+        Assert.Equal(texto, await _lector.LeerRegistroAsync());
+    }
+
+    // ---------------------------------------------------------------- registro abierto por otro
+
+    [FactSoloWindows("solo Windows impide abrir un archivo que otro tiene sin compartir")]
+    public async Task LeerRegistroAsync_AbiertoEnExclusiva_LanzaReglaNegocioDeReintentarSinLaRuta()
+    {
+        await File.WriteAllTextAsync(_registro, "contenido");
+        await using var exclusivo = new FileStream(_registro, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        var ex = await Assert.ThrowsAsync<ReglaNegocioException>(() => _lector.LeerRegistroAsync());
+        var conFecha = await Assert.ThrowsAsync<ReglaNegocioException>(() => _lector.LeerRegistroConFechaAsync());
+
+        Assert.Contains("Vuelve a intentarlo", ex.Message);
+        Assert.Contains(RutasCurriculum.ArchivoRegistro, ex.Message);
+        Assert.DoesNotContain(_carpeta, ex.Message);
+        Assert.Equal(ex.Message, conFecha.Message);
+    }
+
+    [FactSoloWindows("solo Windows impide abrir un archivo que otro tiene sin compartir")]
+    public async Task LeerRegistroAsync_AbiertoParaEscribirSinCompartirLaLectura_LanzaReglaNegocio()
+    {
+        await File.WriteAllTextAsync(_registro, "contenido");
+        await using var escritor = new FileStream(_registro, FileMode.Open, FileAccess.Write, FileShare.Write);
+
+        await Assert.ThrowsAsync<ReglaNegocioException>(() => _lector.LeerRegistroAsync());
+    }
+
+    [Fact]
+    public async Task LeerRegistroConFechaAsync_AbiertoPorUnEditorQueLoComparteTodo_LoLeeYElEditorSigueEscribiendo()
+    {
+        await File.WriteAllTextAsync(_registro, "antes");
+        await using (var editor = new FileStream(_registro, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete))
+        {
+            Assert.Equal("antes", (await _lector.LeerRegistroConFechaAsync()).Texto);
+
+            editor.SetLength(0);
+            editor.Write("después"u8);
+        }
+
+        Assert.Equal("después", await _lector.LeerRegistroAsync());
+    }
+
+    [Fact]
+    public async Task LeerRegistroAsync_DespuesDeLeer_NoSeQuedaAbiertoYSePuedeSustituir()
+    {
+        await File.WriteAllTextAsync(_registro, "viejo");
+        await _lector.LeerRegistroAsync();
+
+        // Lo que hace un editor al guardar: escribir aparte y cambiar uno por otro.
+        var nuevo = Crear("registro.tmp", "nuevo");
+        File.Move(nuevo, _registro, overwrite: true);
+        await using (new FileStream(_registro, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
+
+        Assert.Equal("nuevo", await _lector.LeerRegistroAsync());
+    }
+
     [Fact]
     public void Rutas_ConCarpeta_ApuntanAlRegistroYAlRadarDentroDeElla()
     {

@@ -159,6 +159,24 @@ public sealed class ManejadorAnalizarEncajeTests : IDisposable
     }
 
     [Fact]
+    public async Task PerfilQueNoEsUtf8_DaErrorQueLoDiceSinClaudeNiGastoNiTocarLaFicha()
+    {
+        _descargas.Programar(Enlace, new RespuestaDescargaFalsa(Cuerpo: "<h1>Analista de datos</h1><p>Buscamos SQL avanzado.</p>"));
+        // «Filtros: Málaga» guardado en Windows-1252.
+        File.WriteAllBytes(_rutas.Perfil!, [.. "# Perfil\n\nFiltros: M"u8, 0xE1, .. "laga\n"u8]);
+        var id = Sembrar();
+
+        var ejecucion = await AnalizarAsync(id);
+
+        Assert.Equal(EstadoEjecucion.Error, ejecucion.Estado);
+        Assert.Contains("UTF-8", ejecucion.Error);
+        Assert.Contains(RutasCurriculum.ArchivoPerfil, ejecucion.Error);
+        Assert.Equal(0m, ejecucion.CosteUsd);
+        Assert.Empty(_claude.Peticiones);
+        Assert.Equal(Encaje.SinValorar, (await LeerAsync(id))!.Encaje);
+    }
+
+    [Fact]
     public async Task OfertaQueNoSePuedeLeer_SeAnalizaConLaFichaYElResumenLoDice()
     {
         ProgramarClaude(Salida("TiroLargo"));

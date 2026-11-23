@@ -250,6 +250,79 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         Assert.Empty(_claude.Peticiones);
     }
 
+    [Theory]
+    [InlineData(new byte[0])]
+    [InlineData(new byte[] { 0xEF, 0xBB, 0xBF })]
+    [InlineData(new byte[] { 0xFF, 0xFE })]
+    [InlineData(new byte[] { 0x20, 0x0D, 0x0A, 0x0A, 0x0D, 0x09 })]
+    public async Task RegistroVacioSoloBomOSoloBlancos_TerminaEnOkSinClaude(byte[] bytes)
+    {
+        File.WriteAllBytes(_rutas.Registro!, bytes);
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
+        Assert.Equal(ManejadorExtraerRegistro.MensajeSinTextoLibre, ejecucion.Resumen);
+        Assert.Empty(_claude.Peticiones);
+    }
+
+    [Fact]
+    public async Task RegistroQueNoEsUtf8_DaErrorQueLoDiceSinClaudeNiGastoYNoLoToca()
+    {
+        File.WriteAllBytes(_rutas.Registro!, [.. "- Empresa en M"u8, 0xE1, .. "laga: ENVIADA\n"u8]);
+        var hash = HashRegistro();
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Error, ejecucion.Estado);
+        Assert.Contains("UTF-8", ejecucion.Error);
+        Assert.Contains(RutasCurriculum.ArchivoRegistro, ejecucion.Error);
+        Assert.Equal(0m, ejecucion.CosteUsd);
+        Assert.Empty(_claude.Peticiones);
+        Assert.Equal(hash, HashRegistro());
+    }
+
+    [Fact]
+    public async Task RegistroUtf16ConBom_MandaElTextoLibreConSusTildes()
+    {
+        File.WriteAllText(_rutas.Registro!, "- Señora Peña en Málaga: ENVIADA\r\n", System.Text.Encoding.Unicode);
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([])));
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
+        Assert.Contains("- Señora Peña en Málaga: ENVIADA", Assert.Single(_claude.Peticiones).EntradaEstandar);
+    }
+
+    [Fact]
+    public async Task RegistroBorradoTrasEncolar_DaErrorDeSinRegistroSinClaude()
+    {
+        var (encolada, _) = (await _cola.EncolarAsync(TareaAgente.ExtraerRegistro))!.Value;
+        File.Delete(_rutas.Registro!);
+
+        Assert.True(await _procesador.ProcesarSiguienteAsync(CancellationToken.None));
+
+        await using var db = _factory.CreateDbContext();
+        var ejecucion = await db.EjecucionesAgente.AsNoTracking().SingleAsync(e => e.Id == encolada.Id);
+        Assert.Equal(EstadoEjecucion.Error, ejecucion.Estado);
+        Assert.Equal(ManejadorExtraerRegistro.MensajeSinRegistro, ejecucion.Error);
+        Assert.Empty(_claude.Peticiones);
+    }
+
+    [FactSoloWindows("solo Windows impide abrir un archivo que otro tiene sin compartir")]
+    public async Task RegistroAbiertoEnExclusiva_DaErrorDeReintentarSinClaude()
+    {
+        var (encolada, _) = (await _cola.EncolarAsync(TareaAgente.ExtraerRegistro))!.Value;
+        await using (new FileStream(_rutas.Registro!, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            Assert.True(await _procesador.ProcesarSiguienteAsync(CancellationToken.None));
+
+        await using var db = _factory.CreateDbContext();
+        var ejecucion = await db.EjecucionesAgente.AsNoTracking().SingleAsync(e => e.Id == encolada.Id);
+        Assert.Equal(EstadoEjecucion.Error, ejecucion.Estado);
+        Assert.Contains("Vuelve a intentarlo", ejecucion.Error);
+        Assert.Empty(_claude.Peticiones);
+    }
+
     [Fact]
     public async Task Encolar_SinRegistroOSinCarpetaDa409YConCandidaturaDa400()
     {

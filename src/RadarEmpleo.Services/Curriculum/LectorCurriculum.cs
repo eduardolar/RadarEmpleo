@@ -17,6 +17,14 @@ public sealed class LectorCurriculum : ILectorCurriculum
 
     private static readonly string[] CarpetasQueSeSaltan = ["__pycache__"];
 
+    // Todas estrictas: un archivo guardado en Windows-1252 (o con bytes sueltos, o una mitad de par UTF-16 suelta) no se
+    // lee a medias con «�» en las tildes. No se usa StreamReader: al ver un BOM cambia a su codificación, que no es estricta.
+    private static readonly UTF8Encoding Utf8Estricto = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+    private static readonly UnicodeEncoding Utf16LeEstricto = new(bigEndian: false, byteOrderMark: false, throwOnInvalidBytes: true);
+    private static readonly UnicodeEncoding Utf16BeEstricto = new(bigEndian: true, byteOrderMark: false, throwOnInvalidBytes: true);
+    private static readonly UTF32Encoding Utf32LeEstricto = new(bigEndian: false, byteOrderMark: false, throwOnInvalidCharacters: true);
+    private static readonly UTF32Encoding Utf32BeEstricto = new(bigEndian: true, byteOrderMark: false, throwOnInvalidCharacters: true);
+
     private readonly RutasCurriculum _rutas;
 
     public LectorCurriculum(RutasCurriculum rutas) => _rutas = rutas;
@@ -123,7 +131,8 @@ public sealed class LectorCurriculum : ILectorCurriculum
         var informes = new List<InformeRastreoLeido>();
         var json = new List<string>();
         var noLeidos = new List<string>();
-        if (!EsCarpetaNormal(carpeta)) return new InformesRastreo(informes, json, noLeidos);
+        var noUtf8 = new List<string>();
+        if (!EsCarpetaNormal(carpeta)) return new InformesRastreo(informes, json, noLeidos, noUtf8);
 
         List<FileInfo> archivos;
         try
@@ -135,7 +144,7 @@ public sealed class LectorCurriculum : ILectorCurriculum
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new InformesRastreo(informes, json, noLeidos);
+            return new InformesRastreo(informes, json, noLeidos, noUtf8);
         }
 
         foreach (var archivo in archivos)
@@ -144,22 +153,26 @@ public sealed class LectorCurriculum : ILectorCurriculum
             switch (archivo.Extension.ToLowerInvariant())
             {
                 case ".md":
+                    byte[] bytes;
                     try
                     {
-                        informes.Add(new InformeRastreoLeido(relativa, await LeerTextoAsync(archivo.FullName, archivo.Name, cancelacion)));
+                        bytes = await LeerBytesAsync(archivo.FullName, archivo.Name, cancelacion);
                     }
                     catch (ReglaNegocioException)
                     {
                         // Uno que no se puede abrir (la tarea de los lunes escribiéndolo) no impide leer los demás.
                         noLeidos.Add(relativa);
+                        break;
                     }
+                    if (DecodificarEstricto(bytes) is { } texto) informes.Add(new InformeRastreoLeido(relativa, texto));
+                    else noUtf8.Add(relativa);
                     break;
                 case ".json":
                     json.Add(relativa);
                     break;
             }
         }
-        return new InformesRastreo(informes, json, noLeidos);
+        return new InformesRastreo(informes, json, noLeidos, noUtf8);
     }
 
     // ---------------------------------------------------------------- auxiliares
@@ -172,11 +185,11 @@ public sealed class LectorCurriculum : ILectorCurriculum
     private static async Task<TextoLeido> LeerConFechaAsync(string ruta, string nombre, CancellationToken cancelacion)
     {
         var bytes = await LeerBytesAsync(ruta, nombre, cancelacion);
-        return new TextoLeido(Decodificar(bytes), File.GetLastWriteTimeUtc(ruta), Hash(bytes));
+        return new TextoLeido(Decodificar(bytes, nombre), File.GetLastWriteTimeUtc(ruta), Hash(bytes));
     }
 
     private static async Task<string> LeerTextoAsync(string ruta, string nombre, CancellationToken cancelacion) =>
-        Decodificar(await LeerBytesAsync(ruta, nombre, cancelacion));
+        Decodificar(await LeerBytesAsync(ruta, nombre, cancelacion), nombre);
 
     /// <summary>
     /// El archivo entero de una vez (el registro ronda los 140 KB), para que el texto y su hash salgan de la
@@ -201,11 +214,39 @@ public sealed class LectorCurriculum : ILectorCurriculum
         }
     }
 
-    /// <summary>UTF-8, o lo que diga su BOM (como al leer con <see cref="StreamReader"/> directamente del archivo).</summary>
-    private static string Decodificar(byte[] bytes)
+    /// <summary>
+    /// UTF-8, o lo que diga su BOM (UTF-16 del Bloc de notas antiguo, o UTF-32), igual que detectaba StreamReader. Si no es
+    /// válido en esa codificación no se adivina otra ni se cambian las letras raras por «�»: se avisa para que lo guarden en UTF-8.
+    /// </summary>
+    /// <exception cref="ReglaNegocioException">No es texto válido en su codificación.</exception>
+    private static string Decodificar(byte[] bytes, string nombre) =>
+        DecodificarEstricto(bytes) ?? throw new ReglaNegocioException(MensajeNoUtf8(nombre));
+
+    /// <summary>El aviso de un archivo que no se puede leer sin estropear las letras.</summary>
+    private static string MensajeNoUtf8(string nombre) =>
+        $"{nombre} no está guardado en UTF-8 y se perderían las tildes y las eñes. Guárdalo con la codificación UTF-8 y vuelve a intentarlo.";
+
+    /// <summary>El texto sin su BOM, o null si no es válido en la codificación que toca.</summary>
+    private static string? DecodificarEstricto(byte[] bytes)
     {
-        using var lector = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return lector.ReadToEnd();
+        // UTF-32 LE antes que UTF-16 LE: su BOM empieza igual (FF FE).
+        var (codificacion, salto) = bytes switch
+        {
+            [0xEF, 0xBB, 0xBF, ..] => ((Encoding)Utf8Estricto, 3),
+            [0xFF, 0xFE, 0x00, 0x00, ..] => (Utf32LeEstricto, 4),
+            [0x00, 0x00, 0xFE, 0xFF, ..] => (Utf32BeEstricto, 4),
+            [0xFF, 0xFE, ..] => (Utf16LeEstricto, 2),
+            [0xFE, 0xFF, ..] => (Utf16BeEstricto, 2),
+            _ => (Utf8Estricto, 0)
+        };
+        try
+        {
+            return codificacion.GetString(bytes, salto, bytes.Length - salto);
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
     }
 
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));

@@ -103,6 +103,7 @@ public sealed class RastreosService
         }
         avisos.AddRange(informes.Json.Select(r => $"Todavía no sé leer «{Nombre(r)}»: lo he dejado sin leer."));
         avisos.AddRange(informes.NoLeidos.Select(r => $"No he podido abrir «{Nombre(r)}». Vuelve a buscar en un momento."));
+        avisos.AddRange(informes.NoUtf8.Select(r => $"No he leído «{Nombre(r)}» porque no está guardado en UTF-8: guárdalo con esa codificación y vuelve a buscar."));
 
         await Cerrojo.WaitAsync();
         try

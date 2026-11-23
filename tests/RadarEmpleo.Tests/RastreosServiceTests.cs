@@ -189,6 +189,43 @@ public sealed class RastreosServiceTests : ArnesSqliteTests, IDisposable
     }
 
     [Fact]
+    public async Task Escanear_RegistroQueNoEsUtf8_AvisaDeLaCodificacionYLeeLosInformesDelLunes()
+    {
+        // La sección de rastreo del ejemplo, guardada en Windows-1252: no se lee a medias con las tildes rotas.
+        File.WriteAllBytes(Registro, [.. "## Rastreo 03/11\n- Oferta en M"u8, 0xE1, .. "laga\n"u8]);
+
+        var resultado = await _rastreos.EscanearAsync();
+
+        Assert.Equal(1, resultado.RastreosNuevos);
+        Assert.Contains(resultado.Avisos, a => a.Contains(RutasCurriculum.ArchivoRegistro) && a.Contains("UTF-8"));
+    }
+
+    [FactSoloWindows("solo Windows impide abrir un archivo que otro tiene sin compartir")]
+    public async Task Escanear_RegistroAbiertoEnExclusiva_AvisaYLeeLosInformesDelLunes()
+    {
+        await using var exclusivo = new FileStream(Registro, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        var resultado = await _rastreos.EscanearAsync();
+
+        Assert.Equal(1, resultado.RastreosNuevos);
+        Assert.Contains(resultado.Avisos, a => a.Contains(RutasCurriculum.ArchivoRegistro) && a.Contains("Vuelve a intentarlo"));
+    }
+
+    [Fact]
+    public async Task Escanear_InformeQueNoEsUtf8_AvisaDeQueHayQueGuardarloEnUtf8YLeeElRegistro()
+    {
+        File.WriteAllBytes(Path.Combine(_carpeta, "rastreos", "rastreo_2026-11-09.md"), [.. "# Rastreo en M"u8, 0xE1, .. "laga\n"u8]);
+
+        var resultado = await _rastreos.EscanearAsync();
+
+        Assert.Equal(1, resultado.RastreosNuevos);
+        var aviso = Assert.Single(resultado.Avisos);
+        Assert.Contains("rastreo_2026-11-09.md", aviso);
+        Assert.Contains("UTF-8", aviso);
+        Assert.DoesNotContain("en un momento", aviso);
+    }
+
+    [Fact]
     public async Task Escanear_InformeJson_SeAvisaYNoSeLee()
     {
         File.WriteAllText(Path.Combine(_carpeta, "rastreos", "rastreo_2026-11-16.json"), "{}");

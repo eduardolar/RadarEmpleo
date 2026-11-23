@@ -58,6 +58,21 @@ public sealed class PerfilApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Obtener_PerfilEnWindows1252_Devuelve409QueDiceQueNoEsUtf8SinLaRuta()
+    {
+        // «Filtros: Málaga» con la «á» de Windows-1252 (0xE1).
+        File.WriteAllBytes(Path.Combine(_fabrica.CarpetaCurriculum, RutasCurriculum.ArchivoPerfil), [.. "# Perfil\n\nFiltros: M"u8, 0xE1, .. "laga\n"u8]);
+
+        var respuesta = await _http.GetAsync("/api/perfil");
+
+        Assert.Equal(HttpStatusCode.Conflict, respuesta.StatusCode);
+        var detalle = (await respuesta.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString();
+        Assert.Contains("UTF-8", detalle);
+        Assert.Contains(RutasCurriculum.ArchivoPerfil, detalle);
+        Assert.DoesNotContain(_fabrica.CarpetaCurriculum, detalle);
+    }
+
+    [Fact]
     public async Task Modificar_NoHayEndpoint()
     {
         var respuesta = await _http.PutAsJsonAsync("/api/perfil", new { titulo = "Otro" });
