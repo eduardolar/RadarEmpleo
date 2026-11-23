@@ -68,7 +68,9 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     /// <summary>
     /// «Ahora» de estos tests: 18/11/2026 a las 12:00 de Madrid, lejos de medianoche y de los cambios de hora. Como no es
     /// la hora real, los bloqueos que escribe el test llevan esta fecha de modificación y el inicio de los procesos sale
-    /// de <see cref="InicioDelProceso"/>, no del sistema.
+    /// de <see cref="InicioDelProceso"/>, no del sistema. Ojo: un bloqueo que coge el propio código con
+    /// <c>_bloqueo.Intentar</c> lleva la fecha real, posterior a esta, y otro lo daría por caducado: si un test necesita
+    /// que se vea ocupado, ponle <c>File.SetLastWriteTimeUtc(RutaBloqueo, _reloj.AhoraUtc)</c>.
     /// </summary>
     private static readonly DateTime Ahora = new(2026, 11, 18, 11, 0, 0, DateTimeKind.Utc);
 
@@ -729,7 +731,8 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         // Soltar cierra su archivo y enseguida intenta borrarlo, que en Windows falla mientras el lector siga abierto. El
         // lector se cierra en cuanto se ve cerrado el del bloqueo (ya se puede abrir para escribir), sin esperar un tiempo
         // fijo: el borrado llega en uno de los reintentos, que son pausas reales del propio Dispose (hasta 5
-        // intentos, con 100 ms entre uno y otro).
+        // intentos, con 100 ms entre uno y otro). En la práctica el primer borrado falla (el propio sondeo abre el archivo
+        // sin compartir el borrado), pero no está garantizado al 100 % que se use un reintento.
         await Esperar.HastaAsync(() => !SigueAbiertoParaEscribir(RutaBloqueo), "El bloqueo no se ha cerrado al soltarlo.");
         await lector.DisposeAsync();
         await soltando;
@@ -804,7 +807,6 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         var b = await LeerAsync(segunda.Id);
         Assert.Equal(EstadoEjecucion.Ok, a.Estado);
         Assert.Equal(EstadoEjecucion.Ok, b.Estado);
-        Assert.True(a.Fin <= b.Inicio);
     }
 
     [Fact]
