@@ -23,10 +23,6 @@
             </dd>
             <dt class="text-sm text-on-surface-variant">Versión</dt>
             <dd class="font-mono text-on-surface">{{ info.version }}</dd>
-            <dt class="text-sm text-on-surface-variant">Agentes</dt>
-            <dd class="font-semibold text-on-surface">
-              {{ info.agentesHabilitados ? 'Encendidos' : 'Apagados' }}
-            </dd>
           </dl>
         }
       }
@@ -41,8 +37,80 @@
     }
   </section>
 
+  @if (sistemaService.info()) {
+    <section
+      aria-labelledby="titulo-agentes"
+      class="rounded-2xl border border-borde-fino bg-surface-container-lowest p-4 sm:p-5"
+    >
+      <h2 id="titulo-agentes" class="mb-3 text-xl font-extrabold">Agentes de Claude</h2>
+
+      <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
+        <dt class="text-sm text-on-surface-variant">Estado</dt>
+        <dd class="min-w-0 [overflow-wrap:anywhere]">
+          @if (disponibles()) {
+            <span class="font-semibold text-on-surface">Encendidos</span>
+            @if (motivoCola(); as motivo) {
+              <span class="block text-sm text-on-surface-variant">{{ motivo }}</span>
+            }
+          } @else if (sinAgentes(); as sin) {
+            <span class="font-semibold text-on-surface">{{ sin.etiqueta }}</span>
+            <span class="block text-sm text-on-surface-variant">{{ sin.explicacion }}</span>
+          }
+        </dd>
+        @if (disponibles() && estadoAgentes()) {
+          <dt class="text-sm text-on-surface-variant">Uso de hoy</dt>
+          <dd class="min-w-0">
+            <span class="font-semibold text-on-surface tabular-nums">{{ uso() }}</span>
+            @if (reserva(); as texto) {
+              <span class="block text-sm text-on-surface-variant">{{ texto }}</span>
+            }
+            <span class="block text-sm text-on-surface-variant">
+              No se cobra aparte: sale del mismo cupo que usas con Claude Code.
+            </span>
+          </dd>
+          <dt class="text-sm text-on-surface-variant">Tope diario</dt>
+          <dd class="min-w-0 text-on-surface">
+            Fijo en la configuración de la app; se podrá cambiar más adelante.
+          </dd>
+          <dt class="text-sm text-on-surface-variant">Claude Code</dt>
+          @if (versionClaude(); as version) {
+            <dd class="min-w-0 font-mono text-on-surface">{{ version }}</dd>
+          } @else {
+            <dd class="min-w-0 text-on-surface">No se ha podido comprobar</dd>
+          }
+        }
+      </dl>
+
+      @if (disponibles()) {
+        @if (errorEstado(); as mensaje) {
+          <div role="alert" class="mt-3">
+            <p class="text-sm font-medium text-error">{{ mensaje }}</p>
+            <button
+              mat-button
+              type="button"
+              class="mt-2 [--mat-button-text-container-height:48px]"
+              (click)="reintentar()"
+            >
+              Reintentar
+            </button>
+          </div>
+        } @else if (!estadoAgentes()) {
+          <p role="status" class="mt-3 text-sm text-on-surface-variant">
+            Comprobando el uso de hoy…
+          </p>
+        }
+        <a
+          routerLink="/agentes"
+          class="-mx-1 mt-2 -mb-2 inline-flex min-h-12 items-center rounded-lg px-1 text-sm font-medium text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+        >
+          Ver las tareas de Claude
+        </a>
+      }
+    </section>
+  }
+
   <!-- Lo que vendrá, sin botones -->
   <p class="font-mono text-sm text-on-surface-variant">
-    Aquí llegarán el envío manual o automático y el tope de gasto diario.
+    Aquí llegarán el envío manual o automático y cambiar el tope de uso.
   </p>
 </section>
