@@ -76,7 +76,8 @@ type Accion = 'cancelar' | 'reintentar';
  *
  * Quien la usa debe escuchar `reintentada` y guardar la nueva como su ejecución: si vuelve a pasar la
  * vieja en `ejecucion`, la tarjeta vuelve a ella. `terminada` sale una vez y solo si la ejecución llegó
- * sin terminar: una que ya llega terminada (la lista de /agentes) no avisa.
+ * sin terminar: una que ya llega terminada (la lista de /agentes) no avisa. Al recibir `terminada`, guarda
+ * también la versión terminada: si vuelves a montar la tarjeta con la vieja sin terminar, avisa otra vez.
  */
 @Component({
   imports: [MatButtonModule, MatProgressBarModule],

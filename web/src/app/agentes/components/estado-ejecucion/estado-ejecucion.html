@@ -45,9 +45,9 @@
         [attr.aria-live]="compacta() ? null : 'polite'"
         >{{ anuncio() }}</span
       >
-      @if (reloj(); as reloj) {
+      @if (reloj(); as tiempo) {
         <span class="estado-ejecucion__reloj font-normal text-on-surface-variant tabular-nums">
-          · {{ reloj }}</span
+          · {{ tiempo }}</span
         >
       }
     </p>
