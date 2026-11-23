@@ -121,14 +121,6 @@ public sealed class RecordatoriosApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Post_SinHora_SonLasNueveDeMadrid()
-    {
-        var creado = await CrearAsync("""{"tipo":"PublicacionLinkedIn","titulo":"Publicar en LinkedIn: post de Angular","dia":"2026-11-17"}""");
-
-        Assert.Equal(new DateTime(2026, 11, 17, 8, 0, 0, DateTimeKind.Utc), creado.FechaHora);
-    }
-
-    [Fact]
     public async Task Post_DeUnaCandidatura_Devuelve201YSaleEnSuFicha()
     {
         var candidatura = await CrearCandidaturaAsync();
@@ -145,13 +137,12 @@ public sealed class RecordatoriosApiTests : IDisposable
         Assert.Equal(creado, Assert.Single((await FichaAsync(candidatura.Id))!.Recordatorios));
     }
 
-    [Theory]
-    [InlineData("Descartada", "Zona")]
-    [InlineData("Cerrada", null)]
-    public async Task Post_DeUnaCandidaturaDescartadaOCerrada_Devuelve409YNoLoGuarda(string estado, string? motivo)
+    /// <summary>Cerrada (y el resto de la regla) se prueba en <see cref="RecordatoriosServiceTests"/>.</summary>
+    [Fact]
+    public async Task Post_DeUnaCandidaturaDescartada_Devuelve409YNoLoGuarda()
     {
         var candidatura = await CrearCandidaturaAsync();
-        await CambiarEstadoAsync(candidatura.Id, new { estado, motivoDescarte = motivo });
+        await CambiarEstadoAsync(candidatura.Id, new { estado = "Descartada", motivoDescarte = "Zona" });
 
         var respuesta = await _http.PostAsync($"/api/candidaturas/{candidatura.Id}/recordatorios",
             Json("""{"tipo":"Plazo","titulo":"Plazo de Consultora Ejemplo","dia":"2026-11-17"}"""));
@@ -160,23 +151,18 @@ public sealed class RecordatoriosApiTests : IDisposable
         Assert.Empty((await FichaAsync(candidatura.Id))!.Recordatorios);
     }
 
+    /// <summary>
+    /// La <see cref="ValidacionException"/> del servicio llega como 400 en su campo y con su mensaje. Al editar y al
+    /// posponer (que la pasa a las tres) se prueba en <see cref="RecordatoriosServiceTests"/>.
+    /// </summary>
     [Fact]
-    public async Task HoraQueNoExistePorElCambioDeHora_Da400EnLaHoraAlCrearYAlEditar_YPosponerLaPasaALasTres()
+    public async Task Post_HoraQueNoExistePorElCambioDeHora_Devuelve400EnLaHora()
     {
-        const string Inexistente = """{"tipo":"Otro","titulo":"Renovar la demanda","dia":"2027-03-28","hora":"02:30"}""";
-        var mensaje = "Esa hora no existe ese día: el reloj se adelanta de 02:00 a 03:00.";
+        var errores = await ErroresAsync(await _http.PostAsync(Url,
+            Json("""{"tipo":"Otro","titulo":"Renovar la demanda","dia":"2027-03-28","hora":"02:30"}""")));
 
-        var alCrear = await ErroresAsync(await _http.PostAsync(Url, Json(Inexistente)));
-        Assert.Equal(mensaje, alCrear.GetProperty("hora")[0].GetString());
-
-        var creado = await CrearAsync("""{"tipo":"Otro","titulo":"Renovar la demanda","dia":"2027-03-27","hora":"02:30"}""");
-        var alEditar = await ErroresAsync(await _http.PutAsync($"{Url}/{creado.Id}", Json(Inexistente)));
-        Assert.Equal(mensaje, alEditar.GetProperty("hora")[0].GetString());
-        Assert.Equal(creado.FechaHora, (await ObtenerAsync(creado.Id))!.FechaHora);
-
-        var pospuesto = await _http.PostAsync($"{Url}/{creado.Id}/posponer", Json("""{"dia":"2027-03-28"}"""));
-        Assert.Equal(HttpStatusCode.OK, pospuesto.StatusCode);
-        Assert.Equal("2027-03-28T01:00:00Z", (await pospuesto.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("fechaHora").GetString());
+        Assert.Equal("Esa hora no existe ese día: el reloj se adelanta de 02:00 a 03:00.", errores.GetProperty("hora")[0].GetString());
+        Assert.Empty((await PanelAsync())!.ParaHoy);
     }
 
     // ---------------------------------------------------------------- 400
@@ -192,15 +178,15 @@ public sealed class RecordatoriosApiTests : IDisposable
         Assert.Empty((await PanelAsync())!.ParaHoy);
     }
 
+    /// <summary>
+    /// Lo que rechaza la API antes de llegar al servicio: el JSON (enum como número o desconocido, día con otro
+    /// formato) y las anotaciones (título en blanco). La hora mala, la entrevista sin hora y el día fuera de rango
+    /// son reglas del servicio: <see cref="RecordatoriosServiceTests"/> y <see cref="ReglasRecordatorioTests"/>.
+    /// </summary>
     [Theory]
     [InlineData("""{"tipo":3,"titulo":"Algo","dia":"2026-11-17"}""", "tipo")]
     [InlineData("""{"tipo":"Cumple","titulo":"Algo","dia":"2026-11-17"}""", "tipo")]
-    [InlineData("""{"tipo":"Otro","titulo":"Algo","dia":"2026-11-17","hora":"25:00"}""", "hora")]
-    [InlineData("""{"tipo":"Otro","titulo":"Algo","dia":"2026-11-17","hora":"15:00:00"}""", "hora")]
-    [InlineData("""{"tipo":"Entrevista","titulo":"Algo","dia":"2026-11-17"}""", "hora")]
-    [InlineData("""{"tipo":"Entrevista","titulo":"Algo","dia":"2026-11-17","hora":""}""", "hora")]
     [InlineData("""{"tipo":"Otro","titulo":"Algo","dia":"17/11/2026"}""", "dia")]
-    [InlineData("""{"tipo":"Otro","titulo":"Algo","dia":"1999-11-17"}""", "dia")]
     [InlineData("""{"tipo":"Otro","titulo":"   ","dia":"2026-11-17"}""", "titulo")]
     public async Task Post_ConUnDatoMalo_Devuelve400EnSuCampo(string json, string campo)
     {
