@@ -65,8 +65,15 @@ public sealed class ManejadorDePrueba : IManejadorTarea
 [Collection(nameof(ColeccionManejadorDePrueba))]
 public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 {
+    /// <summary>
+    /// «Ahora» de estos tests: 18/11/2026 a las 12:00 de Madrid, lejos de medianoche y de los cambios de hora. Como no es
+    /// la hora real, los bloqueos que escribe el test llevan esta fecha de modificación y el inicio de los procesos sale
+    /// de <see cref="InicioDelProceso"/>, no del sistema.
+    /// </summary>
+    private static readonly DateTime Ahora = new(2026, 11, 18, 11, 0, 0, DateTimeKind.Utc);
+
     private readonly string _raiz = Path.Combine(Path.GetTempPath(), $"radar-cola-{Guid.NewGuid():N}");
-    private readonly RelojFijo _reloj = new(DateTime.UtcNow);
+    private readonly RelojFijo _reloj = new(Ahora);
     private readonly TestDbContextFactory _factory;
     private readonly RutasCurriculum _rutas;
     private readonly EjecutorClaudeFalso _falso;
@@ -114,7 +121,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         // Sin ruta de exclusión: esta «API» lleva siempre la cola (los tests de dos APIs crean sus propias guardias).
         _guardia = new GuardiaCola(_opciones);
         _cola = Cola(_opciones, _guardia);
-        _bloqueo = new BloqueoCompartido(_rutas, NullLogger<BloqueoCompartido>.Instance);
+        _bloqueo = new BloqueoCompartido(_rutas, NullLogger<BloqueoCompartido>.Instance, InicioDelProceso);
         _procesador = Procesador(_cola);
     }
 
@@ -158,15 +165,34 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         return await db.EjecucionesAgente.AsNoTracking().SingleAsync(e => e.Id == id);
     }
 
-    private async Task<EjecucionAgente> EsperarAsync(int id, Func<EjecucionAgente, bool> condicion)
+    /// <summary>
+    /// Espera a que el procesador, que trabaja en otra tarea, deje la ejecución como diga la condición: solo lo cuenta en
+    /// la BD, así que se lee hasta que se cumple.
+    /// </summary>
+    private Task<EjecucionAgente> EsperarAsync(int id, Func<EjecucionAgente, bool> condicion) =>
+        Esperar.HastaAsync(() => LeerAsync(id), condicion, e => $"La ejecución {id} sigue en {e.Estado} (espera: {e.Espera}).");
+
+    /// <summary>
+    /// El inicio de los procesos para el bloqueo, sin preguntar al sistema (su hora no es la del reloj fijo): esta API
+    /// empezó el día anterior y <see cref="EjecutorClaudeFalso.PidFalso"/> no existe.
+    /// </summary>
+    private static DateTime? InicioDelProceso(int pid) => pid == Environment.ProcessId ? Ahora.AddDays(-1) : null;
+
+    /// <summary>¿Lo tiene abierto alguien que no comparte la escritura (como el bloqueo mientras está cogido)?</summary>
+    private static bool SigueAbiertoParaEscribir(string ruta)
     {
-        var limite = DateTime.UtcNow.AddSeconds(20);
-        while (true)
+        try
         {
-            var ejecucion = await LeerAsync(id);
-            if (condicion(ejecucion)) return ejecucion;
-            if (DateTime.UtcNow > limite) throw new TimeoutException($"La ejecución {id} sigue en {ejecucion.Estado}.");
-            await Task.Delay(20);
+            using var flujo = new FileStream(ruta, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+            return false;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
         }
     }
 
@@ -178,8 +204,15 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     }
 
     private void EscribirBloqueo(string quien, int? pid, DateTime caduca, DateTime? inicio = null) =>
-        File.WriteAllText(Path.Combine(Directory.CreateDirectory(_rutas.CarpetaRadar!).FullName, BloqueoCompartido.NombreArchivo),
-            BloqueoEjecucion.Serializar(new BloqueoLeido(1, quien, "Rastreo", null, pid, inicio ?? DateTime.UtcNow, caduca, true)));
+        EscribirBloqueo(new BloqueoLeido(1, quien, "Rastreo", null, pid, inicio ?? _reloj.AhoraUtc, caduca, true));
+
+    /// <summary>Lo deja como otro programa, con la hora del reloj como fecha de modificación (si no, sería la real).</summary>
+    private void EscribirBloqueo(BloqueoLeido bloqueo)
+    {
+        Directory.CreateDirectory(_rutas.CarpetaRadar!);
+        File.WriteAllText(RutaBloqueo, BloqueoEjecucion.Serializar(bloqueo));
+        File.SetLastWriteTimeUtc(RutaBloqueo, _reloj.AhoraUtc);
+    }
 
     [Fact]
     public async Task UnaEjecucion_PasaPorEnColaEnCursoYOk()
@@ -642,9 +675,8 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     public async Task UnBloqueoPropioDeOtraEjecucion_SeLimpiaYSeCoge()
     {
         // Lo dejó esta misma API (mismo pid, vivo) para una ejecución anterior y no se pudo borrar.
-        File.WriteAllText(Path.Combine(Directory.CreateDirectory(_rutas.CarpetaRadar!).FullName, BloqueoCompartido.NombreArchivo),
-            BloqueoEjecucion.Serializar(BloqueoEjecucion.DeLaApp(TareaAgente.AnalizarEncaje, 9999, Environment.ProcessId,
-                DateTime.UtcNow, TimeSpan.FromMinutes(5))));
+        EscribirBloqueo(BloqueoEjecucion.DeLaApp(TareaAgente.AnalizarEncaje, 9999, Environment.ProcessId, _reloj.AhoraUtc,
+            TimeSpan.FromMinutes(5)));
         var ejecucion = await EncolarAsync();
 
         await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
@@ -687,19 +719,20 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     [Fact]
     public async Task AlSoltar_ReintentaElBorradoSiOtroLoEstaLeyendo()
     {
-        var tomado = _bloqueo.Intentar(BloqueoEjecucion.DeLaApp(TareaAgente.ExtraerRegistro, 1, Environment.ProcessId, DateTime.UtcNow,
+        var tomado = _bloqueo.Intentar(BloqueoEjecucion.DeLaApp(TareaAgente.ExtraerRegistro, 1, Environment.ProcessId, _reloj.AhoraUtc,
             TimeSpan.FromMinutes(5)), _reloj.AhoraUtc);
         Assert.True(tomado.Cogido);
         // Un lector que no comparte el borrado (como Get-Content en la tarea de los lunes), durante un momento.
         var lector = new FileStream(RutaBloqueo, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        var cerrar = Task.Run(async () =>
-        {
-            await Task.Delay(250);
-            await lector.DisposeAsync();
-        });
 
-        tomado.Dispose();
-        await cerrar;
+        var soltando = Task.Run(tomado.Dispose);
+        // Soltar cierra su archivo y enseguida intenta borrarlo, que en Windows falla mientras el lector siga abierto. El
+        // lector se cierra en cuanto se ve cerrado el del bloqueo (ya se puede abrir para escribir), sin esperar un tiempo
+        // fijo: el borrado llega en uno de los reintentos, que son pausas reales del propio Dispose (hasta 5
+        // intentos, con 100 ms entre uno y otro).
+        await Esperar.HastaAsync(() => !SigueAbiertoParaEscribir(RutaBloqueo), "El bloqueo no se ha cerrado al soltarlo.");
+        await lector.DisposeAsync();
+        await soltando;
 
         Assert.False(File.Exists(RutaBloqueo));
     }
@@ -721,7 +754,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     public async Task UnBloqueoConLaFechaDeModificacionEnElFuturo_SeDaPorCaducado()
     {
         EscribirBloqueo(BloqueoEjecucion.QuienTareaLunes, Environment.ProcessId, _reloj.AhoraUtc.AddHours(1));
-        File.SetLastWriteTimeUtc(RutaBloqueo, DateTime.UtcNow.AddDays(3));
+        File.SetLastWriteTimeUtc(RutaBloqueo, _reloj.AhoraUtc.AddDays(3));
         var ejecucion = await EncolarAsync();
 
         await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
@@ -732,9 +765,8 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     [Fact]
     public async Task UnQuienRaroSaleSaneado()
     {
-        File.WriteAllText(Path.Combine(Directory.CreateDirectory(_rutas.CarpetaRadar!).FullName, BloqueoCompartido.NombreArchivo),
-            BloqueoEjecucion.Serializar(new BloqueoLeido(1, "<b>Hola</b>\u202E", null, null, Environment.ProcessId, DateTime.UtcNow,
-                _reloj.AhoraUtc.AddHours(1), false)));
+        EscribirBloqueo(new BloqueoLeido(1, "<b>Hola</b>\u202E", null, null, Environment.ProcessId, _reloj.AhoraUtc,
+            _reloj.AhoraUtc.AddHours(1), false));
         var ejecucion = await EncolarAsync();
 
         var procesando = _procesador.ProcesarSiguienteAsync(CancellationToken.None);
@@ -749,16 +781,20 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     {
         // Arranca antes de encolar: al arrancar, lo que ya estaba en cola se cancela.
         await _procesador.StartAsync(CancellationToken.None);
-        _falso.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(EsperaMs: 300));
         EjecucionAgente? segundaDurante = null;
         var segundaId = 0;
-        _falso.AntesDeResponder = async (p, _) =>
+        // La primera no responde hasta que la segunda está en la cola (una señal, no una pausa).
+        var segundaEncolada = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _falso.AntesDeResponder = async (p, corte) =>
         {
-            if (p.Tarea == TareaAgente.ExtraerRegistro) segundaDurante = await LeerAsync(segundaId);
+            if (p.Tarea != TareaAgente.ExtraerRegistro) return;
+            await segundaEncolada.Task.WaitAsync(corte);
+            segundaDurante = await LeerAsync(segundaId);
         };
         var primera = await EncolarAsync(TareaAgente.ExtraerRegistro);
         var segunda = await EncolarAsync(TareaAgente.AnalizarEncaje, _candidatura);
         segundaId = segunda.Id;
+        segundaEncolada.SetResult();
 
         await EsperarAsync(segunda.Id, e => e.EsTerminal);
 
@@ -973,6 +1009,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         File.WriteAllText(viejo, "x");
         File.WriteAllText(nuevo, "x");
         File.SetLastWriteTimeUtc(viejo, _reloj.AhoraUtc.AddDays(-61));
+        File.SetLastWriteTimeUtc(nuevo, _reloj.AhoraUtc);
         var carpetaVieja = Directory.CreateDirectory(Path.Combine(_opciones.CarpetaEjecuciones, "1"));
         carpetaVieja.LastWriteTimeUtc = _reloj.AhoraUtc.AddDays(-61);
 
