@@ -3,7 +3,7 @@ import { EstadoCandidatura } from '../../candidaturas/interfaces/candidatura.int
 // Tipos del contrato de /api/importacion (RadarEmpleo.Services/Contratos/Importacion.cs).
 // Los enums viajan como texto; `fecha` es un día suelto («2026-10-30»), sin hora ni zona.
 
-export type OrigenLote = 'Tabla';
+export type OrigenLote = 'Tabla' | 'RegistroConClaude';
 
 export type ResultadoFila = 'Nueva' | 'AvanzaEstado' | 'YaExiste' | 'Conflicto';
 

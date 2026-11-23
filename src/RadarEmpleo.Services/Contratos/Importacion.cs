@@ -3,10 +3,11 @@ using RadarEmpleo.Domain;
 
 namespace RadarEmpleo.Services.Contratos;
 
-/// <summary>De dónde sale un lote. La F6 añadirá el texto libre.</summary>
+/// <summary>De dónde sale un lote: la tabla del registro, o la tabla más lo que Claude ha extraído del texto libre.</summary>
 public enum OrigenLote
 {
-    Tabla
+    Tabla,
+    RegistroConClaude
 }
 
 /// <summary>Qué pasaría con una fila del lote al aplicarlo.</summary>
@@ -115,7 +116,8 @@ public sealed record VistaPreviaImportacionDto(
 /// Petición de aplicar: de dónde sale el lote, el hash del registro de la vista previa y las claves sobre las que actuar.
 /// El cliente no manda filas: el servidor vuelve a leer el registro y rehace el lote.
 /// </summary>
-/// <param name="EjecucionId">La extracción de Claude; con la tabla no va.</param>
+/// <param name="EjecucionId">La extracción de Claude: obligatoria con <see cref="OrigenLote.RegistroConClaude"/> y, con la
+/// tabla, no va.</param>
 public sealed record AplicarImportacionRequest(
     [Required(ErrorMessage = "Falta el origen.")] OrigenLote? Origen,
     int? EjecucionId,
