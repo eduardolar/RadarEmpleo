@@ -172,6 +172,20 @@ describe('AgentesService', () => {
       expect(service.disponibles()).toBe(true);
     });
 
+    it('al volver a pedirlo borra el error anterior y dice que está cargando', () => {
+      service.cargarEstado();
+      expect(service.cargandoEstado()).toBe(true);
+      http.expectOne(URL_ESTADO).flush(null, { status: 500, statusText: 'x' });
+      expect(service.errorEstado()).not.toBeNull();
+      expect(service.cargandoEstado()).toBe(false);
+
+      service.cargarEstado();
+      expect(service.errorEstado()).toBeNull();
+      expect(service.cargandoEstado()).toBe(true);
+      http.expectOne(URL_ESTADO).flush(crearEstadoAgentes());
+      expect(service.cargandoEstado()).toBe(false);
+    });
+
     it('una segunda petición cancela la primera', () => {
       service.cargarEstado();
       const primera = http.expectOne(URL_ESTADO);

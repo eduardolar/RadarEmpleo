@@ -200,6 +200,25 @@ export function motivoSinAgentes(
   return TEXTO_RECHAZADOS;
 }
 
+/** El estado corto de Ajustes sin agentes disponibles: la etiqueta y una explicación de una línea */
+export function estadoSinAgentes(
+  info: Pick<SistemaInfo, 'modo' | 'agentesHabilitados' | 'desdeElPc'>,
+): { etiqueta: string; explicacion: string } {
+  if (info.modo === 'Demo') {
+    return { etiqueta: 'Apagados', explicacion: 'En la demo no se usa Claude.' };
+  }
+  if (!info.desdeElPc) {
+    return {
+      etiqueta: 'Solo desde el PC',
+      explicacion: 'Se usan desde el PC donde está instalada la app.',
+    };
+  }
+  if (!info.agentesHabilitados) {
+    return { etiqueta: 'Apagados', explicacion: 'Se encienden en la configuración de la app.' };
+  }
+  return { etiqueta: 'No disponibles ahora', explicacion: TEXTO_RECHAZADOS };
+}
+
 /** Con punto final si no acaba ya en «.», «?», «!» o «…» (los mensajes de la API suelen llevarlo) */
 export function conPunto(texto: string): string {
   const limpio = texto.trim();

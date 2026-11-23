@@ -8,6 +8,7 @@ import {
   conPunto,
   duracion,
   ETIQUETA_ESTADO,
+  estadoSinAgentes,
   motivoSinAgentes,
   NBSP,
   NOMBRE_TAREA,
@@ -196,6 +197,25 @@ describe('motivoSinAgentes', () => {
   it('en la demo lo dice así; en el PC, encendidos pero rechazados (403), que se vuelva a comprobar', () => {
     expect(motivoSinAgentes(DEMO)).toBe('En la demo no se usa Claude: los agentes están apagados.');
     expect(motivoSinAgentes(PC_ENCENDIDOS)).toBe(TEXTO_RECHAZADOS);
+  });
+});
+
+describe('estadoSinAgentes', () => {
+  it('cada caso con su etiqueta y su explicación corta, igual que motivoSinAgentes', () => {
+    expect(estadoSinAgentes(crearSistemaInfo({ modo: 'Demo' }))).toEqual({
+      etiqueta: 'Apagados',
+      explicacion: 'En la demo no se usa Claude.',
+    });
+    expect(estadoSinAgentes(crearSistemaInfo({ desdeElPc: false })).etiqueta).toBe(
+      'Solo desde el PC',
+    );
+    expect(estadoSinAgentes(crearSistemaInfo()).explicacion).toBe(
+      'Se encienden en la configuración de la app.',
+    );
+    expect(estadoSinAgentes(crearSistemaInfo({ agentesHabilitados: true }))).toEqual({
+      etiqueta: 'No disponibles ahora',
+      explicacion: TEXTO_RECHAZADOS,
+    });
   });
 });
 
