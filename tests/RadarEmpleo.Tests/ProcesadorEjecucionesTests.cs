@@ -849,7 +849,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         await cola.EncolarAsync(TareaAgente.ExtraerRegistro);
 
         var error = await Assert.ThrowsAsync<ReglaNegocioException>(() => cola.EncolarAsync(TareaAgente.AnalizarEncaje, _candidatura));
-        Assert.Equal("Has llegado al tope de uso estimado de hoy. Mañana se puede volver a lanzar.", error.Message);
+        Assert.Equal(MensajesEjecucion.TopeDiario, error.Message);
     }
 
     [Fact]
@@ -866,7 +866,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var final = await LeerAsync(ejecucion.Id);
         Assert.Equal(EstadoEjecucion.Error, final.Estado);
-        Assert.Equal("Has llegado al tope de uso estimado de hoy. Mañana se puede volver a lanzar.", final.Error);
+        Assert.Equal(MensajesEjecucion.TopeDiario, final.Error);
         Assert.Empty(_falso.Peticiones);
     }
 
