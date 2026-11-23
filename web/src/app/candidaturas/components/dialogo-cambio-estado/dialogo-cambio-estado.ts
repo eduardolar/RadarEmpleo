@@ -42,6 +42,8 @@ export interface DatosCambioEstado {
   puesto: string;
   actual: EstadoCandidatura;
   destino: EstadoCandidatura;
+  /** Al descartar, el motivo ya elegido (la ficha, con la oferta cerrada); se puede cambiar */
+  motivo?: MotivoDescarte;
 }
 
 /**
@@ -89,7 +91,7 @@ export class DialogoCambioEstado {
 
   protected readonly formulario = new FormGroup({
     motivoDescarte: new FormControl<MotivoDescarte | null>(
-      null,
+      this.descartando ? (this.datos.motivo ?? null) : null,
       this.descartando ? [obligatorio] : [],
     ),
     motivoDescarteTexto: new FormControl('', {

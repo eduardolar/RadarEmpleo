@@ -11,6 +11,7 @@ import {
   CambiarEstado,
   CandidaturaResumen,
   EstadoCandidatura,
+  MotivoDescarte,
 } from '../interfaces/candidatura.interface';
 import { ETIQUETAS_ESTADO } from '../utils/etiquetas';
 import { esEstadoFinal } from '../utils/transiciones-permitidas';
@@ -73,13 +74,14 @@ export class CambioEstadoService {
 
   /**
    * `alTerminar` deja a quien mueve reaccionar a cómo acabó (p. ej. colocar el foco), y `alDeshacer`, a que
-   * se deshaga desde el aviso
+   * se deshaga desde el aviso. `motivo` sale ya elegido en el diálogo de descartar (se puede cambiar)
    */
   mover(
     candidatura: CandidaturaQueSeMueve,
     destino: EstadoCandidatura,
     alTerminar?: (resultado: ResultadoMovimiento) => void,
     alDeshacer?: AlDeshacer,
+    motivo?: MotivoDescarte,
   ): void {
     const { id } = candidatura;
     if (this.idsEnCurso.has(id) || this._idsEnPausa().has(id)) {
@@ -100,6 +102,7 @@ export class CambioEstadoService {
           puesto: candidatura.puesto,
           actual: candidatura.estado,
           destino,
+          motivo,
         },
         width: '32rem',
         maxWidth: '95vw',

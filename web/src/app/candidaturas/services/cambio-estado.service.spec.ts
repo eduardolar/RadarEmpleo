@@ -155,6 +155,14 @@ describe('CambioEstadoService', () => {
       });
     });
 
+    it('pasa al diálogo el motivo ya elegido', () => {
+      responderDialogo(undefined);
+
+      service.mover(CANDIDATURA, 'Descartada', undefined, undefined, 'Cerrada');
+
+      expect(datosDelDialogo().motivo).toBe('Cerrada');
+    });
+
     it('si se cancela no se toca nada', () => {
       responderDialogo(undefined);
 
