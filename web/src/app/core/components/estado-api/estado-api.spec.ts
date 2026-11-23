@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { crearSistemaInfo } from '../../utils/sistema-de-prueba';
 import { EstadoApi } from './estado-api';
 
 describe('EstadoApi', () => {
@@ -42,9 +43,7 @@ describe('EstadoApi', () => {
   });
 
   it('muestra «Conectado · modo Local» cuando la API responde', async () => {
-    http
-      .expectOne('/api/sistema/info')
-      .flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
     await fixture.whenStable();
 
     expect(texto()).toBe('Conectado · modo Local');
@@ -75,9 +74,7 @@ describe('EstadoApi', () => {
     expect(region()?.contains(reintentar)).toBe(false);
 
     reintentar?.click();
-    http
-      .expectOne('/api/sistema/info')
-      .flush({ modo: 'Demo', agentesHabilitados: false, version: '0.1.0' });
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ modo: 'Demo' }));
     await fixture.whenStable();
 
     expect(texto()).toBe('Conectado · modo Demo');
@@ -95,18 +92,14 @@ describe('EstadoApi', () => {
     expect(elemento().querySelector('button')).toBeNull();
     expect(document.activeElement).toBe(region());
 
-    http
-      .expectOne('/api/sistema/info')
-      .flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
     await fixture.whenStable();
 
     expect(document.activeElement).toBe(region());
   });
 
   it('no vuelve a preguntar ni a mostrar «Comprobando» si la API ya estaba conectada', async () => {
-    http
-      .expectOne('/api/sistema/info')
-      .flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
     fixture.destroy();
 
     // Como al salir de Hoy y volver: el servicio es el mismo y el componente, uno nuevo

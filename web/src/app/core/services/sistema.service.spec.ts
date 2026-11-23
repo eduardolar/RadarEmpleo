@@ -1,10 +1,10 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { SistemaInfo } from '../interfaces/sistema-info.interface';
+import { crearSistemaInfo } from '../utils/sistema-de-prueba';
 import { SistemaService } from './sistema.service';
 
-const INFO_LOCAL: SistemaInfo = { modo: 'Local', agentesHabilitados: false, version: '0.1.0' };
+const INFO_LOCAL = crearSistemaInfo();
 
 describe('SistemaService', () => {
   let service: SistemaService;

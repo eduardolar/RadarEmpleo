@@ -8,6 +8,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { routes } from './app.routes';
 import { crearDetalle } from './candidaturas/utils/candidatura-de-prueba';
+import { crearSistemaInfo } from './core/utils/sistema-de-prueba';
 import { crearVista } from './importacion/utils/importacion-de-prueba';
 import { crearPanel } from './recordatorios/utils/recordatorio-de-prueba';
 
@@ -33,9 +34,7 @@ describe('Navegación', () => {
 
   // Hoy lleva el indicador de la API, que pregunta al entrar, y pide su panel
   function responderHoy(): void {
-    http
-      .expectOne('/api/sistema/info')
-      .flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
     http.expectOne('/api/panel/hoy').flush(crearPanel());
   }
 
@@ -180,9 +179,7 @@ describe('Navegación', () => {
 
     expect(TestBed.inject(Router).url).toBe('/ajustes');
     expect(TestBed.inject(Title).getTitle()).toBe('Ajustes · RadarEmpleo');
-    http
-      .expectOne('/api/sistema/info')
-      .flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
     await harness.fixture.whenStable();
 
     expect(pagina.querySelector('h1')?.textContent).toContain('Ajustes');
