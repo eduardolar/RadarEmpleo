@@ -7,10 +7,10 @@ namespace RadarEmpleo.Services.Agentes;
 /// </summary>
 public static class MensajesEjecucion
 {
-    public const string NoInstalado = "No encuentro Claude Code en este PC.";
-    public const string SalidaNoValida = "Claude ha respondido en un formato que no entiendo.";
-    public const string ErrorDeClaude = "Claude ha devuelto un error.";
-    public const string Inesperado = "Algo ha fallado al lanzar Claude.";
+    public const string NoInstalado = "No encuentro Claude Code en este PC. Instálalo o abre la app en el PC donde lo tengas.";
+    public const string SalidaNoValida = "Claude ha respondido en un formato que no entiendo. Reintentarla suele bastar.";
+    public const string ErrorDeClaude = "Claude ha devuelto un error. Prueba a reintentarla en un rato.";
+    public const string Inesperado = "Algo ha fallado al lanzar Claude. Vuelve a intentarlo y, si se repite, reinicia la app.";
     public const string SinManejador = "Esta tarea todavía no se puede lanzar desde la app.";
     public const string Cancelada = "Cancelada.";
 
@@ -26,7 +26,7 @@ public static class MensajesEjecucion
         $"No puedo usar los agentes: el archivo de control junto a la base de datos {detalle}.";
 
     /// <summary>Error cuando una ejecución se pasa del tope de uso de su tarea (<c>--max-budget-usd</c>).</summary>
-    public const string TopeTarea = "Ha llegado al tope de uso de esta tarea y la he parado.";
+    public const string TopeTarea = "Ha llegado al tope de uso de esta tarea y la he parado. Si la reintentas, puede volver a gastar lo mismo.";
 
     /// <summary>Error al encolar o al empezar cuando ya no cabe en el tope de uso de hoy.</summary>
     public const string TopeDiario = "Has llegado al tope de uso estimado de hoy. Mañana se puede volver a lanzar.";
@@ -42,9 +42,12 @@ public static class MensajesEjecucion
         _ => ErrorDeClaude
     };
 
-    /// <summary>Error cuando el bloqueo compartido sigue ocupado después de la espera máxima.</summary>
+    /// <summary>
+    /// Error cuando el bloqueo compartido sigue ocupado después de la espera máxima. <paramref name="quien"/> es el nombre
+    /// para enseñar (<see cref="RadarEmpleo.Domain.BloqueoEjecucion.NombreVisible"/>), nunca el texto del archivo.
+    /// </summary>
     public static string BloqueoDemasiadoTiempo(string quien) =>
-        $"La otra ejecución ({quien}) sigue en marcha después de una hora.";
+        $"Ha esperado una hora y {quien} sigue usando Claude. Reintenta cuando termine.";
 
     /// <summary>«5 min», «90 s», «1 h 2 min».</summary>
     public static string Duracion(TimeSpan tiempo)

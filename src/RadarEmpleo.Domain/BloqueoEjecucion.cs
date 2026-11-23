@@ -45,7 +45,7 @@ public static class BloqueoEjecucion
     /// </summary>
     public static readonly TimeSpan DuracionMaxima = TimeSpan.FromMinutes(60);
 
-    /// <summary>Largo máximo de <see cref="BloqueoLeido.Quien"/> al enseñarlo.</summary>
+    /// <summary>Largo máximo de <see cref="BloqueoLeido.Quien"/> al apuntarlo en el log.</summary>
     private const int LargoQuienVisible = 40;
 
     /// <summary>
@@ -139,21 +139,31 @@ public static class BloqueoEjecucion
     /// </summary>
     private static bool EsFutura(DateTime modificadoUtc, DateTime ahoraUtc) => modificadoUtc > ahoraUtc + HolguraReloj;
 
+    /// <summary>Quien tiene el bloqueo cuando no es uno de los tres conocidos (o no se puede leer).</summary>
+    public const string NombreOtroPrograma = "otro programa";
+
     /// <summary>
-    /// Cómo se le enseña a Eduardo quién tiene el bloqueo. Lo que no es de los tres conocidos se sanea (solo letras,
-    /// números, espacios y «._-/», como mucho 40), porque el archivo lo puede escribir cualquiera.
+    /// Cómo se le enseña a Eduardo quién tiene el bloqueo, para «Esperando: {quien} está usando Claude». Solo los tres
+    /// conocidos tienen nombre propio; cualquier otra cosa es <see cref="NombreOtroPrograma"/>, porque el archivo lo
+    /// puede escribir cualquiera (su texto, saneado con <see cref="NombreSaneado"/>, solo va al log).
     /// </summary>
-    public static string NombreVisible(string? quien)
+    public static string NombreVisible(string? quien) => quien switch
     {
-        switch (quien)
-        {
-            case QuienTareaLunes: return "la tarea de los lunes";
-            case QuienEmpleo: return "/empleo";
-            case QuienRadar: return "RadarEmpleo";
-        }
-        var limpio = new string((quien ?? "").Where(c => char.IsLetterOrDigit(c) || c is ' ' or '.' or '_' or '-' or '/').ToArray()).Trim();
+        QuienTareaLunes => "la tarea de los lunes",
+        QuienEmpleo => "tu sesión de /empleo en Claude Code",
+        QuienRadar => "otra ventana de RadarEmpleo",
+        _ => NombreOtroPrograma
+    };
+
+    /// <summary>
+    /// El texto tal cual del archivo, saneado para el log (solo letras, números, espacios y «._-/», como mucho 40);
+    /// «(vacío)» si no queda nada. Nunca se enseña en la app ni sale por la API.
+    /// </summary>
+    public static string NombreSaneado(string? texto)
+    {
+        var limpio = new string((texto ?? "").Where(c => char.IsLetterOrDigit(c) || c is ' ' or '.' or '_' or '-' or '/').ToArray()).Trim();
         if (limpio.Length > LargoQuienVisible) limpio = limpio[..LargoQuienVisible].TrimEnd();
-        return limpio.Length == 0 ? "otra tarea" : limpio;
+        return limpio.Length == 0 ? "(vacío)" : limpio;
     }
 
     private static string FechaIso(DateTime fecha) => Fechas.AUtc(fecha).ToString("yyyy-MM-ddTHH:mm:ss'Z'");

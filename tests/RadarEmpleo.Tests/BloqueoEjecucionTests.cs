@@ -153,14 +153,27 @@ public class BloqueoEjecucionTests
 
     [Theory]
     [InlineData("TareaLunes", "la tarea de los lunes")]
-    [InlineData("Empleo", "/empleo")]
-    [InlineData(null, "otra tarea")]
-    [InlineData("Otro", "Otro")]
-    [InlineData("<script>alert(1)</script>", "scriptalert1/script")]
-    [InlineData("\u0007\u202E", "otra tarea")]
-    [InlineData("una tarea con un nombre larguísimo que no cabe en la pantalla", "una tarea con un nombre larguísimo que n")]
-    public void NombreVisible(string? quien, string visible)
+    [InlineData("Empleo", "tu sesión de /empleo en Claude Code")]
+    [InlineData("RadarEmpleo", "otra ventana de RadarEmpleo")]
+    [InlineData(null, "otro programa")]
+    [InlineData("", "otro programa")]
+    [InlineData("Otro", "otro programa")]
+    [InlineData("empleo", "otro programa")]
+    [InlineData("<script>alert(1)</script>", "otro programa")]
+    [InlineData("C:\\Users\\alguien\\secreto.txt", "otro programa")]
+    public void NombreVisible_SoloNombraALosConocidos(string? quien, string visible)
     {
         Assert.Equal(visible, BloqueoEjecucion.NombreVisible(quien));
+    }
+
+    [Theory]
+    [InlineData(null, "(vacío)")]
+    [InlineData("Otro", "Otro")]
+    [InlineData("<script>alert(1)</script>", "scriptalert1/script")]
+    [InlineData("\u0007\u202E", "(vacío)")]
+    [InlineData("una tarea con un nombre larguísimo que no cabe en la pantalla", "una tarea con un nombre larguísimo que n")]
+    public void NombreSaneado_ParaElLog(string? texto, string saneado)
+    {
+        Assert.Equal(saneado, BloqueoEjecucion.NombreSaneado(texto));
     }
 }

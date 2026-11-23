@@ -30,11 +30,12 @@ public class EjecucionAgenteTests
     }
 
     [Fact]
-    public void Nueva_QuedaEnColaEsperandoTurno()
+    public void Nueva_QuedaEnColaSinMotivoDeEspera()
     {
         var e = Nueva();
         Assert.Equal(EstadoEjecucion.EnCola, e.Estado);
-        Assert.Equal(MotivoEspera.Turno, e.Espera);
+        Assert.Null(e.Espera);
+        Assert.Null(e.QuienBloquea);
         Assert.Equal(Ahora, e.FechaAlta);
         Assert.Equal(12, e.CandidaturaId);
         Assert.Null(e.Inicio);

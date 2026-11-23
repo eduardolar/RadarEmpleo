@@ -45,10 +45,10 @@ public class EjecucionAgente
     public const int LargoParametros = 500, LargoSesion = 100;
 
     /// <summary>Error que queda en lo que estaba en curso cuando se cerró la API.</summary>
-    public const string MensajeInterrumpida = "Se interrumpió: la API se cerró mientras trabajaba.";
+    public const string MensajeInterrumpida = "Se cortó porque la app se cerró mientras trabajaba.";
 
     /// <summary>Resumen de lo que estaba en cola cuando se cerró la API (no se relanza solo).</summary>
-    public const string MensajeReiniciadaAntesDeEmpezar = "La API se reinició antes de empezar.";
+    public const string MensajeReiniciadaAntesDeEmpezar = "La app se cerró antes de empezar. Vuelve a lanzarla.";
 
     public int Id { get; set; }
     public TareaAgente Tarea { get; set; }
@@ -56,7 +56,10 @@ public class EjecucionAgente
     public string ParametrosJson { get; set; } = "{}";
     public EstadoEjecucion Estado { get; private set; }
     public MotivoEspera? Espera { get; private set; }
-    /// <summary>Quién tiene el bloqueo mientras espera, para enseñarlo: «la tarea de los lunes», «/empleo».</summary>
+    /// <summary>
+    /// Quién tiene el bloqueo mientras espera, para enseñarlo (<see cref="BloqueoEjecucion.NombreVisible"/>): «la tarea de
+    /// los lunes», «tu sesión de /empleo en Claude Code», «otra ventana de RadarEmpleo» u «otro programa».
+    /// </summary>
     public string? QuienBloquea { get; private set; }
     /// <summary>Cuándo se encoló.</summary>
     public DateTime FechaAlta { get; set; }
@@ -110,7 +113,10 @@ public class EjecucionAgente
 
     private static bool Cambiado(string? antes, string? despues) => antes is not null && despues is not null && antes != despues;
 
-    /// <summary>Una ejecución nueva, en cola desde <paramref name="ahoraUtc"/>.</summary>
+    /// <summary>
+    /// Una ejecución nueva, en cola desde <paramref name="ahoraUtc"/>, sin motivo de espera: la cola le pone
+    /// <see cref="MotivoEspera.Turno"/> si de verdad hay otra delante.
+    /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">Presupuesto o tiempo máximo no positivos (son de código, no del usuario).</exception>
     public static EjecucionAgente Nueva(TareaAgente tarea, string parametrosJson, decimal presupuesto, int tiempoMaximo,
         string? modelo, DateTime ahoraUtc, int? candidaturaId = null)
@@ -122,7 +128,6 @@ public class EjecucionAgente
             Tarea = tarea,
             ParametrosJson = parametrosJson,
             Estado = EstadoEjecucion.EnCola,
-            Espera = MotivoEspera.Turno,
             FechaAlta = ahoraUtc,
             PresupuestoUsd = presupuesto,
             TiempoMaximoSegundos = tiempoMaximo,

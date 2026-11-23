@@ -29,7 +29,7 @@ export interface EjecucionAgente {
   tarea: TareaAgente;
   estado: EstadoEjecucion;
   espera: MotivoEspera | null;
-  /** Quién tiene el bloqueo («la tarea de los lunes», «/empleo») */
+  /** Quién tiene el bloqueo («la tarea de los lunes», «tu sesión de /empleo en Claude Code», «otro programa») */
   quienBloquea: string | null;
   fechaAlta: string;
   inicio: string | null;

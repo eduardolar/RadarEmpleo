@@ -246,6 +246,30 @@ public sealed class AgentesApiTests
         Assert.Equal(1, await db.EjecucionesAgente.CountAsync());
     }
 
+    [Fact]
+    public async Task Lanzar_ConLaColaVacia_NoDiceQueEsperaTurno_YConOtraDelanteSi()
+    {
+        using var fabrica = Fabrica();
+        using var http = fabrica.CreateClient();
+        Falso(fabrica).Programar(TareaAgente.AnalizarEncaje, new RespuestaFalsa(ModoFalso.NoResponde));
+        var id = await SembrarCandidaturaAsync(fabrica);
+
+        var primera = await LeerAsync(await PostJson(http, $"/api/agentes/analizar/{id}"), HttpStatusCode.Accepted);
+        Assert.Equal(JsonValueKind.Null, primera.GetProperty("espera").ValueKind);
+        Assert.Equal(JsonValueKind.Null, primera.GetProperty("quienBloquea").ValueKind);
+
+        var segunda = await LeerAsync(await PostJson(http, "/api/agentes/extraer-registro"), HttpStatusCode.Accepted);
+        Assert.Equal("Turno", segunda.GetProperty("espera").GetString());
+        Assert.Equal(JsonValueKind.Null, segunda.GetProperty("quienBloquea").ValueKind);
+
+        var segundaId = segunda.GetProperty("id").GetInt32();
+        await PostJson(http, $"/api/agentes/ejecuciones/{segundaId}/cancelar");
+        var primeraId = primera.GetProperty("id").GetInt32();
+        await PostJson(http, $"/api/agentes/ejecuciones/{primeraId}/cancelar");
+        await EsperarAsync(http, primeraId, "Cancelada");
+        await EsperarAsync(http, segundaId, "Cancelada");
+    }
+
     [Theory]
     [InlineData(EstadoCandidatura.Descartada)]
     [InlineData(EstadoCandidatura.Cerrada)]

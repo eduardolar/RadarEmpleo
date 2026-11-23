@@ -244,6 +244,24 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Encolar_SoloEsperaTurnoSiHayOtraDelante()
+    {
+        var primera = await EncolarAsync();
+        Assert.Null((await LeerAsync(primera.Id)).Espera);
+
+        var segunda = await EncolarAsync(TareaAgente.AnalizarEncaje, _candidatura);
+        var leida = await LeerAsync(segunda.Id);
+        Assert.Equal(MotivoEspera.Turno, leida.Espera);
+        Assert.Null(leida.QuienBloquea);
+
+        // Con la de delante ya terminada, la siguiente vuelve a no tener motivo de espera.
+        Assert.True(await _procesador.ProcesarSiguienteAsync(CancellationToken.None));
+        Assert.True(await _procesador.ProcesarSiguienteAsync(CancellationToken.None));
+        var tercera = await EncolarAsync();
+        Assert.Null((await LeerAsync(tercera.Id)).Espera);
+    }
+
+    [Fact]
     public async Task LaTareaSinCarpetaDeCurriculum_TrabajaEnSuCarpetaDeEjecucion()
     {
         var ejecucion = await EncolarAsync();
@@ -289,7 +307,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var final = await LeerAsync(ejecucion.Id);
         Assert.Equal(EstadoEjecucion.Error, final.Estado);
-        Assert.Equal("Ha llegado al tope de uso de esta tarea y la he parado.", final.Error);
+        Assert.Equal(MensajesEjecucion.TopeTarea, final.Error);
         Assert.Equal(0.52m, final.CosteUsd);
         Assert.False(File.Exists(RutaBloqueo));
     }
@@ -331,8 +349,8 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(ModoFalso.Error, "Claude ha devuelto un error.")]
-    [InlineData(ModoFalso.SalidaNoValida, "Claude ha respondido en un formato que no entiendo.")]
+    [InlineData(ModoFalso.Error, MensajesEjecucion.ErrorDeClaude)]
+    [InlineData(ModoFalso.SalidaNoValida, MensajesEjecucion.SalidaNoValida)]
     public async Task UnFalloDeClaude_QuedaErrorConSuMensaje(ModoFalso modo, string mensaje)
     {
         var ejecucion = await EncolarAsync();
@@ -694,7 +712,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var procesando = _procesador.ProcesarSiguienteAsync(CancellationToken.None);
         var esperando = await EsperarAsync(ejecucion.Id, e => e.Espera == MotivoEspera.BloqueoOcupado);
-        Assert.Equal("otra tarea", esperando.QuienBloquea);
+        Assert.Equal(BloqueoEjecucion.NombreOtroPrograma, esperando.QuienBloquea);
 
         Directory.Delete(RutaBloqueo);
         await procesando;
@@ -766,7 +784,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UnQuienRaroSaleSaneado()
+    public async Task UnQuienRaro_SeEnsenaComoOtroPrograma()
     {
         EscribirBloqueo(new BloqueoLeido(1, "<b>Hola</b>\u202E", null, null, Environment.ProcessId, _reloj.AhoraUtc,
             _reloj.AhoraUtc.AddHours(1), false));
@@ -774,9 +792,50 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var procesando = _procesador.ProcesarSiguienteAsync(CancellationToken.None);
         var esperando = await EsperarAsync(ejecucion.Id, e => e.Espera == MotivoEspera.BloqueoOcupado);
-        Assert.Equal("bHola/b", esperando.QuienBloquea);
+        Assert.Equal(BloqueoEjecucion.NombreOtroPrograma, esperando.QuienBloquea);
         File.Delete(RutaBloqueo);
         await procesando;
+    }
+
+    [Fact]
+    public void UnBloqueoDeOtroPrograma_SeApuntaEnElLogUnaVezPorBloqueo()
+    {
+        var log = new LogEnMemoria();
+        var bloqueo = new BloqueoCompartido(_rutas, log, InicioDelProceso);
+        var contenido = BloqueoEjecucion.DeLaApp(TareaAgente.ExtraerRegistro, 1, Environment.ProcessId, _reloj.AhoraUtc, TimeSpan.FromMinutes(5));
+        EscribirBloqueo("<b>Raro</b>", Environment.ProcessId, _reloj.AhoraUtc.AddHours(1));
+
+        for (var sondeo = 0; sondeo < 3; sondeo++)
+            Assert.Equal(BloqueoEjecucion.NombreOtroPrograma, bloqueo.Intentar(contenido, _reloj.AhoraUtc).OcupadoPor);
+        var aviso = Assert.Single(log.Mensajes);
+        Assert.Contains("bRaro/b", aviso);
+
+        // Otro bloqueo distinto (otra caducidad) se vuelve a apuntar, también una vez.
+        EscribirBloqueo("<b>Raro</b>", Environment.ProcessId, _reloj.AhoraUtc.AddHours(2));
+        bloqueo.Intentar(contenido, _reloj.AhoraUtc);
+        bloqueo.Intentar(contenido, _reloj.AhoraUtc);
+        Assert.Equal(2, log.Mensajes.Count);
+
+        // Los conocidos no se apuntan: ya se enseñan con su nombre.
+        EscribirBloqueo(BloqueoEjecucion.QuienTareaLunes, Environment.ProcessId, _reloj.AhoraUtc.AddHours(1));
+        bloqueo.Intentar(contenido, _reloj.AhoraUtc);
+        Assert.Equal(2, log.Mensajes.Count);
+    }
+
+    /// <summary>Log que guarda los mensajes de nivel Information o más.</summary>
+    private sealed class LogEnMemoria : Microsoft.Extensions.Logging.ILogger<BloqueoCompartido>
+    {
+        public List<string> Mensajes { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel >= Microsoft.Extensions.Logging.LogLevel.Information) Mensajes.Add(formatter(state, exception));
+        }
     }
 
     [Fact]
@@ -802,6 +861,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         await EsperarAsync(segunda.Id, e => e.EsTerminal);
 
         Assert.Equal(EstadoEjecucion.EnCola, segundaDurante!.Estado);
+        Assert.Equal(MotivoEspera.Turno, segundaDurante.Espera);
         Assert.Equal([TareaAgente.ExtraerRegistro, TareaAgente.AnalizarEncaje], _falso.Peticiones.Select(p => p.Tarea));
         var a = await LeerAsync(primera.Id);
         var b = await LeerAsync(segunda.Id);
@@ -881,7 +941,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         var procesando = _procesador.ProcesarSiguienteAsync(CancellationToken.None);
         var esperando = await EsperarAsync(ejecucion.Id, e => e.Espera == MotivoEspera.BloqueoOcupado);
         Assert.Equal(EstadoEjecucion.EnCola, esperando.Estado);
-        Assert.Equal("la tarea de los lunes", esperando.QuienBloquea);
+        Assert.Equal(BloqueoEjecucion.NombreVisible(BloqueoEjecucion.QuienTareaLunes), esperando.QuienBloquea);
         Assert.Empty(_falso.Peticiones);
 
         File.Delete(RutaBloqueo);
@@ -905,7 +965,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var final = await LeerAsync(ejecucion.Id);
         Assert.Equal(EstadoEjecucion.Error, final.Estado);
-        Assert.Equal("La otra ejecución (/empleo) sigue en marcha después de una hora.", final.Error);
+        Assert.Equal(MensajesEjecucion.BloqueoDemasiadoTiempo(BloqueoEjecucion.NombreVisible(BloqueoEjecucion.QuienEmpleo)), final.Error);
         Assert.True(File.Exists(RutaBloqueo));
     }
 
@@ -984,10 +1044,10 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var curso = await LeerAsync(enCurso.Id);
         Assert.Equal(EstadoEjecucion.Error, curso.Estado);
-        Assert.Equal("Se interrumpió: la API se cerró mientras trabajaba.", curso.Error);
+        Assert.Equal(EjecucionAgente.MensajeInterrumpida, curso.Error);
         var cola = await LeerAsync(enCola.Id);
         Assert.Equal(EstadoEjecucion.Cancelada, cola.Estado);
-        Assert.Equal("La API se reinició antes de empezar.", cola.Resumen);
+        Assert.Equal(EjecucionAgente.MensajeReiniciadaAntesDeEmpezar, cola.Resumen);
         Assert.False(File.Exists(RutaBloqueo));
         Assert.False(await _procesador.ProcesarSiguienteAsync(CancellationToken.None));
     }
@@ -1035,7 +1095,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var a = await LeerAsync(primera.Id);
         Assert.Equal(EstadoEjecucion.Error, a.Estado);
-        Assert.Equal("Algo ha fallado al lanzar Claude.", a.Error);
+        Assert.Equal(MensajesEjecucion.Inesperado, a.Error);
         Assert.Equal(EstadoEjecucion.Ok, (await LeerAsync(segunda.Id)).Estado);
         Assert.False(File.Exists(RutaBloqueo));
     }
