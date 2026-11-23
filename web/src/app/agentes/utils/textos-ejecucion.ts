@@ -17,6 +17,13 @@ export const ETIQUETA_ESTADO: Record<EstadoEjecucion, string> = {
   Cancelada: 'Cancelada',
 };
 
+/** La API ya no la encuentra (404 en el seguimiento): sin esto se quedaría «En curso» para siempre */
+export const ETIQUETA_PERDIDA = 'No se encuentra';
+export const TEXTO_PERDIDA =
+  'Ya no se encuentra esta tarea de Claude. Si hace falta, vuelve a lanzarla.';
+/** En la lista de /agentes, donde no se lanza nada */
+export const TEXTO_PERDIDA_CORTO = 'Ya no se encuentra esta tarea.';
+
 /** El nombre de la tarea en listas («Análisis del encaje · Acme») */
 export const NOMBRE_TAREA: Record<TareaAgente, string> = {
   Rastreo: 'Rastreo de ofertas',
@@ -136,13 +143,20 @@ export function usoDelDia(gasto: Pick<GastoHoy, 'gastadoUsd' | 'topeUsd'>): stri
   return `Uso estimado de tu suscripción hoy: ${parteConocida(gasto.gastadoUsd, porcentaje)} del tope`;
 }
 
+/** Con punto final si no acaba ya en «.», «?», «!» o «…» (los mensajes de la API suelen llevarlo) */
+export function conPunto(texto: string): string {
+  const limpio = texto.trim();
+  return /[.?!…]$/.test(limpio) ? limpio : `${limpio}.`;
+}
+
 /**
- * La frase del estado para la tarjeta. `ahora` cuenta el tiempo de lo que va en curso; `topeUsd` es
- * el de hoy (de `EstadoAgentes.gasto`), o null si no se sabe y no se dice el uso
+ * La frase del estado para la tarjeta. `ahora` cuenta el tiempo de lo que va en curso (null: sin el
+ * tiempo, ver `relojEnCurso`); `topeUsd` es el de hoy (de `EstadoAgentes.gasto`), o null si no se
+ * sabe y no se dice el uso
  */
 export function textoEstado(
   ejecucion: EjecucionAgente,
-  ahora: Date,
+  ahora: Date | null,
   topeUsd: number | null,
 ): string {
   switch (ejecucion.estado) {
@@ -153,29 +167,57 @@ export function textoEstado(
     case 'Ok':
       return textoHecha(ejecucion, topeUsd);
     case 'Error':
-      return ejecucion.error ? `No ha salido: ${ejecucion.error}` : 'No ha salido.';
+      return ejecucion.error?.trim()
+        ? `No ha salido. ${conPunto(ejecucion.error)}`
+        : 'No ha salido.';
     case 'Cancelada':
       // También la cancela la API al arrancar si estaba en cola: no se dice quién
-      return 'Cancelada antes de terminar.';
+      return textoCancelada(ejecucion, topeUsd);
   }
+}
+
+/**
+ * «1 min 20 s (máximo 5 min)» de lo que va en curso, para pintarlo aparte de la frase (no se anuncia
+ * cada segundo). null si no va en curso, si ya se está cancelando o sin `inicio` válido
+ */
+export function relojEnCurso(
+  ejecucion: Pick<EjecucionAgente, 'estado' | 'inicio' | 'puedeCancelar' | 'tiempoMaximoSegundos'>,
+  ahora: Date,
+): string | null {
+  if (ejecucion.estado !== 'EnCurso' || !ejecucion.puedeCancelar || ejecucion.inicio === null) {
+    return null;
+  }
+  const transcurrido = duracion((ahora.getTime() - Date.parse(ejecucion.inicio)) / 1000);
+  if (transcurrido === null) {
+    return null;
+  }
+  const maximo = duracion(ejecucion.tiempoMaximoSegundos);
+  return maximo === null ? transcurrido : `${transcurrido} (máximo ${maximo})`;
 }
 
 /** Los avisos rojos: el registro o el perfil han cambiado mientras trabajaba Claude */
 export function avisosCambio(
   ejecucion: Pick<EjecucionAgente, 'registroCambiado' | 'perfilCambiado'>,
+  corto = false,
 ): string[] {
+  const aviso = corto ? avisoCambioCorto : avisoCambio;
   const avisos: string[] = [];
   if (ejecucion.registroCambiado) {
-    avisos.push(avisoCambio('registro'));
+    avisos.push(aviso('registro'));
   }
   if (ejecucion.perfilCambiado) {
-    avisos.push(avisoCambio('perfil'));
+    avisos.push(aviso('perfil'));
   }
   return avisos;
 }
 
 export function avisoCambio(archivo: ArchivoVigilado): string {
   return `Ojo: ${NOMBRE_ARCHIVO[archivo]} ha cambiado mientras trabajaba Claude. Si no lo has tocado tú, revísalo.`;
+}
+
+/** En una línea, para la lista de /agentes */
+export function avisoCambioCorto(archivo: ArchivoVigilado): string {
+  return `Ojo: cambió ${NOMBRE_ARCHIVO[archivo]} mientras trabajaba Claude.`;
 }
 
 function textoEnCola(ejecucion: EjecucionAgente): string {
@@ -191,23 +233,22 @@ function textoEnCola(ejecucion: EjecucionAgente): string {
   }
 }
 
-function textoEnCurso(ejecucion: EjecucionAgente, ahora: Date): string {
+function textoEnCurso(ejecucion: EjecucionAgente, ahora: Date | null): string {
   // En curso y sin poder cancelar es que ya se ha pedido: la API corta el proceso en unos segundos
   if (!ejecucion.puedeCancelar) {
     return 'Cancelando… se parará en unos segundos.';
   }
   const trabajando = `${TRABAJANDO[ejecucion.tarea]}…`;
-  const transcurrido =
-    ejecucion.inicio === null
-      ? null
-      : duracion((ahora.getTime() - Date.parse(ejecucion.inicio)) / 1000);
-  if (transcurrido === null) {
-    return trabajando;
+  const reloj = ahora === null ? null : relojEnCurso(ejecucion, ahora);
+  return reloj === null ? trabajando : `${trabajando} · ${reloj}`;
+}
+
+function textoCancelada(ejecucion: EjecucionAgente, topeUsd: number | null): string {
+  if (ejecucion.inicio === null) {
+    return 'Cancelada antes de empezar. No ha gastado nada.';
   }
-  const maximo = duracion(ejecucion.tiempoMaximoSegundos);
-  return maximo === null
-    ? `${trabajando} · ${transcurrido}`
-    : `${trabajando} · ${transcurrido} (máximo ${maximo})`;
+  const uso = usoEstimado(ejecucion, topeUsd);
+  return uso === null ? 'Cancelada antes de terminar.' : `Cancelada antes de terminar · ${uso}`;
 }
 
 function textoHecha(ejecucion: EjecucionAgente, topeUsd: number | null): string {
