@@ -105,7 +105,9 @@ public static class CombinadorLotes
 
     /// <summary>
     /// Una línea (o una cita) tal como se compara: con la limpieza de <see cref="PlantillaPrompt.Normalizar"/> en una línea y
-    /// los espacios y tabuladores seguidos en uno. Se repite hasta que no cambia, porque la cita ya viene limpiada una vez y
+    /// los espacios y tabuladores seguidos en uno. Los invisibles se quitan antes de pasar a una línea, como en el prompt
+    /// (que limpia el texto entero): así un tabulador vertical (U+000B) o un salto de página (U+000C) del registro
+    /// desaparece en vez de volverse un espacio. Se repite hasta que no cambia, porque la cita ya viene limpiada una vez y
     /// limpiar otra vez no siempre deja lo mismo («{{{» pasa a «{ {{» y luego a «{ { {»).
     /// </summary>
     private static string Comparable(string texto)
@@ -114,18 +116,21 @@ public static class CombinadorLotes
         do
         {
             anterior = texto;
-            texto = HtmlATexto.NormalizarEspacios(PlantillaPrompt.Normalizar(texto, unaLinea: true));
+            texto = HtmlATexto.NormalizarEspacios(PlantillaPrompt.Normalizar(PlantillaPrompt.QuitarInvisibles(texto), unaLinea: true));
         } while (texto != anterior);
         return texto;
     }
 
-    /// <summary>La línea de una cita de una fila sin leer: exacta o, si viene recortada con «…», la primera que empieza por ella.</summary>
+    /// <summary>La línea de una cita de una fila sin leer: exacta o, si el manejador la recortó (justo
+    /// <see cref="ManejadorExtraerRegistro.LargoCitaSinLeer"/> caracteres acabados en «…»), la primera que empieza por ella.
+    /// Una cita corta que acaba en «…» por sí sola no se busca como principio: daría una línea equivocada.</summary>
     private static int? BuscarPrincipio(List<(int Numero, string Texto)> lineas, Dictionary<string, int> primeraLinea, string cita)
     {
         var comparable = Comparable(cita);
         if (comparable.Length == 0) return null;
         if (primeraLinea.TryGetValue(comparable, out var exacta)) return exacta;
-        if (!cita.EndsWith('…') || Comparable(cita[..^1]) is not { Length: > 0 } principio) return null;
+        if (!cita.EndsWith('…') || cita.EnumerateRunes().Count() != ManejadorExtraerRegistro.LargoCitaSinLeer
+            || Comparable(cita[..^1]) is not { Length: > 0 } principio) return null;
         return lineas.FirstOrDefault(l => l.Texto.StartsWith(principio, StringComparison.Ordinal)) is { Numero: > 0 } encontrada
             ? encontrada.Numero
             : null;
