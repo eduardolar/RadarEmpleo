@@ -19,6 +19,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { filter, fromEvent, Observable } from 'rxjs';
 import { ErrorApi } from '../../../core/interfaces/error-api.interface';
+import { FechaActualService } from '../../../shared/services/fecha-actual.service';
 import { diaMadrid } from '../../../shared/utils/fechas-madrid';
 import {
   EjecucionAgente,
@@ -91,6 +92,7 @@ export class EstadoEjecucion {
   private readonly documento = inject(DOCUMENT);
   private readonly elemento = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly fechaActual = inject(FechaActualService);
 
   readonly ejecucion = input.required<EjecucionAgente>();
   /** Para la lista de /agentes: en una línea, sin marco, sin barra y sin anunciar los cambios */
@@ -180,7 +182,7 @@ export class EstadoEjecucion {
       return true;
     }
     const e = this.actual();
-    return diaMadrid(e.inicio ?? e.fechaAlta) === diaMadrid(new Date());
+    return diaMadrid(e.inicio ?? e.fechaAlta) === diaMadrid(this.fechaActual.ahora());
   });
 
   // Si hay reloj no depende de la hora, solo de la ejecución

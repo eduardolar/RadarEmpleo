@@ -13,6 +13,7 @@ import {
   NOMBRE_TAREA,
   relojEnCurso,
   reservaDelDia,
+  TEXTO_RECHAZADOS,
   textoEstado,
   usoDelDia,
   usoEstimado,
@@ -192,9 +193,9 @@ describe('motivoSinAgentes', () => {
     );
   });
 
-  it('en la demo lo dice así; encendidos pero rechazados (403), solo desde el PC', () => {
+  it('en la demo lo dice así; en el PC, encendidos pero rechazados (403), que se vuelva a comprobar', () => {
     expect(motivoSinAgentes(DEMO)).toBe('En la demo no se usa Claude: los agentes están apagados.');
-    expect(motivoSinAgentes(PC_ENCENDIDOS)).toBe(SOLO_PC);
+    expect(motivoSinAgentes(PC_ENCENDIDOS)).toBe(TEXTO_RECHAZADOS);
   });
 });
 

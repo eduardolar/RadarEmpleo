@@ -40,7 +40,19 @@
         <circle cx="12" cy="12" r="9" />
         <path stroke-linecap="square" d="M12 11v6M12 7.5v.01" />
       </svg>
-      <p class="agentes__motivo text-on-surface">{{ motivo() }}</p>
+      <div class="min-w-0">
+        <p class="agentes__motivo text-on-surface">{{ motivo() }}</p>
+        @if (rechazados()) {
+          <button
+            mat-button
+            type="button"
+            class="mt-2 [--mat-button-text-container-height:48px]"
+            (click)="volverAComprobar()"
+          >
+            Volver a comprobar
+          </button>
+        }
+      </div>
     </div>
   } @else {
     <section
@@ -142,7 +154,8 @@
               <!-- Arriba, la tarea y su fecha en la misma línea (la fecha a la derecha, como un
                    registro); debajo, la candidatura. El enlace crece solo hacia abajo hasta los
                    48 px de toque: un ::before que subiera taparía la tarea y la fecha, y uno que
-                   bajara taparía los botones de la fila -->
+                   bajara taparía los botones de la fila. Con -mb-2 pisa el relleno vacío de arriba
+                   de la fila de estado (que se pinta debajo del enlace) y no deja tanto hueco -->
               <li class="agentes__ejecucion pt-3 pb-1">
                 <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
                   <h3 class="font-semibold text-on-surface">{{ nombreTarea[e.tarea] }}</h3>
@@ -155,7 +168,7 @@
                 @if (e.candidaturaId !== null) {
                   <a
                     [routerLink]="['/candidaturas', e.candidaturaId]"
-                    class="-mx-1 mt-1 inline-flex min-h-12 max-w-full items-start rounded-lg px-1 pt-0.5 text-sm font-medium text-primary underline decoration-2 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+                    class="-mx-1 mt-1 -mb-2 inline-flex min-h-12 max-w-full items-start rounded-lg px-1 pt-0.5 text-sm font-medium text-primary underline decoration-2 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
                     [attr.aria-label]="
                       e.candidatura ? null : 'Ver la candidatura: ' + nombreTarea[e.tarea]
                     "

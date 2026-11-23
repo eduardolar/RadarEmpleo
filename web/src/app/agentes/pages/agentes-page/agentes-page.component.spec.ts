@@ -7,7 +7,7 @@ import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import { EjecucionAgente, EstadoAgentes } from '../../interfaces/ejecucion.interface';
 import { INTERVALO_SEGUIMIENTO_MS } from '../../services/agentes.service';
 import { crearEjecucion, crearEstadoAgentes, crearGasto } from '../../utils/ejecucion-de-prueba';
-import { NBSP } from '../../utils/textos-ejecucion';
+import { NBSP, TEXTO_RECHAZADOS } from '../../utils/textos-ejecucion';
 import AgentesPageComponent from './agentes-page.component';
 
 const URL_ESTADO = '/api/agentes/estado';
@@ -32,7 +32,10 @@ describe('AgentesPageComponent', () => {
     vi.useRealTimers();
   });
 
-  function abrir(info: Partial<SistemaInfo> = { agentesDisponibles: true }): void {
+  // Como la API: disponibles implica encendidos
+  function abrir(
+    info: Partial<SistemaInfo> = { agentesHabilitados: true, agentesDisponibles: true },
+  ): void {
     fixture = TestBed.createComponent(AgentesPageComponent);
     fixture.detectChanges();
     http.expectOne('/api/sistema/info').flush(crearSistemaInfo(info));
@@ -118,6 +121,77 @@ describe('AgentesPageComponent', () => {
 
       // Sin bucle: no se vuelve a pedir nada (lo comprueba http.verify)
       expect(elemento().querySelector('.agentes__motivo')).not.toBeNull();
+    });
+
+    describe('tras un 403', () => {
+      function rechazar(): void {
+        abrir();
+        http.expectOne(URL_ESTADO).flush(crearEstadoAgentes());
+        http
+          .expectOne((r) => r.url === URL_EJECUCIONES)
+          .flush(null, { status: 403, statusText: 'Forbidden' });
+        fixture.detectChanges();
+      }
+
+      function reabrir(): void {
+        fixture.destroy();
+        // /api/sistema/info ya contestó: no se vuelve a pedir
+        fixture = TestBed.createComponent(AgentesPageComponent);
+        fixture.detectChanges();
+      }
+
+      const volver = () =>
+        [...elemento().querySelectorAll('button')].find((b) =>
+          b.textContent!.includes('Volver a comprobar'),
+        );
+
+      it('en el PC dice que se vuelva a comprobar y «Volver a comprobar» pide el estado y luego la lista', () => {
+        rechazar();
+        expect(elemento().querySelector('.agentes__motivo')!.textContent).toContain(
+          TEXTO_RECHAZADOS,
+        );
+
+        volver()!.click();
+        // Una sola vez el estado; con el 200, solo falta la lista
+        http.expectOne(URL_ESTADO).flush(crearEstadoAgentes());
+        fixture.detectChanges();
+        http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+        fixture.detectChanges();
+
+        expect(elemento().querySelector('.agentes__motivo')).toBeNull();
+        expect(elemento().querySelector('.agentes__vacio')).not.toBeNull();
+      });
+
+      it('al volver a entrar pregunta una vez: con 200, pide la lista', () => {
+        rechazar();
+        reabrir();
+
+        http.expectOne(URL_ESTADO).flush(crearEstadoAgentes());
+        fixture.detectChanges();
+        http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+        fixture.detectChanges();
+
+        expect(elemento().querySelector('.agentes__vacio')).not.toBeNull();
+      });
+
+      it('al volver a entrar, otro 403 deja la explicación sin volver a preguntar', () => {
+        rechazar();
+        reabrir();
+
+        http.expectOne(URL_ESTADO).flush(null, { status: 403, statusText: 'Forbidden' });
+        fixture.detectChanges();
+
+        expect(elemento().querySelector('.agentes__motivo')!.textContent).toContain(
+          TEXTO_RECHAZADOS,
+        );
+        expect(volver()).toBeDefined();
+      });
+    });
+
+    it('desde el móvil no hay «Volver a comprobar»', () => {
+      abrir({ agentesHabilitados: false, agentesDisponibles: false, desdeElPc: false });
+
+      expect(elemento().querySelector('button')).toBeNull();
     });
   });
 
@@ -292,7 +366,11 @@ describe('AgentesPageComponent', () => {
       ]);
 
       vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+      // Cada respuesta llega en su propio evento: entre una y otra, la página no refresca
       http.expectOne(`${URL_EJECUCIONES}/6`).flush(crearEjecucion({ id: 6, estado: 'Ok' }));
+      fixture.detectChanges();
+      await Promise.resolve();
+      expect(http.match(URL_ESTADO)).toEqual([]);
       http
         .expectOne(`${URL_EJECUCIONES}/5`)
         .flush(crearEjecucion({ id: 5, candidaturaId: 20, estado: 'Ok' }));

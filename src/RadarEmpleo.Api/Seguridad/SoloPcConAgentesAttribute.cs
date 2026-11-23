@@ -31,7 +31,7 @@ public sealed class DisponibilidadAgentes(IClasificadorCanal clasificador, IOpti
     /// </summary>
     public string? Motivo(HttpContext http)
     {
-        if (clasificador.Canal(http) != CanalPeticion.Local) return MensajeSoloPc;
+        if (!DesdeElPc(http)) return MensajeSoloPc;
         if (!Encendidos) return MensajeApagados;
         return DesdeRadarEmpleo(http.Request, entorno.IsDevelopment()) ? null : MensajeOtroSitio;
     }

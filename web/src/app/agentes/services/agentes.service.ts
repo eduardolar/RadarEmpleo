@@ -295,9 +295,12 @@ export class AgentesService {
       return;
     }
     this.consultando = true;
+    // Se registran todas juntas al acabar la vuelta: cada respuesta llega en su propio evento y, una a
+    // una, las que terminan a la vez harían que la pantalla refrescase una vez por cada una
+    const respuestas: EjecucionAgente[] = [];
     const peticiones = [...this.seguidas].map((id) =>
       this.http.get<EjecucionAgente>(`${URL_AGENTES}/ejecuciones/${id}`).pipe(
-        tap((ejecucion) => this.registrar(ejecucion)),
+        tap((ejecucion) => respuestas.push(ejecucion)),
         catchError((error: unknown) => {
           this.alFallarSeguimiento(id, convertirErrorApi(error));
           return of(null);
@@ -308,6 +311,9 @@ export class AgentesService {
       .pipe(
         finalize(() => {
           this.consultando = false;
+          if (!this.destruido) {
+            respuestas.forEach((ejecucion) => this.registrar(ejecucion));
+          }
           this.programar();
         }),
       )

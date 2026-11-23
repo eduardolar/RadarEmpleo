@@ -179,6 +179,9 @@ export function reservaDelDia(gasto: Pick<GastoHoy, 'reservadoUsd' | 'topeUsd'>)
     : `Reservado para lo que está en marcha: hasta el ${cota}${NBSP}% del tope de hoy`;
 }
 
+export const TEXTO_RECHAZADOS =
+  'Ahora mismo no se puede usar Claude desde aquí. Vuelve a comprobarlo en un momento.';
+
 /** Por qué no se pueden usar los agentes desde aquí, para /agentes (sin /api/agentes/estado, que daría 403) */
 export function motivoSinAgentes(
   info: Pick<SistemaInfo, 'modo' | 'agentesHabilitados' | 'desdeElPc'>,
@@ -187,10 +190,14 @@ export function motivoSinAgentes(
     return 'En la demo no se usa Claude: los agentes están apagados.';
   }
   // Por el móvil `agentesHabilitados` siempre llega a false: no quiere decir que estén apagados
-  if (info.desdeElPc && !info.agentesHabilitados) {
+  if (!info.desdeElPc) {
+    return 'Los agentes de Claude solo se pueden usar desde el PC donde está instalada la app.';
+  }
+  if (!info.agentesHabilitados) {
     return 'Los agentes de Claude están apagados en la configuración de la app. Se encienden allí, no desde esta pantalla; en Ajustes puedes ver si están encendidos.';
   }
-  return 'Los agentes de Claude solo se pueden usar desde el PC donde está instalada la app.';
+  // En el PC y encendidos: solo llega aquí tras un 403 de /api/agentes
+  return TEXTO_RECHAZADOS;
 }
 
 /** Con punto final si no acaba ya en «.», «?», «!» o «…» (los mensajes de la API suelen llevarlo) */

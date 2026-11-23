@@ -47,6 +47,10 @@ export default class AgentesPageComponent {
   protected readonly errorHistorial = this.agentes.errorHistorial;
   protected readonly nombreTarea = NOMBRE_TAREA;
 
+  /** /api/sistema/info dice que sí, pero /api/agentes ha dado 403: se puede volver a comprobar */
+  private readonly segunInfo = computed(() => this.info()?.agentesDisponibles === true);
+  protected readonly rechazados = computed(() => this.segunInfo() && !this.disponibles());
+
   protected readonly motivo = computed(() => {
     const info = this.info();
     return info ? motivoSinAgentes(info) : null;
@@ -67,15 +71,33 @@ export default class AgentesPageComponent {
 
   private refrescoPendiente = false;
   private destruida = false;
+  /** Con un 403 de otra visita se pregunta una vez al entrar; si contesta bien, solo falta la lista */
+  private comprobadoAlEntrar = false;
+  private estadoRecienPedido = false;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => (this.destruida = true));
     this.sistema.cargarInfoSiFalta();
-    // Al entrar, o en cuanto /api/sistema/info diga que hay agentes, se pide la lista y el uso
+    // Al entrar, o en cuanto /api/sistema/info diga que hay agentes, se pide la lista y el uso. Con un
+    // 403 de antes (otra visita), se vuelve a preguntar una vez: si no, haría falta recargar
     effect(() => {
-      if (this.disponibles()) {
-        untracked(() => this.refrescar());
-      }
+      const disponibles = this.disponibles();
+      const segunInfo = this.segunInfo();
+      untracked(() => {
+        if (disponibles) {
+          // Ya se ha pedido al entrar: un 403 de ahora se queda con «Volver a comprobar»
+          this.comprobadoAlEntrar = true;
+          if (this.estadoRecienPedido) {
+            this.estadoRecienPedido = false;
+            this.agentes.cargarHistorial();
+          } else {
+            this.refrescar();
+          }
+        } else if (segunInfo && !this.comprobadoAlEntrar) {
+          this.comprobadoAlEntrar = true;
+          this.volverAComprobar();
+        }
+      });
     });
   }
 
@@ -96,6 +118,12 @@ export default class AgentesPageComponent {
         this.refrescar();
       }
     });
+  }
+
+  /** Tras un 403: si ahora contesta bien, el efecto pide la lista; si vuelve a dar 403, se queda así */
+  protected volverAComprobar(): void {
+    this.estadoRecienPedido = true;
+    this.agentes.cargarEstado();
   }
 
   protected reintentarConexion(): void {

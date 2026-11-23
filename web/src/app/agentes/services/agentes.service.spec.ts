@@ -380,6 +380,22 @@ describe('AgentesService', () => {
       seguimiento(2).flush(crearEjecucion({ id: 2, candidaturaId: 13, estado: 'Ok' }));
     });
 
+    it('las que terminan en la misma vuelta se registran y avisan juntas, al llegar la última', () => {
+      const terminadas: number[] = [];
+      service.terminada$.subscribe((e) => terminadas.push(e.id));
+      lanzar(crearEjecucion({ id: 1, candidaturaId: 12 }));
+      lanzar(crearEjecucion({ id: 2, candidaturaId: 13 }));
+
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+      seguimiento(1).flush(crearEjecucion({ id: 1, estado: 'Ok' }));
+      expect(terminadas).toEqual([]);
+      expect(service.ejecuciones().get(1)?.estado).toBe('EnCola');
+
+      seguimiento(2).flush(crearEjecucion({ id: 2, candidaturaId: 13, estado: 'Ok' }));
+      expect(terminadas).toEqual([1, 2]);
+      expect(service.ejecuciones().get(1)?.estado).toBe('Ok');
+    });
+
     it('no solapa peticiones: si la API tarda, espera a la respuesta y otros 5 s', () => {
       lanzar();
       vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
