@@ -308,6 +308,34 @@ public sealed class ImportacionApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Aplicar_MasDeMilClaves_Devuelve400()
+    {
+        var vista = await VistaPreviaAsync();
+
+        var respuesta = await AplicarAsync(vista, Enumerable.Range(0, 1001).Select(i => $"clave|{i}|2026-09-01"));
+
+        var problema = await LeerProblemaAsync(respuesta, HttpStatusCode.BadRequest);
+        Assert.Equal("No puede haber más de 1000 claves.", problema.GetProperty("detail").GetString());
+        Assert.True(problema.GetProperty("errors").TryGetProperty("claves", out _));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(99)]
+    public async Task Aplicar_OrigenNumerico_Devuelve400(int origen)
+    {
+        var vista = await VistaPreviaAsync();
+        var cuerpo = Cuerpo(vista, ClavesAccionables(vista));
+        cuerpo["origen"] = origen;
+
+        var problema = await LeerProblemaAsync(await EnviarAsync(cuerpo), HttpStatusCode.BadRequest);
+
+        Assert.Equal("El valor de «origen» no es válido.", problema.GetProperty("detail").GetString());
+        Assert.True(problema.GetProperty("errors").TryGetProperty("origen", out _));
+        Assert.Equal(0, await ContarCandidaturasAsync());
+    }
+
+    [Fact]
     public async Task Aplicar_TablaConEjecucionId_Devuelve400()
     {
         var vista = await VistaPreviaAsync();

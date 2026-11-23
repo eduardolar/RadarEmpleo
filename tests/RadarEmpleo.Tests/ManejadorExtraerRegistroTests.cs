@@ -349,6 +349,23 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     [Fact]
+    public async Task RegistroSinHashAlEmpezar_DaErrorQueLoDiceSinClaudeNiGasto()
+    {
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([Fila()]), CosteUsd: 0.42m));
+        using var procesador = CrearProcesador(new HashDeOtroRegistro(_lector, hash: null));
+        var (encolada, _) = (await _cola.EncolarAsync(TareaAgente.ExtraerRegistro))!.Value;
+
+        Assert.True(await procesador.ProcesarSiguienteAsync(CancellationToken.None));
+
+        await using var db = _factory.CreateDbContext();
+        var ejecucion = await db.EjecucionesAgente.AsNoTracking().SingleAsync(e => e.Id == encolada.Id);
+        Assert.Equal(EstadoEjecucion.Error, ejecucion.Estado);
+        Assert.Equal(ManejadorExtraerRegistro.MensajeRegistroSinHashAlEmpezar, ejecucion.Error);
+        Assert.Equal(0m, ejecucion.CosteUsd);
+        Assert.Empty(_claude.Peticiones);
+    }
+
+    [Fact]
     public async Task Encolar_SinRegistroOSinCarpetaDa409YConCandidaturaDa400()
     {
         await Assert.ThrowsAsync<ValidacionException>(() => _cola.EncolarAsync(TareaAgente.ExtraerRegistro, 1));
@@ -595,16 +612,23 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     [InlineData("[]")]
     [InlineData("""{"candidaturas":[],"dudas":[]}""")]
     [InlineData("""{"candidaturas":[{"estado":3}],"dudas":[],"sinLeer":[]}""")]
+    [InlineData("""{"candidaturas":[null],"dudas":[],"sinLeer":[]}""")]
+    [InlineData("""{"candidaturas":[{}],"dudas":[],"sinLeer":[]}""")]
+    [InlineData("""{"candidaturas":[],"dudas":[null],"sinLeer":[]}""")]
+    [InlineData("""{"candidaturas":[],"dudas":[],"sinLeer":[null]}""")]
+    [InlineData("""{"candidaturas":[],"dudas":[],"sinLeer":[{"cita":"x"}]}""")]
+    [InlineData("""{"candidaturas":[],"dudas":[],"sinLeer":[{"cita":null,"motivo":"m"}]}""")]
+    [InlineData("""{"candidaturas":null,"dudas":[],"sinLeer":[]}""")]
     public void LeerGuardado_JsonRotoONull_DaNull(string? json) =>
         Assert.Null(ManejadorExtraerRegistro.LeerGuardado(json));
 
     /// <summary>
     /// El lector real, pero el hash del registro que ve el procesador es otro: como si el archivo cambiara justo entre el
-    /// hash «antes» y la lectura del manejador.
+    /// hash «antes» y la lectura del manejador. Con null, como si estuviera bloqueado justo al sacar el hash.
     /// </summary>
-    private sealed class HashDeOtroRegistro(ILectorCurriculum real) : ILectorCurriculum
+    private sealed class HashDeOtroRegistro(ILectorCurriculum real, string? hash = HashDeOtroRegistro.Hash) : ILectorCurriculum
     {
-        public static readonly string Hash = new('0', 64);
+        public const string Hash = "0000000000000000000000000000000000000000000000000000000000000000";
 
         public Task<string> LeerRegistroAsync(CancellationToken cancelacion = default) => real.LeerRegistroAsync(cancelacion);
 
@@ -613,7 +637,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         public Task<TextoLeido> LeerPerfilAsync(CancellationToken cancelacion = default) => real.LeerPerfilAsync(cancelacion);
 
         public Task<string?> LeerHashAsync(ArchivoVigilado archivo, CancellationToken cancelacion = default) =>
-            archivo == ArchivoVigilado.Registro ? Task.FromResult<string?>(Hash) : real.LeerHashAsync(archivo, cancelacion);
+            archivo == ArchivoVigilado.Registro ? Task.FromResult(hash) : real.LeerHashAsync(archivo, cancelacion);
 
         public IReadOnlyList<ArchivoDisponible> LeerDocumentosDisponibles() => real.LeerDocumentosDisponibles();
 

@@ -20,6 +20,7 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
     public const string MensajeSinTextoLibre = "El registro no tiene texto libre fuera de la tabla y los rastreos: no hay nada que extraer.";
     public const string MensajeDemasiadoLargo = "El texto libre del registro es demasiado largo para leerlo de una vez (más de 250.000 caracteres).";
     public const string MensajeRegistroCambiandoAlEmpezar = "El registro ha cambiado justo al empezar la extracción. Vuelve a lanzarla.";
+    public const string MensajeRegistroSinHashAlEmpezar = "No se ha podido leer el registro al empezar. Vuelve a lanzarla.";
 
     /// <summary>Largo máximo del texto libre en el prompt (unos 100.000 tokens): si se pasa, no se lanza.</summary>
     public const int LargoRegistro = 250_000;
@@ -42,6 +43,13 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
         Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
     };
 
+    // Al volver a leer lo guardado: sin campos que falten ni null donde no cabe (los elementos de las listas, aparte).
+    private static readonly JsonSerializerOptions LecturaGuardado = new(Guardado)
+    {
+        RespectNullableAnnotations = true,
+        RespectRequiredConstructorParameters = true
+    };
+
     public DefinicionTarea Definicion => DefinicionesTareas.ExtraerRegistro;
 
     public Task<bool> ValidarAsync(int? candidaturaId, CancellationToken cancelacion)
@@ -54,12 +62,13 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
 
     /// <summary>
     /// El texto del prompt sale de los mismos bytes que el hash que se compara al aplicar: si no son los del hash guardado al
-    /// empezar (<see cref="ContextoTarea.HashRegistroAntes"/>; también si ese hash no se pudo leer), la extracción nunca se
-    /// podría aplicar y acaba en Error sin lanzar Claude.
+    /// empezar (<see cref="ContextoTarea.HashRegistroAntes"/>), o si ese hash no se pudo leer, la extracción nunca se podría
+    /// aplicar y acaba en Error sin lanzar Claude.
     /// </summary>
     public async Task<PreparacionTarea> ConstruirAsync(EjecucionAgente ejecucion, ContextoTarea contexto, CancellationToken cancelacion)
     {
         var leido = await lector.LeerRegistroConFechaAsync(cancelacion);
+        if (contexto.HashRegistroAntes is null) throw new ReglaNegocioException(MensajeRegistroSinHashAlEmpezar);
         if (!string.Equals(leido.Hash, contexto.HashRegistroAntes, StringComparison.Ordinal))
             throw new ReglaNegocioException(MensajeRegistroCambiandoAlEmpezar);
         var texto = AnalizadorRegistro.TextoLibre(leido.Texto).Texto;
@@ -180,8 +189,9 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
         if (json is null) return null;
         try
         {
-            // Una lista que falta llega como null: eso tampoco es algo que haya guardado Guardar.
-            return JsonSerializer.Deserialize<ResultadoExtraccionRegistro>(json, Guardado) is { Candidaturas: not null, Dudas: not null, SinLeer: not null } leido
+            // Las opciones no miran dentro de las listas: un elemento null tampoco es algo que haya guardado Guardar.
+            return JsonSerializer.Deserialize<ResultadoExtraccionRegistro>(json, LecturaGuardado) is { } leido
+                && !leido.Candidaturas.Any(f => f is null) && !leido.Dudas.Any(d => d is null) && !leido.SinLeer.Any(f => f is null)
                 ? leido
                 : null;
         }
