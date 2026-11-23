@@ -86,6 +86,9 @@ public sealed class ColaEjecuciones
             var parametros = candidaturaId is { } id ? JsonSerializer.Serialize(new { candidaturaId = id }) : "{}";
             var ejecucion = EjecucionAgente.Nueva(tarea, parametros, definicion.PresupuestoUsd,
                 (int)definicion.TiempoMaximo.TotalSeconds, definicion.Modelo, ahora, candidaturaId);
+            // Solo espera su turno si hay otra delante; con la cola vacía empieza enseguida (sin motivo de espera).
+            if (await db.EjecucionesAgente.AnyAsync(e => e.Estado == EstadoEjecucion.EnCola || e.Estado == EstadoEjecucion.EnCurso, cancelacion))
+                ejecucion.Esperar(MotivoEspera.Turno, null);
             db.EjecucionesAgente.Add(ejecucion);
             await db.SaveChangesAsync(cancelacion);
             Avisar(ejecucion.Id);

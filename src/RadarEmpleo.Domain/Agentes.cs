@@ -110,7 +110,10 @@ public class EjecucionAgente
 
     private static bool Cambiado(string? antes, string? despues) => antes is not null && despues is not null && antes != despues;
 
-    /// <summary>Una ejecución nueva, en cola desde <paramref name="ahoraUtc"/>.</summary>
+    /// <summary>
+    /// Una ejecución nueva, en cola desde <paramref name="ahoraUtc"/>, sin motivo de espera: la cola le pone
+    /// <see cref="MotivoEspera.Turno"/> si de verdad hay otra delante.
+    /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">Presupuesto o tiempo máximo no positivos (son de código, no del usuario).</exception>
     public static EjecucionAgente Nueva(TareaAgente tarea, string parametrosJson, decimal presupuesto, int tiempoMaximo,
         string? modelo, DateTime ahoraUtc, int? candidaturaId = null)
@@ -122,7 +125,6 @@ public class EjecucionAgente
             Tarea = tarea,
             ParametrosJson = parametrosJson,
             Estado = EstadoEjecucion.EnCola,
-            Espera = MotivoEspera.Turno,
             FechaAlta = ahoraUtc,
             PresupuestoUsd = presupuesto,
             TiempoMaximoSegundos = tiempoMaximo,

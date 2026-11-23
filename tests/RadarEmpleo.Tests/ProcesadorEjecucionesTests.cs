@@ -244,6 +244,24 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Encolar_SoloEsperaTurnoSiHayOtraDelante()
+    {
+        var primera = await EncolarAsync();
+        Assert.Null((await LeerAsync(primera.Id)).Espera);
+
+        var segunda = await EncolarAsync(TareaAgente.AnalizarEncaje, _candidatura);
+        var leida = await LeerAsync(segunda.Id);
+        Assert.Equal(MotivoEspera.Turno, leida.Espera);
+        Assert.Null(leida.QuienBloquea);
+
+        // Con la de delante ya terminada, la siguiente vuelve a no tener motivo de espera.
+        Assert.True(await _procesador.ProcesarSiguienteAsync(CancellationToken.None));
+        Assert.True(await _procesador.ProcesarSiguienteAsync(CancellationToken.None));
+        var tercera = await EncolarAsync();
+        Assert.Null((await LeerAsync(tercera.Id)).Espera);
+    }
+
+    [Fact]
     public async Task LaTareaSinCarpetaDeCurriculum_TrabajaEnSuCarpetaDeEjecucion()
     {
         var ejecucion = await EncolarAsync();
