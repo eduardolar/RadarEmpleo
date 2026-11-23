@@ -116,9 +116,16 @@ public sealed class BloqueoCompartido
             }
 
             var (leido, caducado) = Leer(ruta, ahoraUtc, contenido.EjecucionId);
-            if (!caducado || intento > 0) return ResultadoBloqueo.Ocupado(BloqueoEjecucion.NombreVisible(leido?.Quien));
+            if (!caducado || intento > 0)
+            {
+                // Uno que no es de los conocidos se enseña como «otro programa»; lo que dice el archivo, solo aquí.
+                if (leido is not null && BloqueoEjecucion.NombreVisible(leido.Quien) == BloqueoEjecucion.NombreOtroPrograma)
+                    _log.LogInformation("Bloqueo ocupado por «{Quien}» ({Tarea}, pid {Pid}).",
+                        BloqueoEjecucion.NombreSaneado(leido.Quien), BloqueoEjecucion.NombreSaneado(leido.Tarea), leido.Pid);
+                return ResultadoBloqueo.Ocupado(BloqueoEjecucion.NombreVisible(leido?.Quien));
+            }
             _log.LogInformation("Bloqueo caducado de {Quien} ({Tarea}, pid {Pid}): se borra.",
-                BloqueoEjecucion.NombreVisible(leido?.Quien), BloqueoEjecucion.NombreVisible(leido?.Tarea), leido?.Pid);
+                BloqueoEjecucion.NombreSaneado(leido?.Quien), BloqueoEjecucion.NombreSaneado(leido?.Tarea), leido?.Pid);
             if (!Borrar(ruta)) return ResultadoBloqueo.Ocupado(BloqueoEjecucion.NombreVisible(leido?.Quien));
         }
     }

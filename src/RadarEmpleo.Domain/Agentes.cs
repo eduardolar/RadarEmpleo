@@ -56,7 +56,10 @@ public class EjecucionAgente
     public string ParametrosJson { get; set; } = "{}";
     public EstadoEjecucion Estado { get; private set; }
     public MotivoEspera? Espera { get; private set; }
-    /// <summary>Quién tiene el bloqueo mientras espera, para enseñarlo: «la tarea de los lunes», «/empleo».</summary>
+    /// <summary>
+    /// Quién tiene el bloqueo mientras espera, para enseñarlo (<see cref="BloqueoEjecucion.NombreVisible"/>): «la tarea de
+    /// los lunes», «tu sesión de /empleo en Claude Code», «otra ventana de RadarEmpleo» u «otro programa».
+    /// </summary>
     public string? QuienBloquea { get; private set; }
     /// <summary>Cuándo se encoló.</summary>
     public DateTime FechaAlta { get; set; }
