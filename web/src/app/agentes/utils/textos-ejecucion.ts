@@ -9,6 +9,9 @@ import {
 // Claude Code va con la suscripción de Eduardo: en pantalla se habla de «uso estimado» como porcentaje
 // del tope de hoy y nunca de dólares, aunque la API dé los importes en el equivalente en USD.
 
+/** Entre una cifra y su unidad («3 %», «5 min»): así no se parten al final de una línea */
+export const NBSP = String.fromCharCode(0xa0);
+
 /** La insignia de cada estado (en femenino, como «la tarea») */
 export const ETIQUETA_ESTADO: Record<EstadoEjecucion, string> = {
   EnCola: 'En cola',
@@ -60,23 +63,26 @@ type DatosUso = Pick<
   'estado' | 'inicio' | 'costeUsd' | 'costeEstimado' | 'presupuestoUsd'
 >;
 
-/** «59 s», «1 min 20 s», «5 min», «1 h 2 min», «2 h»; null si no es un número (una fecha inválida) */
+/**
+ * «59 s», «1 min 20 s», «5 min», «1 h 2 min», «2 h», con espacio de no separación entre la cifra y su
+ * unidad (no se parten al final de una línea); null si no es un número (una fecha inválida)
+ */
 export function duracion(segundos: number): string | null {
   if (!Number.isFinite(segundos)) {
     return null;
   }
   const total = Math.max(0, Math.floor(segundos));
   if (total < 60) {
-    return `${total} s`;
+    return `${total}${NBSP}s`;
   }
   if (total < 3600) {
     const minutos = Math.floor(total / 60);
     const resto = total % 60;
-    return resto === 0 ? `${minutos} min` : `${minutos} min ${resto} s`;
+    return resto === 0 ? `${minutos}${NBSP}min` : `${minutos}${NBSP}min ${resto}${NBSP}s`;
   }
   const horas = Math.floor(total / 3600);
   const minutos = Math.floor((total % 3600) / 60);
-  return minutos === 0 ? `${horas} h` : `${horas} h ${minutos} min`;
+  return minutos === 0 ? `${horas}${NBSP}h` : `${horas}${NBSP}h ${minutos}${NBSP}min`;
 }
 
 /**
@@ -96,9 +102,9 @@ function porcentajeDelTope(usd: number, topeUsd: number | null, comoMucho: boole
   return porcentaje < 100 ? Math.min(redondeado, 99) : redondeado;
 }
 
-/** «3 %», o «menos del 1 %» si ha gastado algo pero no llega al 1 % */
+/** «3 %», o «menos del 1 %» si ha gastado algo pero no llega al 1 % (con espacio de no separación) */
 function parteConocida(usd: number, porcentaje: number): string {
-  return porcentaje === 0 && usd > 0 ? 'menos del 1 %' : `${porcentaje} %`;
+  return porcentaje === 0 && usd > 0 ? `menos del 1${NBSP}%` : `${porcentaje}${NBSP}%`;
 }
 
 /**
@@ -106,18 +112,25 @@ function parteConocida(usd: number, porcentaje: number): string {
  * - con su coste, «uso estimado: 1 % del tope de hoy» (con 0, «no ha gastado nada de tu tope de hoy»);
  * - en curso, «uso estimado: como mucho el 3 % del tope de hoy», con su presupuesto;
  * - terminada sin coste, «uso estimado: no se sabe, como mucho el 3 % del tope de hoy».
- * null sin tope o si no llegó a empezar (no ha gastado nada)
+ * De otro día (`deHoy` a false), «del tope diario». null sin tope o si no llegó a empezar (no ha
+ * gastado nada)
  */
-export function usoEstimado(ejecucion: DatosUso, topeUsd: number | null): string | null {
+export function usoEstimado(
+  ejecucion: DatosUso,
+  topeUsd: number | null,
+  deHoy = true,
+): string | null {
   const { costeUsd, costeEstimado, estado, inicio, presupuestoUsd } = ejecucion;
+  // El porcentaje sale del tope de ahora: de otro día no se sabe si era el mismo, así que «diario»
+  const tope = deHoy ? 'tope de hoy' : 'tope diario';
   if (costeUsd !== null) {
     const porcentaje = porcentajeDelTope(costeUsd, topeUsd, false);
     if (porcentaje === null) {
       return null;
     }
     return costeUsd <= 0
-      ? 'no ha gastado nada de tu tope de hoy'
-      : `uso estimado: ${parteConocida(costeUsd, porcentaje)} del tope de hoy`;
+      ? `no ha gastado nada de tu ${tope}`
+      : `uso estimado: ${parteConocida(costeUsd, porcentaje)} del ${tope}`;
   }
   const enCurso = estado === 'EnCurso' && inicio !== null;
   if (!costeEstimado && !enCurso) {
@@ -128,8 +141,8 @@ export function usoEstimado(ejecucion: DatosUso, topeUsd: number | null): string
     return null;
   }
   return costeEstimado
-    ? `uso estimado: no se sabe, como mucho el ${cota} % del tope de hoy`
-    : `uso estimado: como mucho el ${cota} % del tope de hoy`;
+    ? `uso estimado: no se sabe, como mucho el ${cota}${NBSP}% del ${tope}`
+    : `uso estimado: como mucho el ${cota}${NBSP}% del ${tope}`;
 }
 
 /**
@@ -163,16 +176,19 @@ export function reservaDelDia(gasto: Pick<GastoHoy, 'reservadoUsd' | 'topeUsd'>)
   const cota = porcentajeDelTope(gasto.reservadoUsd, gasto.topeUsd, true);
   return cota === null
     ? null
-    : `Reservado para lo que está en marcha: hasta el ${cota} % del tope de hoy`;
+    : `Reservado para lo que está en marcha: hasta el ${cota}${NBSP}% del tope de hoy`;
 }
 
 /** Por qué no se pueden usar los agentes desde aquí, para /agentes (sin /api/agentes/estado, que daría 403) */
-export function motivoSinAgentes(info: Pick<SistemaInfo, 'modo' | 'agentesHabilitados'>): string {
+export function motivoSinAgentes(
+  info: Pick<SistemaInfo, 'modo' | 'agentesHabilitados' | 'desdeElPc'>,
+): string {
   if (info.modo === 'Demo') {
     return 'En la demo no se usa Claude: los agentes están apagados.';
   }
-  if (!info.agentesHabilitados) {
-    return 'Los agentes de Claude están apagados en la configuración de la app.';
+  // Por el móvil `agentesHabilitados` siempre llega a false: no quiere decir que estén apagados
+  if (info.desdeElPc && !info.agentesHabilitados) {
+    return 'Los agentes de Claude están apagados en la configuración de la app. Se encienden allí, no desde esta pantalla; en Ajustes puedes ver si están encendidos.';
   }
   return 'Los agentes de Claude solo se pueden usar desde el PC donde está instalada la app.';
 }
@@ -186,12 +202,14 @@ export function conPunto(texto: string): string {
 /**
  * La frase del estado para la tarjeta. `ahora` cuenta el tiempo de lo que va en curso (null: sin el
  * tiempo, ver `relojEnCurso`); `topeUsd` es el de hoy (de `EstadoAgentes.gasto`), o null si no se
- * sabe y no se dice el uso
+ * sabe y no se dice el uso. En la lista de /agentes (`compacta`), un Error solo da el motivo (la
+ * insignia ya dice «No ha salido») y lo de otro día (`deHoy` a false) habla del «tope diario»
  */
 export function textoEstado(
   ejecucion: EjecucionAgente,
   ahora: Date | null,
   topeUsd: number | null,
+  { compacta = false, deHoy = true }: { compacta?: boolean; deHoy?: boolean } = {},
 ): string {
   switch (ejecucion.estado) {
     case 'EnCola':
@@ -199,14 +217,17 @@ export function textoEstado(
     case 'EnCurso':
       return textoEnCurso(ejecucion, ahora);
     case 'Ok':
-      return textoHecha(ejecucion, topeUsd);
-    case 'Error':
-      return ejecucion.error?.trim()
-        ? `No ha salido. ${conPunto(ejecucion.error)}`
-        : 'No ha salido.';
+      return textoHecha(ejecucion, topeUsd, deHoy);
+    case 'Error': {
+      const motivo = ejecucion.error?.trim() ? conPunto(ejecucion.error) : null;
+      if (compacta) {
+        return motivo ?? 'Sin más detalle.';
+      }
+      return motivo ? `No ha salido. ${motivo}` : 'No ha salido.';
+    }
     case 'Cancelada':
       // También la cancela la API al arrancar si estaba en cola: no se dice quién
-      return textoCancelada(ejecucion, topeUsd);
+      return textoCancelada(ejecucion, topeUsd, deHoy);
   }
 }
 
@@ -277,21 +298,25 @@ function textoEnCurso(ejecucion: EjecucionAgente, ahora: Date | null): string {
   return reloj === null ? trabajando : `${trabajando} · ${reloj}`;
 }
 
-function textoCancelada(ejecucion: EjecucionAgente, topeUsd: number | null): string {
+function textoCancelada(
+  ejecucion: EjecucionAgente,
+  topeUsd: number | null,
+  deHoy: boolean,
+): string {
   if (ejecucion.inicio === null) {
     return 'Cancelada antes de empezar. No ha gastado nada.';
   }
-  const uso = usoEstimado(ejecucion, topeUsd);
+  const uso = usoEstimado(ejecucion, topeUsd, deHoy);
   return uso === null ? 'Cancelada antes de terminar.' : `Cancelada antes de terminar · ${uso}`;
 }
 
-function textoHecha(ejecucion: EjecucionAgente, topeUsd: number | null): string {
+function textoHecha(ejecucion: EjecucionAgente, topeUsd: number | null, deHoy: boolean): string {
   const { inicio, fin } = ejecucion;
   const tardado =
     inicio !== null && fin !== null
       ? duracion((Date.parse(fin) - Date.parse(inicio)) / 1000)
       : null;
   const hecha = tardado === null ? 'Hecha' : `Hecha en ${tardado}`;
-  const uso = usoEstimado(ejecucion, topeUsd);
+  const uso = usoEstimado(ejecucion, topeUsd, deHoy);
   return uso === null ? `${hecha}.` : `${hecha} · ${uso}`;
 }

@@ -41,9 +41,17 @@ describe('MasPageComponent', () => {
     expect(elemento.querySelector('a[href="/agentes"]')!.textContent).toContain(
       'Agentes de Claude',
     );
+    expect(elemento.querySelector('header p')!.textContent).toContain(
+      'Perfil, estadísticas, importación, ajustes y agentes.',
+    );
   });
 
   it('sin agentes disponibles (el móvil, la demo), las cuatro de siempre', () => {
-    expect(rutas(pintar(false))).toEqual(['/perfil', '/estadisticas', '/importacion', '/ajustes']);
+    const elemento = pintar(false);
+
+    expect(rutas(elemento)).toEqual(['/perfil', '/estadisticas', '/importacion', '/ajustes']);
+    expect(elemento.querySelector('header p')!.textContent).toContain(
+      'Perfil, estadísticas, importación y ajustes.',
+    );
   });
 });

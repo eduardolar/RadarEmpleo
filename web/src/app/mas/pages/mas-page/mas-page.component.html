@@ -1,7 +1,14 @@
 <!-- Página de rejilla: alineada a la izquierda con el título, como Tablero y Rastreos, y con un ancho
      máximo para que las tarjetas no se estiren (docs/DISENO.md, «Maquetación de página») -->
 <section class="flex w-full max-w-4xl flex-col gap-6">
-  <app-cabecera-pagina titulo="Más" descripcion="Perfil, estadísticas, importación y ajustes." />
+  <app-cabecera-pagina
+    titulo="Más"
+    [descripcion]="
+      conAgentes()
+        ? 'Perfil, estadísticas, importación, ajustes y agentes.'
+        : 'Perfil, estadísticas, importación y ajustes.'
+    "
+  />
 
   <ul class="grid gap-4 sm:grid-cols-2">
     <li class="flex">
@@ -64,7 +71,7 @@
           class="flex-1"
           ruta="/agentes"
           titulo="Agentes de Claude"
-          descripcion="Lo que ha lanzado la app con Claude y cuánto llevas usado hoy."
+          descripcion="Cuánto llevas usado hoy y qué ha hecho Claude."
         >
           <svg
             viewBox="0 0 24 24"

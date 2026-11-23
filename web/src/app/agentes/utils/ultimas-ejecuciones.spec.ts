@@ -11,7 +11,7 @@ describe('ultimasDeCadaTarea', () => {
       crearEjecucion({ id: 2, tarea: 'ExtraerRegistro', candidaturaId: null }),
     ];
 
-    expect([...ultimasDeCadaTarea(lista)].sort()).toEqual([5, 6, 7]);
+    expect([...ultimasDeCadaTarea(lista)].sort((a, b) => a - b)).toEqual([5, 6, 7]);
   });
 
   it('la misma candidatura con otra tarea cuenta aparte', () => {
@@ -20,7 +20,17 @@ describe('ultimasDeCadaTarea', () => {
       crearEjecucion({ id: 2, tarea: 'Rastreo', candidaturaId: 12 }),
     ];
 
-    expect([...ultimasDeCadaTarea(lista)].sort()).toEqual([1, 2]);
+    expect([...ultimasDeCadaTarea(lista)].sort((a, b) => a - b)).toEqual([1, 2]);
+  });
+
+  it('cada rastreo cuenta aparte', () => {
+    const lista = [
+      crearEjecucion({ id: 8, tarea: 'Rastreo', candidaturaId: null, rastreoId: 1 }),
+      crearEjecucion({ id: 9, tarea: 'Rastreo', candidaturaId: null, rastreoId: 2 }),
+      crearEjecucion({ id: 4, tarea: 'Rastreo', candidaturaId: null, rastreoId: 2 }),
+    ];
+
+    expect([...ultimasDeCadaTarea(lista)].sort((a, b) => a - b)).toEqual([8, 9]);
   });
 
   it('sin ejecuciones, ninguna', () => {

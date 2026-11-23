@@ -67,6 +67,8 @@ export class AgentesService {
 
   /** La API ha contestado 403: desde aquí no se puede, aunque /api/sistema/info dijera que sí */
   private readonly _rechazados = signal(false);
+  /** Cuántos 403 van: un estado pedido antes del último no vuelve a dar por disponibles los agentes */
+  private rechazos = 0;
 
   readonly disponibles = computed(
     () => this.sistema.info()?.agentesDisponibles === true && !this._rechazados(),
@@ -131,8 +133,14 @@ export class AgentesService {
       return;
     }
     this.peticionEstado?.unsubscribe();
+    const rechazosAlPedir = this.rechazos;
     this.peticionEstado = this.http.get<EstadoAgentes>(`${URL_AGENTES}/estado`).subscribe({
       next: (estado) => {
+        // Pedido con la lista y esta dio 403: una API que dice sí y no a la vez no reactiva nada
+        // (si no, la página volvería a pedirlo todo en bucle)
+        if (this.rechazos !== rechazosAlPedir) {
+          return;
+        }
         this._estado.set(estado);
         this._rechazados.set(false);
         this._errorEstado.set(null);
@@ -337,6 +345,7 @@ export class AgentesService {
     if (error.estado !== 403) {
       return false;
     }
+    this.rechazos++;
     this._rechazados.set(true);
     this._estado.set(null);
     this.seguidas.clear();

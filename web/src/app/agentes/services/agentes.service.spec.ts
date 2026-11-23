@@ -139,6 +139,19 @@ describe('AgentesService', () => {
       expect(service.puedeLanzar()).toBe(true);
     });
 
+    it('un estado pedido antes de un 403 que contesta después no vuelve a dar disponibles', () => {
+      service.cargarEstado();
+      service.cargarHistorial();
+      const estado = http.expectOne(URL_ESTADO);
+      http
+        .expectOne((r) => r.url === URL_EJECUCIONES)
+        .flush(null, { status: 403, statusText: 'Forbidden' });
+      estado.flush(crearEstadoAgentes());
+
+      expect(service.disponibles()).toBe(false);
+      expect(service.estado()).toBeNull();
+    });
+
     it('un error que no es 403 conserva el estado anterior', () => {
       const estado = crearEstadoAgentes();
       service.cargarEstado();

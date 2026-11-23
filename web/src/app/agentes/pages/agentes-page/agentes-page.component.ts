@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, untracked } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
@@ -65,7 +65,11 @@ export default class AgentesPageComponent {
 
   protected readonly ultimas = computed(() => ultimasDeCadaTarea(this.historial() ?? []));
 
+  private refrescoPendiente = false;
+  private destruida = false;
+
   constructor() {
+    inject(DestroyRef).onDestroy(() => (this.destruida = true));
     this.sistema.cargarInfoSiFalta();
     // Al entrar, o en cuanto /api/sistema/info diga que hay agentes, se pide la lista y el uso
     effect(() => {
@@ -80,8 +84,18 @@ export default class AgentesPageComponent {
     this.agentes.cargarHistorial();
   }
 
-  protected reintentarHistorial(): void {
-    this.agentes.cargarHistorial();
+  /** Lo que avisan las tarjetas: si terminan varias en la misma vuelta del seguimiento, se pide una vez */
+  protected pedirRefresco(): void {
+    if (this.refrescoPendiente) {
+      return;
+    }
+    this.refrescoPendiente = true;
+    queueMicrotask(() => {
+      this.refrescoPendiente = false;
+      if (!this.destruida) {
+        this.refrescar();
+      }
+    });
   }
 
   protected reintentarConexion(): void {

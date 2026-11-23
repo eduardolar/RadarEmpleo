@@ -4,7 +4,7 @@
 
   <app-cabecera-pagina
     titulo="Agentes de Claude"
-    descripcion="Lo que ha lanzado la app con Claude y cuánto llevas usado de tu tope de hoy."
+    descripcion="Cuánto llevas usado hoy de tu tope y qué ha hecho Claude: lo que salió bien y lo que no."
   />
 
   @if (!info()) {
@@ -22,7 +22,7 @@
       </div>
     } @else {
       <p role="status" class="text-sm text-on-surface-variant">
-        Comprobando si se puede usar Claude...
+        Comprobando si Claude está disponible…
       </p>
     }
   } @else if (!disponibles()) {
@@ -49,7 +49,17 @@
     >
       <h2 id="titulo-uso" class="mb-3 text-xl font-extrabold">Uso de hoy</h2>
       @if (errorEstado(); as mensaje) {
-        <p role="alert" class="text-sm font-medium text-error">{{ mensaje }}</p>
+        <div role="alert">
+          <p class="text-sm font-medium text-error">{{ mensaje }}</p>
+          <button
+            mat-button
+            type="button"
+            class="mt-2 [--mat-button-text-container-height:48px]"
+            (click)="refrescar()"
+          >
+            Reintentar
+          </button>
+        </div>
       } @else if (uso(); as texto) {
         <!-- La frase del uso, en grande y en tinta (nada de rojo ni ámbar): se lee de un vistazo sin
              parecer un aviso -->
@@ -58,7 +68,7 @@
           <p class="mt-1 text-sm text-on-surface-variant">{{ texto }}</p>
         }
       } @else {
-        <p class="text-sm text-on-surface-variant">Comprobando el uso de hoy...</p>
+        <p class="text-sm text-on-surface-variant">Calculando el uso de hoy…</p>
       }
     </section>
 
@@ -79,7 +89,7 @@
             mat-button
             type="button"
             class="mt-2 [--mat-button-text-container-height:48px]"
-            (click)="reintentarHistorial()"
+            (click)="refrescar()"
           >
             Reintentar
           </button>
@@ -117,8 +127,12 @@
               Todavía no has lanzado ninguna tarea de Claude.
             </p>
             <p class="mt-3 font-mono text-sm font-medium text-on-surface-variant">
-              Se lanzan desde la ficha de una candidatura y desde Importación.
+              Se lanzan desde la ficha de una candidatura o desde Importación.
             </p>
+            <div class="mt-6 flex flex-wrap justify-center gap-3">
+              <a mat-stroked-button routerLink="/tablero">Ir al Tablero</a>
+              <a mat-stroked-button routerLink="/importacion">Ir a Importación</a>
+            </div>
           </div>
         } @else {
           <ul
@@ -126,9 +140,9 @@
           >
             @for (e of lista; track e.id) {
               <!-- Arriba, la tarea y su fecha en la misma línea (la fecha a la derecha, como un
-                   registro); debajo, la candidatura. El enlace es del alto del texto (el anillo
-                   de foco no tapa la tarea ni la fecha) y su ::before le da los 48 px de toque:
-                   así 50 filas no se estiran -->
+                   registro); debajo, la candidatura. El enlace crece solo hacia abajo hasta los
+                   48 px de toque: un ::before que subiera taparía la tarea y la fecha, y uno que
+                   bajara taparía los botones de la fila -->
               <li class="agentes__ejecucion pt-3 pb-1">
                 <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
                   <h3 class="font-semibold text-on-surface">{{ nombreTarea[e.tarea] }}</h3>
@@ -141,7 +155,10 @@
                 @if (e.candidaturaId !== null) {
                   <a
                     [routerLink]="['/candidaturas', e.candidaturaId]"
-                    class="relative -mx-1 my-1 inline-flex max-w-full items-center rounded-lg px-1 py-0.5 text-sm font-medium text-primary underline decoration-2 underline-offset-4 [overflow-wrap:anywhere] before:absolute before:inset-x-0 before:-inset-y-3 hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+                    class="-mx-1 mt-1 inline-flex min-h-12 max-w-full items-start rounded-lg px-1 pt-0.5 text-sm font-medium text-primary underline decoration-2 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+                    [attr.aria-label]="
+                      e.candidatura ? null : 'Ver la candidatura: ' + nombreTarea[e.tarea]
+                    "
                   >
                     @if (e.candidatura; as c) {
                       {{ c.puesto }} en {{ c.empresa }}
@@ -156,9 +173,9 @@
                   [topeUsd]="tope()"
                   [contexto]="e.candidatura?.empresa ?? null"
                   [permitirReintentar]="ultimas().has(e.id)"
-                  (terminada)="refrescar()"
-                  (reintentada)="refrescar()"
-                  (perdida)="refrescar()"
+                  (terminada)="pedirRefresco()"
+                  (reintentada)="pedirRefresco()"
+                  (perdida)="pedirRefresco()"
                 />
               </li>
             }
