@@ -6,7 +6,9 @@ namespace RadarEmpleo.Services.Agentes;
 /// <param name="CarpetaTrabajo">Curriculum o <c>ejecuciones\&lt;id&gt;\</c>, según la definición de la tarea.</param>
 /// <param name="RutaLog">Ruta absoluta del log.</param>
 /// <param name="CarpetaDatos">Carpeta de datos de la app, que la tarea nunca puede leer (<see cref="ValoresArgumentos"/>).</param>
-public sealed record ContextoTarea(string CarpetaTrabajo, string RutaLog, string CarpetaDatos)
+/// <param name="HashRegistroAntes">El hash del registro que se guarda al empezar (<see cref="EjecucionAgente.HashRegistroAntes"/>),
+/// o null si no se ha podido leer. El <c>ejecucion</c> que recibe el manejador es de antes de empezar y aún no lo tiene.</param>
+public sealed record ContextoTarea(string CarpetaTrabajo, string RutaLog, string CarpetaDatos, string? HashRegistroAntes = null)
 {
     /// <summary>La petición con lo fijo de la definición (tiempo máximo, salida privada) y lo que pone el manejador.</summary>
     public PeticionClaude Peticion(DefinicionTarea definicion, IReadOnlyList<string> argumentos, string entrada) =>

@@ -181,7 +181,7 @@ public sealed class ProcesadorEjecuciones : BackgroundService
         using var corte = CancellationTokenSource.CreateLinkedTokenSource(parada);
         var hashRegistro = await HashAsync(ArchivoVigilado.Registro);
         var hashPerfil = await HashAsync(ArchivoVigilado.Perfil);
-        var contexto = Contexto(ejecucion, definicion);
+        var contexto = Contexto(ejecucion, definicion, hashRegistro);
         var empezada = await EmpezarAsync(id, corte, e =>
         {
             e.Empezar(_reloj.AhoraUtc, hashRegistro, hashPerfil);
@@ -345,7 +345,7 @@ public sealed class ProcesadorEjecuciones : BackgroundService
             _opciones.TopeGastoDiarioUsd);
     }
 
-    private ContextoTarea Contexto(EjecucionAgente ejecucion, DefinicionTarea definicion)
+    private ContextoTarea Contexto(EjecucionAgente ejecucion, DefinicionTarea definicion, string? hashRegistro)
     {
         var id = ejecucion.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var carpeta = definicion.Carpeta == CarpetaTrabajo.Curriculum ? _rutas.Carpeta! : Path.Combine(_opciones.CarpetaEjecuciones, id);
@@ -353,7 +353,7 @@ public sealed class ProcesadorEjecuciones : BackgroundService
         Directory.CreateDirectory(_opciones.CarpetaLogs);
         // Con la fecha de alta: si la BD se vuelve a crear y los ids se repiten, no se mezclan logs de ejecuciones distintas.
         var log = $"{ClaveLog}{id}-{ejecucion.FechaAlta:yyyyMMdd-HHmmss}.log";
-        return new ContextoTarea(carpeta, Path.Combine(_opciones.CarpetaLogs, log), _opciones.CarpetaDatos);
+        return new ContextoTarea(carpeta, Path.Combine(_opciones.CarpetaLogs, log), _opciones.CarpetaDatos, hashRegistro);
     }
 
     /// <summary>Mientras corre, mira cada sondeo si alguien ha pedido cancelarla en la BD y, si es así, corta.</summary>

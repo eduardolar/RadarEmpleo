@@ -19,6 +19,7 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
     public const string MensajeSinRegistro = $"No se encuentra {RutasCurriculum.ArchivoRegistro} en la carpeta Curriculum.";
     public const string MensajeSinTextoLibre = "El registro no tiene texto libre fuera de la tabla y los rastreos: no hay nada que extraer.";
     public const string MensajeDemasiadoLargo = "El texto libre del registro es demasiado largo para leerlo de una vez (más de 250.000 caracteres).";
+    public const string MensajeRegistroCambiandoAlEmpezar = "El registro ha cambiado justo al empezar la extracción. Vuelve a lanzarla.";
 
     /// <summary>Largo máximo del texto libre en el prompt (unos 100.000 tokens): si se pasa, no se lanza.</summary>
     public const int LargoRegistro = 250_000;
@@ -51,9 +52,17 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
         return Task.FromResult(true);
     }
 
+    /// <summary>
+    /// El texto del prompt sale de los mismos bytes que el hash que se compara al aplicar: si no son los del hash guardado al
+    /// empezar (<see cref="ContextoTarea.HashRegistroAntes"/>; también si ese hash no se pudo leer), la extracción nunca se
+    /// podría aplicar y acaba en Error sin lanzar Claude.
+    /// </summary>
     public async Task<PreparacionTarea> ConstruirAsync(EjecucionAgente ejecucion, ContextoTarea contexto, CancellationToken cancelacion)
     {
-        var texto = AnalizadorRegistro.TextoLibre(await lector.LeerRegistroAsync(cancelacion)).Texto;
+        var leido = await lector.LeerRegistroConFechaAsync(cancelacion);
+        if (!string.Equals(leido.Hash, contexto.HashRegistroAntes, StringComparison.Ordinal))
+            throw new ReglaNegocioException(MensajeRegistroCambiandoAlEmpezar);
+        var texto = AnalizadorRegistro.TextoLibre(leido.Texto).Texto;
         // Se mide lo que de verdad iría al prompt (sin invisibles y con NFKC, que puede alargarlo): así Rellenar nunca
         // recorta en silencio, y un texto que solo tiene invisibles cuenta como vacío.
         var limpio = PlantillaPrompt.Normalizar(texto, unaLinea: false);
@@ -164,6 +173,23 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
             : throw new FilaNoValida($"El campo «{campo}» no admite «{Recortar(Linea(valor), 40)}».");
 
     private static string Guardar(ResultadoExtraccionRegistro resultado) => JsonSerializer.Serialize(resultado, Guardado);
+
+    /// <summary>Lo que se ha guardado en <c>ResultadoJson</c>, con las mismas opciones, o null si falta o no se puede leer.</summary>
+    public static ResultadoExtraccionRegistro? LeerGuardado(string? json)
+    {
+        if (json is null) return null;
+        try
+        {
+            // Una lista que falta llega como null: eso tampoco es algo que haya guardado Guardar.
+            return JsonSerializer.Deserialize<ResultadoExtraccionRegistro>(json, Guardado) is { Candidaturas: not null, Dudas: not null, SinLeer: not null } leido
+                ? leido
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>«Ha encontrado 34 candidaturas en el texto libre.», y cuántas filas no se han leído y cuántas dudas hay.</summary>
     private static string Resumen(ResultadoExtraccionRegistro r)
