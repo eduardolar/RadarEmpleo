@@ -1,0 +1,116 @@
+<!-- Una tarjeta en línea con un solo marco y sin relleno lima; compacta, sin marco (va dentro de una lista).
+     tabindex -1: si el botón con el foco desaparece al cambiar el estado, el foco vuelve aquí -->
+<div
+  #tarjeta
+  tabindex="-1"
+  role="group"
+  class="estado-ejecucion focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+  [class]="
+    compacta()
+      ? 'estado-ejecucion--compacta py-2'
+      : 'rounded-md border-2 border-trazo bg-surface-container-lowest p-4'
+  "
+  [attr.aria-label]="'Tarea de Claude: ' + nombreTarea()"
+  [attr.data-estado]="estadoVisible()"
+>
+  <div class="estado-ejecucion__cabecera flex flex-wrap items-start gap-x-3 gap-y-1">
+    <span class="estado-ejecucion__insignia insignia" [class]="colorInsignia()">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        class="h-3 w-3 shrink-0"
+      >
+        <path stroke-linecap="square" [attr.d]="icono()" />
+      </svg>
+      <span class="insignia-texto">{{ etiqueta() }}</span>
+    </span>
+
+    <!-- La región que se anuncia solo lleva la frase del estado: el reloj va al lado, fuera de ella,
+         para que el lector de pantalla no repita la hora cada segundo -->
+    <p
+      class="estado-ejecucion__texto min-w-0 flex-1 text-sm text-on-surface [overflow-wrap:anywhere]"
+    >
+      <span class="estado-ejecucion__anuncio" role="status" aria-live="polite">{{
+        anuncio()
+      }}</span>
+      @if (reloj()) {
+        <span class="estado-ejecucion__reloj text-on-surface-variant tabular-nums">{{
+          reloj()
+        }}</span>
+      }
+    </p>
+  </div>
+
+  @if (enCurso() && !compacta()) {
+    <!-- Sin movimiento con el movimiento reducido: la insignia y el texto ya dicen que va en curso -->
+    <mat-progress-bar
+      class="estado-ejecucion__progreso mt-3 motion-reduce:hidden"
+      mode="indeterminate"
+      [attr.aria-label]="nombreTarea() + ' en curso'"
+    />
+  }
+
+  @for (aviso of avisos(); track aviso) {
+    <!-- En la lista compacta, sin role="alert": al abrir /agentes no se leerían todos de golpe -->
+    <p
+      class="estado-ejecucion__aviso mt-2 flex items-start gap-2 text-sm font-bold text-error [overflow-wrap:anywhere]"
+      [attr.role]="compacta() ? null : 'alert'"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        class="mt-0.5 h-4 w-4 shrink-0"
+      >
+        <path stroke-linejoin="round" d="M10 3 18 17H2L10 3Z" />
+        <path stroke-linecap="square" d="M10 8v4M10 14.5v.5" />
+      </svg>
+      <span>{{ aviso }}</span>
+    </p>
+  }
+
+  @if (errorAccion(); as error) {
+    <p
+      class="estado-ejecucion__error-accion mt-2 text-sm font-medium text-error [overflow-wrap:anywhere]"
+      role="alert"
+    >
+      {{ error }}
+    </p>
+  }
+
+  @if (puedeCancelar() || puedeReintentar()) {
+    <div class="estado-ejecucion__acciones mt-3 flex flex-wrap gap-2">
+      @if (puedeCancelar()) {
+        <button
+          mat-stroked-button
+          type="button"
+          class="boton-peligro-borde min-h-12 [--mat-button-outlined-container-height:48px]"
+          disabledInteractive
+          [disabled]="ocupada()"
+          [attr.aria-label]="(ocupada() ? 'Cancelando: ' : 'Cancelar: ') + nombreTarea()"
+          (click)="cancelar()"
+        >
+          {{ ocupada() ? 'Cancelando…' : 'Cancelar' }}
+        </button>
+      }
+      @if (puedeReintentar()) {
+        <button
+          mat-stroked-button
+          type="button"
+          class="min-h-12 [--mat-button-outlined-container-height:48px]"
+          disabledInteractive
+          [disabled]="ocupada()"
+          [attr.aria-label]="(ocupada() ? 'Reintentando: ' : 'Reintentar: ') + nombreTarea()"
+          (click)="reintentar()"
+        >
+          {{ ocupada() ? 'Reintentando…' : 'Reintentar' }}
+        </button>
+      }
+    </div>
+  }
+</div>

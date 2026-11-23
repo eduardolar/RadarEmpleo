@@ -17,6 +17,11 @@ export const ETIQUETA_ESTADO: Record<EstadoEjecucion, string> = {
   Cancelada: 'Cancelada',
 };
 
+/** La API ya no la encuentra (404 en el seguimiento): sin esto se quedaría «En curso» para siempre */
+export const ETIQUETA_PERDIDA = 'No se encuentra';
+export const TEXTO_PERDIDA =
+  'Ya no se encuentra esta tarea de Claude. Si hace falta, vuelve a lanzarla.';
+
 /** El nombre de la tarea en listas («Análisis del encaje · Acme») */
 export const NOMBRE_TAREA: Record<TareaAgente, string> = {
   Rastreo: 'Rastreo de ofertas',
