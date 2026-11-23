@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -58,38 +57,35 @@ public sealed class ConfiguracionAgentesTests : IDisposable
         Assert.False(ConfiguracionAgentes.EsLaDeVerdad(Path.Combine(_raiz, "temporal.db"), _datos));
     }
 
-    [Fact]
+    [FactSoloWindows("la identidad del archivo se lee con la API de Windows y la junction se crea con mklink")]
     public void EsLaDeVerdad_PorUnaJunctionHaciaLaCarpetaDeDatos()
     {
-        if (!OperatingSystem.IsWindows()) return;
         var junction = Path.Combine(_raiz, "atajo");
-        if (!Mklink("/J", junction, _datos)) return;
+        RutaSeguraTests.Mklink("/J", junction, _datos);
 
         Assert.True(ConfiguracionAgentes.EsLaDeVerdad(Path.Combine(junction, "radar.db"), _datos));
         Assert.True(ConfiguracionAgentes.EsLaDeVerdad(Path.Combine(junction, "nueva.db"), _datos));
     }
 
-    [Fact]
+    [FactSoloWindows("los enlaces duros se crean con mklink y se cuentan con la API de Windows")]
     public void EsLaDeVerdad_UnEnlaceDuro()
     {
-        if (!OperatingSystem.IsWindows()) return;
         var original = Path.Combine(_raiz, "original.db");
         File.WriteAllText(original, "x");
         var enlace = Path.Combine(_raiz, "enlace.db");
-        if (!Mklink("/H", enlace, original)) return;
+        RutaSeguraTests.Mklink("/H", enlace, original);
 
         Assert.True(ConfiguracionAgentes.EsLaDeVerdad(enlace, _datos));
         Assert.True(ConfiguracionAgentes.EsLaDeVerdad(original, _datos));
     }
 
-    [Fact]
+    [FactSoloWindows("la identidad del archivo se lee con la API de Windows y la junction se crea con mklink")]
     public void EsLaDeVerdad_ElMismoArchivoQueLaBdPorDefecto()
     {
-        if (!OperatingSystem.IsWindows()) return;
         // La BD «por defecto» de la carpeta de datos de mentira, alcanzada por otra ruta (una junction a su carpeta, fuera
         // de la comprobación por texto): la identidad del archivo la delata.
         var junction = Path.Combine(_raiz, "otra-ruta");
-        if (!Mklink("/J", junction, _datos)) return;
+        RutaSeguraTests.Mklink("/J", junction, _datos);
         Assert.True(ConfiguracionAgentes.EsLaDeVerdad(Path.Combine(junction, "radar.db"), Path.Combine(_raiz, "RADAREMPLEO")));
     }
 
@@ -146,16 +142,6 @@ public sealed class ConfiguracionAgentesTests : IDisposable
         // La propia API sigue valiendo en cualquier entorno.
         http.Request.Headers.Origin = "http://localhost:5180";
         Assert.Null(disponibilidad.Motivo(http));
-    }
-
-    private static bool Mklink(string tipo, string enlace, string destino)
-    {
-        var inicio = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var argumento in new[] { "/c", "mklink", tipo, enlace, destino }) inicio.ArgumentList.Add(argumento);
-        using var proceso = Process.Start(inicio)!;
-        proceso.WaitForExit(10_000);
-        // Sin permiso para crear enlaces en este PC: el test no se puede hacer aquí.
-        return proceso.ExitCode == 0 && (File.Exists(enlace) || Directory.Exists(enlace));
     }
 
     private sealed class CanalFijo : IClasificadorCanal

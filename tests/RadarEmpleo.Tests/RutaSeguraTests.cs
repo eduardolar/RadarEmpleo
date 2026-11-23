@@ -158,22 +158,11 @@ public sealed class RutaSeguraTests : IDisposable
         AssertNoValida(_raiz, "Archivo/DNI.pdf");
     }
 
-    [Fact]
+    [FactConEnlacesSimbolicos]
     public void Resolver_ArchivoQueEsUnEnlaceSimbolico_LoRechaza()
     {
         var enlace = Path.Combine(_raiz, "Candidaturas", Semana, "CV_enlace.pdf");
-        try
-        {
-            File.CreateSymbolicLink(enlace, Path.Combine(_fuera, "secreto.pdf"));
-        }
-        catch (IOException)
-        {
-            return; // Windows sin modo de desarrollador no deja crear enlaces simbólicos: lo cubre la unión.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return;
-        }
+        File.CreateSymbolicLink(enlace, Path.Combine(_fuera, "secreto.pdf"));
 
         AssertNoValida(_raiz, "Candidaturas/" + Semana + "/CV_enlace.pdf");
     }
