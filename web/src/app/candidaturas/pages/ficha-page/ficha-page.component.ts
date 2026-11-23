@@ -35,7 +35,6 @@ import { filter, finalize, switchMap } from 'rxjs';
 import { EstadoEjecucion } from '../../../agentes/components/estado-ejecucion/estado-ejecucion';
 import { EjecucionAgente } from '../../../agentes/interfaces/ejecucion.interface';
 import { AgentesService, esTerminal } from '../../../agentes/services/agentes.service';
-import { NBSP } from '../../../agentes/utils/textos-ejecucion';
 import { ErrorApi } from '../../../core/interfaces/error-api.interface';
 import { SistemaService } from '../../../core/services/sistema.service';
 import { PanelDocumentos } from '../../../documentos/components/panel-documentos/panel-documentos';
@@ -220,7 +219,9 @@ export default class FichaPageComponent {
       ? 'Volver a analizar el encaje'
       : 'Analizar encaje con Claude',
   );
-  protected readonly avisoGasto = `Gasta un poco de tu tope diario de Claude (suele ser en torno al 1${NBSP}%).`;
+  protected readonly avisoGasto = 'Gasta un poco de tu tope diario de Claude.';
+  // Aparte del effect: volver a guardar la misma info no repite la consulta de la última
+  private readonly segunInfo = computed(() => this.sistema.info()?.agentesDisponibles === true);
 
   protected readonly formularioNota = new FormGroup({
     texto: new FormControl('', {
@@ -304,7 +305,7 @@ export default class FichaPageComponent {
     this.sistema.cargarInfoSiFalta();
     effect(() => {
       const id = this.id();
-      const segunInfo = this.sistema.info()?.agentesDisponibles === true;
+      const segunInfo = this.segunInfo();
       const disponibles = this.agentes.disponibles();
       untracked(() => {
         if (disponibles) {
@@ -390,10 +391,13 @@ export default class FichaPageComponent {
     }
     const c = this.candidatura();
     if (e.estadoOferta === 'Cerrada') {
-      this.avisos.exito('La oferta ya no está publicada. ¿La descartas?', {
-        texto: 'Descartar',
-        alPulsar: () => this.descartarCerrada(c),
-      });
+      this.avisos.exito(
+        `La oferta de ${e.candidatura?.empresa ?? c?.empresa} ya no está publicada. ¿La descartas?`,
+        {
+          texto: 'Descartar',
+          alPulsar: () => this.descartarCerrada(c),
+        },
+      );
       return;
     }
     if (c?.id === e.candidaturaId) {
@@ -416,7 +420,8 @@ export default class FichaPageComponent {
         c,
         'Descartada',
         undefined,
-        () => (this.enfocarAcciones = true),
+        // Deshacer desde el aviso estando en otra ficha no debe mover el foco de esta
+        () => (this.enfocarAcciones = c.id === this.id()),
         'Cerrada',
       );
     }

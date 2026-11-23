@@ -5,8 +5,12 @@ import { MatDialog } from '@angular/material/dialog';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { EjecucionAgente } from '../../../agentes/interfaces/ejecucion.interface';
-import { INTERVALO_SEGUIMIENTO_MS } from '../../../agentes/services/agentes.service';
+import {
+  AgentesService,
+  INTERVALO_SEGUIMIENTO_MS,
+} from '../../../agentes/services/agentes.service';
 import { crearEjecucion, crearEstadoAgentes } from '../../../agentes/utils/ejecucion-de-prueba';
+import { SistemaService } from '../../../core/services/sistema.service';
 import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import { DialogoRecordatorio } from '../../../recordatorios/components/dialogo-recordatorio/dialogo-recordatorio';
 import { crearRecordatorio } from '../../../recordatorios/utils/recordatorio-de-prueba';
@@ -833,9 +837,7 @@ describe('FichaPageComponent', () => {
       const gasto = elemento().querySelector(
         `#${botonAnalizar()!.getAttribute('aria-describedby')}`,
       );
-      expect(gasto?.textContent?.trim()).toBe(
-        'Gasta un poco de tu tope diario de Claude (suele ser en torno al 1\u00a0%).',
-      );
+      expect(gasto?.textContent?.trim()).toBe('Gasta un poco de tu tope diario de Claude.');
       expect(elemento().querySelectorAll('[mat-flat-button]')).toHaveLength(1);
     });
 
@@ -898,10 +900,13 @@ describe('FichaPageComponent', () => {
       await seguimiento(5, analisis({ estado: 'Ok', estadoOferta: 'Cerrada' }));
 
       http.expectNone('/api/candidaturas/1');
-      expect(avisos.exito).toHaveBeenCalledWith('La oferta ya no está publicada. ¿La descartas?', {
-        texto: 'Descartar',
-        alPulsar: expect.any(Function),
-      });
+      expect(avisos.exito).toHaveBeenCalledWith(
+        'La oferta de Acme ya no está publicada. ¿La descartas?',
+        {
+          texto: 'Descartar',
+          alPulsar: expect.any(Function),
+        },
+      );
       expect(botonAnalizar()).toBeUndefined();
       const descartar = botonTexto('Descartar: oferta cerrada')!;
       expect(descartar.classList).toContain('boton-peligro-borde');
@@ -919,6 +924,63 @@ describe('FichaPageComponent', () => {
       (avisos.exito.mock.calls[0][1] as AccionAviso).alPulsar();
       expect(abrirDialogo).toHaveBeenCalledTimes(2);
       expect(abrirDialogo.mock.calls[1][1].data).toMatchObject({ motivo: 'Cerrada' });
+    });
+
+    it('«Descartar» del aviso, ya en otra ficha, abre el diálogo de la candidatura de la oferta', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      await conAgentes();
+      await lanzar();
+      await seguimiento(5, analisis({ estado: 'Ok', estadoOferta: 'Cerrada' }));
+
+      fixture.componentRef.setInput('id', 2);
+      await pasan(0);
+      http
+        .expectOne('/api/candidaturas/2')
+        .flush(crearDetalle({ id: 2, empresa: 'Otra', puesto: 'Otro puesto' }));
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+      await pasan(MARGEN_PINTADO_MS);
+
+      (avisos.exito.mock.calls[0][1] as AccionAviso).alPulsar();
+      expect(abrirDialogo.mock.calls[0][1].data).toMatchObject({
+        empresa: 'Acme',
+        destino: 'Descartada',
+        motivo: 'Cerrada',
+      });
+    });
+
+    it('con un 403 de otra visita pregunta el estado una sola vez y, si contesta, retoma', async () => {
+      await crear({ estado: 'Enviada' }, true);
+      vi.useFakeTimers();
+      vi.setSystemTime(AHORA);
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ agentesDisponibles: true }));
+      await pasan(0);
+      http
+        .expectOne('/api/agentes/estado')
+        .flush({ detail: 'No.' }, { status: 403, statusText: 'Forbidden' });
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+      await pasan(MARGEN_PINTADO_MS);
+      expect(botonAnalizar()).toBeUndefined();
+
+      // Otra visita a la ficha, con la info ya cargada
+      fixture.destroy();
+      const cargarEstado = vi.spyOn(TestBed.inject(AgentesService), 'cargarEstado');
+      fixture = TestBed.createComponent(FichaPageComponent);
+      fixture.componentRef.setInput('id', 1);
+      await pasan(0);
+      http.expectOne('/api/candidaturas/1').flush(crearDetalle({ id: 1, estado: 'Enviada' }));
+      http.expectOne('/api/agentes/estado').flush(crearEstadoAgentes());
+      await pasan(MARGEN_PINTADO_MS);
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([analisis()]);
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(cargarEstado).toHaveBeenCalledTimes(1);
+      expect(tarjeta()).not.toBeNull();
+
+      // Volver a guardar la misma info no repite la consulta de la última
+      TestBed.inject(SistemaService).cargarInfo();
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ agentesDisponibles: true }));
+      await pasan(MARGEN_PINTADO_MS);
+      http.expectNone((r) => r.url === URL_EJECUCIONES);
     });
 
     it('al entrar en frío (F5) pide la info, el estado y la última, y retoma la que sigue en marcha', async () => {
