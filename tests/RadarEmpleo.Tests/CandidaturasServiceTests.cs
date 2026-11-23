@@ -107,6 +107,7 @@ public class CandidaturasServiceTests : ArnesSqliteTests
     [InlineData(", S.L.")]
     [InlineData("...")]
     [InlineData("(S.A.)")]
+    [InlineData("¿?")]
     public async Task CrearAsync_EmpresaVaciaOSoloFormaJuridicaOPuntuacion_LanzaValidacion(string empresa)
     {
         var ex = await Assert.ThrowsAsync<ValidacionException>(() => CrearAsync(empresa: empresa));
