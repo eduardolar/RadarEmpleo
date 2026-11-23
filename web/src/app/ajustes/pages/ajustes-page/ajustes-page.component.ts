@@ -86,12 +86,16 @@ export default class AjustesPageComponent {
         untracked(() => this.agentes.cargarEstado());
       }
     });
-    // Al recuperarse, el botón pulsado desaparece: el foco va al título del bloque y no a <body>
+    // Al acabar de volver a pedirlo: si ha salido bien, el botón pulsado desaparece y el foco va al
+    // título del bloque y no a <body>
     effect(() => {
-      if (this.recuperando() && this.disponibles() && this.estadoAgentes() && !this.fallo()) {
+      if (this.recuperando() && !this.cargandoEstado()) {
         untracked(() => {
           this.recuperando.set(false);
-          this.titulo()?.nativeElement.focus();
+          this.reintentando.set(false);
+          if (this.disponibles() && this.agentes.errorEstado() === null) {
+            this.titulo()?.nativeElement.focus();
+          }
         });
       }
     });

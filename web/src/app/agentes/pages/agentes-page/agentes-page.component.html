@@ -59,17 +59,26 @@
       aria-labelledby="titulo-uso"
       class="agentes__uso rounded-2xl border border-borde-fino bg-surface-container-lowest p-4 sm:p-5"
     >
-      <h2 id="titulo-uso" class="mb-3 text-xl font-extrabold">Uso de hoy</h2>
-      @if (errorEstado(); as mensaje) {
+      <h2
+        #tituloUso
+        id="titulo-uso"
+        tabindex="-1"
+        class="mb-3 rounded-sm text-xl font-extrabold focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+      >
+        Uso de hoy
+      </h2>
+      @if (errorUso(); as mensaje) {
         <div role="alert">
           <p class="text-sm font-medium text-error">{{ mensaje }}</p>
           <button
             mat-button
             type="button"
             class="mt-2 [--mat-button-text-container-height:48px]"
-            (click)="refrescar()"
+            disabledInteractive
+            [disabled]="cargandoEstado()"
+            (click)="reintentarUso()"
           >
-            Reintentar
+            {{ cargandoEstado() ? 'Reintentando…' : 'Reintentar' }}
           </button>
         </div>
       } @else if (uso(); as texto) {

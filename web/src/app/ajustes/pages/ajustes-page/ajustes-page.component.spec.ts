@@ -192,6 +192,23 @@ describe('AjustesPageComponent', () => {
       expect(document.activeElement).toBe(bloque().querySelector('h2'));
     });
 
+    it('si el reintento vuelve a fallar, el aviso se queda y el botón vuelve a «Reintentar»', () => {
+      const { fixture, bloque } = pintarConAgentes();
+      http.expectOne(URL_ESTADO).flush({ title: 'Fallo' }, { status: 500, statusText: 'Error' });
+      fixture.detectChanges();
+
+      const boton = bloque().querySelector<HTMLButtonElement>('button')!;
+      boton.focus();
+      boton.click();
+      fixture.detectChanges();
+      http.expectOne(URL_ESTADO).flush({ title: 'Fallo' }, { status: 500, statusText: 'Error' });
+      fixture.detectChanges();
+
+      expect(bloque().querySelector('p[role="alert"]')).not.toBeNull();
+      expect(boton.textContent!.trim()).toBe('Reintentar');
+      expect(document.activeElement).toBe(boton);
+    });
+
     it('un 403 en el estado: «No disponibles ahora» y «Volver a comprobar», sin aviso de error', () => {
       const { fixture, bloque } = pintarConAgentes();
       http.expectOne(URL_ESTADO).flush(null, PROHIBIDO);

@@ -247,11 +247,52 @@ describe('AgentesPageComponent', () => {
       http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
       fixture.detectChanges();
 
-      elemento().querySelector<HTMLButtonElement>('.agentes__uso [role="alert"] button')!.click();
+      // En el documento, para poder comprobar a dónde va el foco
+      document.body.appendChild(elemento());
+      const boton = elemento().querySelector<HTMLButtonElement>(
+        '.agentes__uso [role="alert"] button',
+      )!;
+      boton.focus();
+      boton.click();
+      fixture.detectChanges();
+
+      // Mientras espera, el aviso y su botón (con el foco) siguen ahí
+      expect(elemento().querySelector('.agentes__uso [role="alert"]')).not.toBeNull();
+      expect(boton.isConnected).toBe(true);
+      expect(boton.textContent!.trim()).toBe('Reintentando…');
+      expect(boton.getAttribute('aria-disabled')).toBe('true');
+      boton.click();
+
       responder([]);
       expect(elemento().querySelector('.agentes__uso')!.textContent).toContain(
         'Hoy aún no has usado Claude',
       );
+      expect(elemento().querySelector('.agentes__uso [role="alert"]')).toBeNull();
+      expect(document.activeElement).toBe(elemento().querySelector('#titulo-uso'));
+      elemento().remove();
+    });
+
+    it('si el reintento vuelve a fallar, el aviso no desaparece y el foco se queda en el botón', () => {
+      abrir();
+      http.expectOne(URL_ESTADO).flush({ title: 'Fallo' }, { status: 500, statusText: 'Error' });
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+      fixture.detectChanges();
+      document.body.appendChild(elemento());
+
+      const boton = elemento().querySelector<HTMLButtonElement>(
+        '.agentes__uso [role="alert"] button',
+      )!;
+      boton.focus();
+      boton.click();
+      fixture.detectChanges();
+      http.expectOne(URL_ESTADO).flush({ title: 'Fallo' }, { status: 500, statusText: 'Error' });
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+      fixture.detectChanges();
+
+      expect(boton.isConnected).toBe(true);
+      expect(boton.textContent!.trim()).toBe('Reintentar');
+      expect(document.activeElement).toBe(boton);
+      elemento().remove();
     });
   });
 

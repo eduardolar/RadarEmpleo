@@ -129,7 +129,9 @@ export class AgentesService {
   /**
    * Pide el gasto de hoy, la versión y quién lleva la cola. Sin agentes disponibles no pide nada.
    * Tras un 403 se puede volver a llamar: si entonces contesta bien, `disponibles` vuelve a true. Con
-   * un error que no es 403 se conserva el estado anterior y solo se deja el mensaje
+   * un error que no es 403 se conserva el estado anterior y solo se deja el mensaje. Al empezar borra el
+   * error anterior: las pantallas que reintentan usan `cargandoEstado` para no esconder el aviso (y su
+   * botón, que tiene el foco) mientras esperan
    */
   cargarEstado(): void {
     if (this.sistema.info()?.agentesDisponibles !== true) {

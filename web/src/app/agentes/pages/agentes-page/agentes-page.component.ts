@@ -1,4 +1,14 @@
-import { Component, computed, DestroyRef, effect, inject, untracked } from '@angular/core';
+import {
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  ElementRef,
+  inject,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
@@ -41,7 +51,16 @@ export default class AgentesPageComponent {
   protected readonly info = this.sistema.info;
   protected readonly sinConexion = computed(() => this.sistema.estado() === 'sin-conexion');
   protected readonly disponibles = this.agentes.disponibles;
-  protected readonly errorEstado = this.agentes.errorEstado;
+  protected readonly cargandoEstado = this.agentes.cargandoEstado;
+  /** Mientras se reintenta, el aviso del uso sigue a la vista con su mensaje aunque el servicio lo borre */
+  private readonly reintentandoUso = signal(false);
+  private readonly ultimoErrorUso = signal<string | null>(null);
+  protected readonly errorUso = computed(
+    () =>
+      this.agentes.errorEstado() ??
+      (this.reintentandoUso() && this.cargandoEstado() ? this.ultimoErrorUso() : null),
+  );
+  private readonly tituloUso = viewChild<ElementRef<HTMLElement>>('tituloUso');
   protected readonly historial = this.agentes.historial;
   protected readonly cargando = this.agentes.cargandoHistorial;
   protected readonly errorHistorial = this.agentes.errorHistorial;
@@ -76,6 +95,18 @@ export default class AgentesPageComponent {
   private estadoRecienPedido = false;
 
   constructor() {
+    // Al acabar el reintento: si ha salido bien, el botón pulsado desaparece y el foco va al título
+    // de «Uso de hoy» y no a <body>
+    effect(() => {
+      if (this.reintentandoUso() && !this.cargandoEstado()) {
+        untracked(() => {
+          this.reintentandoUso.set(false);
+          if (this.agentes.errorEstado() === null) {
+            this.tituloUso()?.nativeElement.focus();
+          }
+        });
+      }
+    });
     inject(DestroyRef).onDestroy(() => (this.destruida = true));
     this.sistema.cargarInfoSiFalta();
     // Al entrar, o en cuanto /api/sistema/info diga que hay agentes, se pide la lista y el uso. Con un
@@ -104,6 +135,15 @@ export default class AgentesPageComponent {
   protected refrescar(): void {
     this.agentes.cargarEstado();
     this.agentes.cargarHistorial();
+  }
+
+  protected reintentarUso(): void {
+    if (this.cargandoEstado()) {
+      return;
+    }
+    this.ultimoErrorUso.set(this.agentes.errorEstado());
+    this.reintentandoUso.set(true);
+    this.refrescar();
   }
 
   /** Lo que avisan las tarjetas: si terminan varias en la misma vuelta del seguimiento, se pide una vez */
