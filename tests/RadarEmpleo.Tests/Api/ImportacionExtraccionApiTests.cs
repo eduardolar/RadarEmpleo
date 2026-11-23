@@ -152,6 +152,55 @@ public sealed class ImportacionExtraccionApiTests
     }
 
     [Fact]
+    public async Task Aplicar_RegistroConClaudePorRemoto_Da403YNoCreaNada()
+    {
+        using var fabrica = Fabrica(CanalPeticion.Remoto);
+        using var http = fabrica.CreateClient();
+        var id = await SembrarEnErrorAsync(fabrica);
+        // Sin el registro, si llegara a leerlo daría 409.
+        var hash = HashRegistro(fabrica);
+        File.Delete(RutaRegistro(fabrica));
+
+        var problema = await LeerAsync(await AplicarAsync(http, id, hash, []), HttpStatusCode.Forbidden);
+
+        Assert.Equal(DisponibilidadAgentes.MensajeSoloPc, problema.GetProperty("detail").GetString());
+        await using var db = await BdAsync(fabrica);
+        Assert.Empty(db.Candidaturas);
+    }
+
+    [Fact]
+    public async Task Aplicar_RegistroConClaudeConLosAgentesApagadosOTraidoDeOtroSitio_Da403()
+    {
+        using var apagados = Fabrica(agentes: false);
+        using var http = apagados.CreateClient();
+        var problema = await LeerAsync(await AplicarAsync(http, 1, HashRegistro(apagados), []), HttpStatusCode.Forbidden);
+        Assert.Equal(DisponibilidadAgentes.MensajeApagados, problema.GetProperty("detail").GetString());
+
+        using var fabrica = Fabrica();
+        using var otroSitio = fabrica.CreateClient();
+        otroSitio.DefaultRequestHeaders.Add("Sec-Fetch-Site", "cross-site");
+        var deFuera = await LeerAsync(await AplicarAsync(otroSitio, 1, HashRegistro(fabrica), []), HttpStatusCode.Forbidden);
+        Assert.Equal(DisponibilidadAgentes.MensajeOtroSitio, deFuera.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task Aplicar_TablaPorRemoto_SigueDando200()
+    {
+        using var fabrica = Fabrica(CanalPeticion.Remoto, agentes: false);
+        using var http = fabrica.CreateClient();
+        var vista = await LeerAsync(await http.PostAsync("/api/importacion/tabla/previsualizar", null), HttpStatusCode.OK);
+
+        var resultado = await LeerAsync(await PostAsync(http, UrlAplicar, new JsonObject
+        {
+            ["origen"] = "Tabla",
+            ["hashRegistro"] = vista.GetProperty("hashRegistro").GetString(),
+            ["claves"] = new JsonArray(ClavesAccionables(vista).Select(c => (JsonNode)JsonValue.Create(c)!).ToArray())
+        }.ToJsonString()), HttpStatusCode.OK);
+
+        Assert.Equal(8, resultado.GetProperty("creadas").GetInt32());
+    }
+
+    [Fact]
     public async Task Aplicar_RegistroConClaudeConEjecucionEnError_Devuelve409()
     {
         using var fabrica = Fabrica();

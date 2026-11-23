@@ -833,6 +833,28 @@ public class ImportacionServiceTests : ArnesSqliteTests
     }
 
     [Fact]
+    public async Task Aplicar_RegistroConClaudeConLaClaveDeUnaFueraODeUnaSinLeer_LanzaValidacionYNoCreaNada()
+    {
+        UsarTablaYTextoLibre();
+        var fuera = Extraida(empresa: "ACME S.L.", fecha: "2026-09-02");
+        var sinLeer = Extraida(empresa: "Omega", cita: "- Omega: inventada.");
+        var id = await SembrarExtraccionAsync(Extraida(), fuera, sinLeer);
+        var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
+        Assert.Single(vista.Fuera);
+        Assert.Single(vista.SinLeer);
+
+        foreach (var fila in new[] { fuera, sinLeer })
+        {
+            var peticion = PeticionConClaude(vista);
+            var ex = await Assert.ThrowsAsync<ValidacionException>(() => _importacion.AplicarAsync(
+                peticion with { Claves = [.. peticion.Claves, ReglasImportacion.Clave(fila.Empresa, fila.Puesto, fila.Fecha)] }));
+            Assert.Equal("claves", ex.Campo);
+        }
+        await using var db = CreateContext();
+        Assert.Equal(0, await db.Candidaturas.CountAsync());
+    }
+
+    [Fact]
     public async Task Aplicar_RegistroConClaude_CreaLasDeLaTablaYLasExtraidasConSuSeccion()
     {
         UsarTablaYTextoLibre();
