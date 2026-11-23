@@ -13,6 +13,11 @@ const PORTALES: readonly { dominio: string; nombre: string }[] = [
   { dominio: 'computrabajo.com', nombre: 'Computrabajo' },
   { dominio: 'infoempleo.com', nombre: 'Infoempleo' },
   { dominio: 'jobfluent.com', nombre: 'JobFluent' },
+  // Sistemas de selección que usan las empresas en su propia web de empleo
+  { dominio: 'greenhouse.io', nombre: 'Greenhouse' },
+  { dominio: 'lever.co', nombre: 'Lever' },
+  { dominio: 'ashbyhq.com', nombre: 'Ashby' },
+  { dominio: 'workable.com', nombre: 'Workable' },
 ];
 
 /**
