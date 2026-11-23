@@ -26,18 +26,34 @@
       </p>
     }
   } @else if (!disponibles()) {
-    <!-- Desde el móvil o con los agentes apagados: solo la explicación, nada que pulsar -->
-    <p class="agentes__motivo text-on-surface">{{ motivo() }}</p>
+    <!-- Desde el móvil o con los agentes apagados: solo la explicación, nada que pulsar. Un panel
+         sereno con una «i», no un aviso: no es un error -->
+    <div class="flex items-start gap-3 rounded-2xl bg-surface-container-lowest p-4 sm:p-5">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        class="mt-0.5 h-5 w-5 shrink-0 text-on-surface-variant"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path stroke-linecap="square" d="M12 11v6M12 7.5v.01" />
+      </svg>
+      <p class="agentes__motivo text-on-surface">{{ motivo() }}</p>
+    </div>
   } @else {
     <section
       aria-labelledby="titulo-uso"
       class="agentes__uso rounded-2xl border border-borde-fino bg-surface-container-lowest p-4 sm:p-5"
     >
-      <h2 id="titulo-uso" class="mb-2 text-xl font-extrabold">Uso de hoy</h2>
+      <h2 id="titulo-uso" class="mb-3 text-xl font-extrabold">Uso de hoy</h2>
       @if (errorEstado(); as mensaje) {
         <p role="alert" class="text-sm font-medium text-error">{{ mensaje }}</p>
       } @else if (uso(); as texto) {
-        <p class="text-on-surface">{{ texto }}</p>
+        <!-- La frase del uso, en grande y en tinta (nada de rojo ni ámbar): se lee de un vistazo sin
+             parecer un aviso -->
+        <p class="text-lg leading-snug font-semibold text-on-surface tabular-nums">{{ texto }}</p>
         @if (reserva(); as texto) {
           <p class="mt-1 text-sm text-on-surface-variant">{{ texto }}</p>
         }
@@ -72,10 +88,32 @@
 
       @if (historial(); as lista) {
         @if (lista.length === 0) {
+          <!-- Sin marco (no es el estado vacío principal de la página: va bajo «Uso de hoy») y con la
+               terminal en un bloque de tinta, esperando la primera orden -->
           <div
-            class="agentes__vacio rounded-2xl bg-surface-container-lowest px-6 py-10 text-center"
+            class="agentes__vacio flex flex-col items-center rounded-2xl bg-surface-container-lowest px-6 py-10 text-center"
           >
-            <p class="font-display text-2xl font-extrabold text-on-surface">
+            <svg aria-hidden="true" viewBox="0 0 72 72" class="mb-5 h-16 w-16">
+              <rect x="6" y="6" width="64" height="64" rx="5" class="fill-on-surface" />
+              <rect
+                x="2"
+                y="2"
+                width="64"
+                height="64"
+                rx="5"
+                class="fill-tinta-noche stroke-trazo"
+                stroke-width="3"
+              />
+              <path
+                d="m16 24 10 10-10 10"
+                fill="none"
+                class="stroke-tinta-clara"
+                stroke-width="4"
+                stroke-linecap="square"
+              />
+              <path d="M32 46h18" class="stroke-fosforito" stroke-width="4" />
+            </svg>
+            <p class="max-w-md font-display text-2xl font-extrabold text-on-surface">
               Todavía no has lanzado ninguna tarea de Claude.
             </p>
             <p class="mt-3 font-mono text-sm font-medium text-on-surface-variant">
@@ -87,27 +125,31 @@
             class="divide-y divide-borde-fino rounded-2xl border border-borde-fino bg-surface-container-lowest px-4 sm:px-5"
           >
             @for (e of lista; track e.id) {
-              <li class="agentes__ejecucion py-3">
-                <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <!-- Arriba, la tarea y su fecha en la misma línea (la fecha a la derecha, como un
+                   registro); debajo, la candidatura. El enlace es del alto del texto (el anillo
+                   de foco no tapa la tarea ni la fecha) y su ::before le da los 48 px de toque:
+                   así 50 filas no se estiran -->
+              <li class="agentes__ejecucion pt-3 pb-1">
+                <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
                   <h3 class="font-semibold text-on-surface">{{ nombreTarea[e.tarea] }}</h3>
-                  @if (e.candidaturaId !== null) {
-                    <a
-                      [routerLink]="['/candidaturas', e.candidaturaId]"
-                      class="inline-flex min-h-12 items-center rounded-lg px-1 text-sm font-medium text-primary underline decoration-2 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
-                    >
-                      @if (e.candidatura; as c) {
-                        {{ c.puesto }} en {{ c.empresa }}
-                      } @else {
-                        Ver la candidatura
-                      }
-                    </a>
-                  }
                   <time
                     [attr.datetime]="e.fechaAlta"
                     class="font-mono text-sm text-on-surface-variant"
                     >{{ e.fechaAlta | fechaMadrid: 'dia-hora' }}</time
                   >
                 </div>
+                @if (e.candidaturaId !== null) {
+                  <a
+                    [routerLink]="['/candidaturas', e.candidaturaId]"
+                    class="relative -mx-1 my-1 inline-flex max-w-full items-center rounded-lg px-1 py-0.5 text-sm font-medium text-primary underline decoration-2 underline-offset-4 [overflow-wrap:anywhere] before:absolute before:inset-x-0 before:-inset-y-3 hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+                  >
+                    @if (e.candidatura; as c) {
+                      {{ c.puesto }} en {{ c.empresa }}
+                    } @else {
+                      Ver la candidatura
+                    }
+                  </a>
+                }
                 <app-estado-ejecucion
                   [ejecucion]="e"
                   [compacta]="true"
