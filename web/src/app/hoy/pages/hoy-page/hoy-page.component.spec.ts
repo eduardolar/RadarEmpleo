@@ -8,6 +8,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { crearDetalle } from '../../../candidaturas/utils/candidatura-de-prueba';
+import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import { DialogoRecordatorio } from '../../../recordatorios/components/dialogo-recordatorio/dialogo-recordatorio';
 import { RecordatoriosService } from '../../../recordatorios/services/recordatorios.service';
 import {
@@ -128,9 +129,7 @@ describe('HoyPageComponent', () => {
     fixture = TestBed.createComponent(HoyPageComponent);
     await fixture.whenStable();
     // El indicador de la API pregunta al entrar
-    http
-      .expectOne('/api/sistema/info')
-      .flush({ modo: 'Local', agentesHabilitados: false, version: '0.1.0' });
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
   }
 
   async function responderPanel(panel: PanelHoy): Promise<void> {

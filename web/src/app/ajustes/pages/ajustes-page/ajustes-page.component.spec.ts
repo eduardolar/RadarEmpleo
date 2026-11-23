@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import AjustesPageComponent from './ajustes-page.component';
 
 describe('AjustesPageComponent', () => {
@@ -26,9 +27,7 @@ describe('AjustesPageComponent', () => {
 
   it('enseña el modo, la versión y los agentes de la API', () => {
     const fixture = pintar();
-    http
-      .expectOne('/api/sistema/info')
-      .flush({ modo: 'Local', agentesHabilitados: false, version: '0.6.0' });
+    http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ version: '0.6.0' }));
     fixture.detectChanges();
 
     const elemento = fixture.nativeElement as HTMLElement;
