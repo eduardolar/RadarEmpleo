@@ -65,10 +65,12 @@ public sealed record InformeRastreoLeido(string RutaRelativa, string Texto);
 /// <summary>Lo que hay en <c>rastreos\</c>.</summary>
 /// <param name="Json">Rutas de los <c>.json</c>, que se dejan sin leer.</param>
 /// <param name="NoLeidos">Rutas de los <c>.md</c> que no se han podido abrir (en uso, sin permiso…).</param>
+/// <param name="NoUtf8">Rutas de los <c>.md</c> que se abren pero no están en UTF-8: volver a buscar no lo arregla.</param>
 public sealed record InformesRastreo(
     IReadOnlyList<InformeRastreoLeido> Informes,
     IReadOnlyList<string> Json,
-    IReadOnlyList<string> NoLeidos);
+    IReadOnlyList<string> NoLeidos,
+    IReadOnlyList<string> NoUtf8);
 
 /// <summary>Texto de un archivo de Curriculum con su fecha de modificación (UTC).</summary>
 /// <param name="Hash">SHA-256 de los mismos bytes de los que sale <paramref name="Texto"/> (como <see cref="ILectorCurriculum.LeerHashAsync"/>).</param>

@@ -131,7 +131,8 @@ public sealed class LectorCurriculum : ILectorCurriculum
         var informes = new List<InformeRastreoLeido>();
         var json = new List<string>();
         var noLeidos = new List<string>();
-        if (!EsCarpetaNormal(carpeta)) return new InformesRastreo(informes, json, noLeidos);
+        var noUtf8 = new List<string>();
+        if (!EsCarpetaNormal(carpeta)) return new InformesRastreo(informes, json, noLeidos, noUtf8);
 
         List<FileInfo> archivos;
         try
@@ -143,7 +144,7 @@ public sealed class LectorCurriculum : ILectorCurriculum
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new InformesRastreo(informes, json, noLeidos);
+            return new InformesRastreo(informes, json, noLeidos, noUtf8);
         }
 
         foreach (var archivo in archivos)
@@ -152,22 +153,26 @@ public sealed class LectorCurriculum : ILectorCurriculum
             switch (archivo.Extension.ToLowerInvariant())
             {
                 case ".md":
+                    byte[] bytes;
                     try
                     {
-                        informes.Add(new InformeRastreoLeido(relativa, await LeerTextoAsync(archivo.FullName, archivo.Name, cancelacion)));
+                        bytes = await LeerBytesAsync(archivo.FullName, archivo.Name, cancelacion);
                     }
                     catch (ReglaNegocioException)
                     {
                         // Uno que no se puede abrir (la tarea de los lunes escribiéndolo) no impide leer los demás.
                         noLeidos.Add(relativa);
+                        break;
                     }
+                    if (DecodificarEstricto(bytes) is { } texto) informes.Add(new InformeRastreoLeido(relativa, texto));
+                    else noUtf8.Add(relativa);
                     break;
                 case ".json":
                     json.Add(relativa);
                     break;
             }
         }
-        return new InformesRastreo(informes, json, noLeidos);
+        return new InformesRastreo(informes, json, noLeidos, noUtf8);
     }
 
     // ---------------------------------------------------------------- auxiliares
