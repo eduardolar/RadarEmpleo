@@ -161,15 +161,15 @@ public sealed class EjecutorClaudeCliTests : IDisposable
         var ejecucion = Ejecutor("--sim:modo=hijo", $"--sim:pidhijo={Ruta("hijo.txt")}")
             .EjecutarAsync(Peticion(), (p, _) => pid = p, cancelar.Token);
 
-        // Se cancela cuando el hijo ya existe.
-        var limite = DateTime.UtcNow.AddSeconds(30);
-        while (!File.Exists(Ruta("hijo.txt")) && DateTime.UtcNow < limite) await Task.Delay(100);
-        await Task.Delay(200);
+        // Se cancela cuando el hijo ya existe: lo dice el pid que escribe ClaudeSimulado al lanzarlo. Es un proceso de
+        // verdad que no avisa de otra forma, así que se mira el archivo hasta que tiene el pid entero.
+        var pidHijo = await Esperar.HastaAsync(() => Task.FromResult(LeerPid(Ruta("hijo.txt"))), p => p is not null,
+            _ => "ClaudeSimulado no ha escrito el pid de su hijo.");
         cancelar.Cancel();
         var respuesta = await ejecucion;
 
         Assert.Equal(FalloClaude.Cancelado, respuesta.Fallo);
-        await ComprobarMuertosAsync(pid, int.Parse(File.ReadAllText(Ruta("hijo.txt"))));
+        await ComprobarMuertosAsync(pid, pidHijo!.Value);
     }
 
     [FactSoloWindows("el Job Object que mata al hijo solo existe en Windows, donde la app lanza los agentes")]
@@ -243,11 +243,24 @@ public sealed class EjecutorClaudeCliTests : IDisposable
         Assert.Equal(fallo is null, respuesta.Correcta);
     }
 
-    private static async Task ComprobarMuertosAsync(params int[] pids)
+    /// <summary>
+    /// Espera a que mueran: matar el árbol no espera a que Windows los cierre y no hay otra señal que preguntar por ellos.
+    /// </summary>
+    private static Task ComprobarMuertosAsync(params int[] pids) =>
+        Esperar.HastaAsync(() => Task.FromResult(pids.Where(Vivo).ToArray()), vivos => vivos.Length == 0,
+            vivos => $"Siguen vivos los procesos {string.Join(", ", vivos)}.");
+
+    /// <summary>El pid del archivo, o null si aún no existe o está a medio escribir.</summary>
+    private static int? LeerPid(string ruta)
     {
-        var limite = DateTime.UtcNow.AddSeconds(10);
-        while (pids.Any(Vivo) && DateTime.UtcNow < limite) await Task.Delay(100);
-        Assert.All(pids, pid => Assert.False(Vivo(pid), $"El proceso {pid} sigue vivo."));
+        try
+        {
+            return int.TryParse(File.ReadAllText(ruta), out var pid) ? pid : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     private static bool Vivo(int pid)
