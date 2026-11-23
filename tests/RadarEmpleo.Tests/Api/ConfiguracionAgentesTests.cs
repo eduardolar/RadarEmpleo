@@ -9,8 +9,10 @@ namespace RadarEmpleo.Tests.Api;
 
 /// <summary>
 /// Lo que se comprueba al arrancar (ruta de la BD, ejecutor falso) y la regla de <c>Sec-Fetch-Site</c> según el entorno.
-/// La «carpeta de datos de verdad» es aquí una carpeta temporal: nunca se usa la real.
+/// La «carpeta de datos de verdad» es aquí una carpeta temporal: nunca se usa la real. Va sola (<see cref="ColeccionVariablesDeEntorno"/>)
+/// porque dos tests cambian <c>LOCALAPPDATA</c> y <c>USERPROFILE</c> del proceso entero.
 /// </summary>
+[Collection(nameof(ColeccionVariablesDeEntorno))]
 public sealed class ConfiguracionAgentesTests : IDisposable
 {
     private readonly string _raiz = Path.Combine(Path.GetTempPath(), $"radar-config-{Guid.NewGuid():N}");
@@ -157,3 +159,10 @@ public sealed class ConfiguracionAgentesTests : IDisposable
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }
+
+/// <summary>
+/// Los tests que cambian variables de entorno del proceso (<c>LOCALAPPDATA</c>, <c>USERPROFILE</c>): no van en paralelo
+/// con nada, para que ningún otro test (la API, las rutas por defecto, la carpeta temporal) lea las de mentira.
+/// </summary>
+[CollectionDefinition(nameof(ColeccionVariablesDeEntorno), DisableParallelization = true)]
+public sealed class ColeccionVariablesDeEntorno;
