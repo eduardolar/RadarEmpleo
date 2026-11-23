@@ -89,12 +89,23 @@ public sealed record FilaVistaPreviaDto(
 /// <summary>Una fila de la tabla que no se ha podido leer.</summary>
 public sealed record FilaSinLeerDto(int Linea, string Motivo);
 
+/// <summary>Una fila extraída que se ha quedado fuera del lote porque ya estaba, con el aviso para enseñarlo tal cual.</summary>
+/// <param name="Linea">Línea de su <c>cita</c> en el registro, empezando en 1.</param>
+public sealed record FilaFueraDelLote(int Linea, string Empresa, string Puesto, DateOnly Fecha, string Aviso);
+
 /// <summary>Respuesta de la vista previa. No se ha escrito nada.</summary>
+/// <param name="HashRegistro">SHA-256 (hexadecimal en minúsculas) de los bytes del registro leído: aplicar lo exige igual.</param>
+/// <param name="EjecucionId">La extracción de Claude de la que sale el lote, o null con la tabla.</param>
+/// <param name="Fuera">Las extraídas que se quedan fuera porque ya estaban; vacía con la tabla.</param>
 public sealed record VistaPreviaImportacionDto(
     LoteImportacion Lote,
     ResumenImportacionDto Resumen,
     IReadOnlyList<FilaVistaPreviaDto> Filas,
-    IReadOnlyList<FilaSinLeerDto> SinLeer);
+    IReadOnlyList<FilaSinLeerDto> SinLeer,
+    OrigenLote Origen,
+    string HashRegistro,
+    int? EjecucionId,
+    IReadOnlyList<FilaFueraDelLote> Fuera);
 
 /// <summary>Petición de aplicar: el lote de la vista previa y las claves sobre las que actuar.</summary>
 public sealed record AplicarLoteRequest(

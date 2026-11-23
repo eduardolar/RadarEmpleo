@@ -240,7 +240,7 @@
         >
           <p class="px-4 pt-1 text-sm text-on-surface-variant">{{ explicacionSinLeer }}</p>
           <ul class="flex flex-col gap-2 px-2 pt-2 text-sm text-on-surface">
-            @for (fila of previa.sinLeer; track fila.linea) {
+            @for (fila of previa.sinLeer; track $index) {
               <li class="rounded-md bg-surface-container-lowest p-3">
                 Línea {{ fila.linea }}: {{ fila.motivo }}
               </li>

@@ -412,6 +412,21 @@ describe('ImportacionPageComponent', () => {
       );
     });
 
+    it('enseña dos filas sin leer con la misma línea', async () => {
+      await abrir(
+        crearVista([], {
+          sinLeer: [
+            { linea: 0, motivo: 'No encuentro esta línea en el registro: «Uno».' },
+            { linea: 0, motivo: 'No encuentro esta línea en el registro: «Dos».' },
+          ],
+        }),
+      );
+
+      const filas = grupo('No se han podido leer (2)')?.querySelectorAll('li');
+      expect(filas).toHaveLength(2);
+      expect(filas?.[1].textContent).toContain('«Dos»');
+    });
+
     it('una fila repetida en el registro sale dos veces aunque comparta clave', async () => {
       await abrirCon([
         crearFila({ clave: 'misma', resultado: 'YaExiste', puesto: 'Primera' }),

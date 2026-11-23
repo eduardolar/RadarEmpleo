@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using RadarEmpleo.Domain;
 using RadarEmpleo.Services;
@@ -63,6 +65,20 @@ public class ImportacionServiceTests : ArnesSqliteTests
         await using var db = CreateContext();
         Assert.Equal(0, await db.Candidaturas.CountAsync());
         Assert.Equal(0, await db.Empresas.CountAsync());
+    }
+
+    [Fact]
+    public async Task PrevisualizarTabla_DevuelveElHashDeLosBytesLeidosYOrigenTablaSinEjecucionNiFuera()
+    {
+        UsarEjemplo();
+
+        var vista = await _importacion.PrevisualizarTablaAsync();
+
+        Assert.Equal(OrigenLote.Tabla, vista.Origen);
+        Assert.Equal(_lector.Hash, vista.HashRegistro);
+        Assert.Matches("^[0-9a-f]{64}$", vista.HashRegistro);
+        Assert.Null(vista.EjecucionId);
+        Assert.Empty(vista.Fuera);
     }
 
     [Fact]
@@ -675,9 +691,14 @@ public class ImportacionServiceTests : ArnesSqliteTests
     {
         public string Texto { get; set; } = "";
 
-        public Task<string> LeerRegistroAsync(CancellationToken cancelacion = default) => Task.FromResult(Texto);
+        /// <summary>Hash de los bytes en UTF-8 sin BOM, como lo calcula el lector real.</summary>
+        public string Hash => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Texto)));
 
-        public Task<TextoLeido> LeerRegistroConFechaAsync(CancellationToken cancelacion = default) => throw new NotSupportedException();
+        // La importación lee siempre con el hash: así el texto y el hash salen de la misma lectura.
+        public Task<string> LeerRegistroAsync(CancellationToken cancelacion = default) => throw new NotSupportedException();
+
+        public Task<TextoLeido> LeerRegistroConFechaAsync(CancellationToken cancelacion = default) =>
+            Task.FromResult(new TextoLeido(Texto, DateTime.UnixEpoch, Hash));
 
         public Task<TextoLeido> LeerPerfilAsync(CancellationToken cancelacion = default) => throw new NotSupportedException();
 

@@ -105,6 +105,19 @@ public sealed class ImportacionApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Previsualizar_RegistroDeEjemplo_ElHashEsElSha256DelArchivo()
+    {
+        var esperado = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(RutaRegistro)));
+
+        var vista = await VistaPreviaAsync();
+
+        Assert.Equal(esperado, vista["hashRegistro"]!.GetValue<string>());
+        Assert.Equal("Tabla", vista["origen"]!.GetValue<string>());
+        Assert.Null(vista["ejecucionId"]);
+        Assert.Empty(vista["fuera"]!.AsArray());
+    }
+
+    [Fact]
     public async Task Previsualizar_SinCarpeta_Devuelve409ConMensajeClaro()
     {
         Directory.Delete(_fabrica.CarpetaCurriculum, recursive: true);
@@ -140,14 +153,18 @@ public sealed class ImportacionApiTests : IDisposable
     [InlineData("utf-8-bom")]
     [InlineData("utf-16")]
     [InlineData("utf-16BE")]
-    public async Task Previsualizar_RegistroConBom_DaElMismoLoteQueSinBom(string codificacion)
+    public async Task Previsualizar_RegistroConBom_DaLasMismasFilasYOtroHash(string codificacion)
     {
-        var sinBom = (await VistaPreviaAsync())["lote"]!.ToJsonString();
+        var sinBom = await VistaPreviaAsync();
         var texto = await File.ReadAllTextAsync(RutaRegistro);
         var conBom = codificacion == "utf-8-bom" ? new UTF8Encoding(encoderShouldEmitUTF8Identifier: true) : Encoding.GetEncoding(codificacion);
         await File.WriteAllTextAsync(RutaRegistro, texto, conBom);
 
-        Assert.Equal(sinBom, (await VistaPreviaAsync())["lote"]!.ToJsonString());
+        // El hash es el de los bytes (BOM incluido): cambia aunque el texto, y con él las filas, sea el mismo.
+        var vista = await VistaPreviaAsync();
+        foreach (var campo in new[] { "resumen", "filas", "sinLeer" })
+            Assert.Equal(sinBom[campo]!.ToJsonString(), vista[campo]!.ToJsonString());
+        Assert.NotEqual(sinBom["hashRegistro"]!.GetValue<string>(), vista["hashRegistro"]!.GetValue<string>());
     }
 
     [Fact]

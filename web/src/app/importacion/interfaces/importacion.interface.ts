@@ -63,9 +63,19 @@ export interface FilaVistaPrevia {
   avisos: string[];
 }
 
+/** `linea` puede repetirse (o ser 0): no sirve para identificar la fila */
 export interface FilaSinLeer {
   linea: number;
   motivo: string;
+}
+
+/** Extraída por Claude que se queda fuera porque ya estaba, con el aviso para enseñarlo tal cual */
+export interface FilaFuera {
+  linea: number;
+  empresa: string;
+  puesto: string;
+  fecha: string;
+  aviso: string;
 }
 
 /** Respuesta de POST /api/importacion/tabla/previsualizar. No se ha escrito nada */
@@ -74,6 +84,11 @@ export interface VistaPreviaImportacion {
   resumen: ResumenImportacion;
   filas: FilaVistaPrevia[];
   sinLeer: FilaSinLeer[];
+  origen: OrigenLote;
+  /** SHA-256 del registro leído: aplicar lo exige igual, y si ha cambiado da un 409 */
+  hashRegistro: string;
+  ejecucionId: number | null;
+  fuera: FilaFuera[];
 }
 
 /** Cuerpo de POST /api/importacion/lote/aplicar */

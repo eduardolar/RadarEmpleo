@@ -32,11 +32,14 @@ public class ImportacionService
         _reloj = reloj;
     }
 
-    /// <summary>Lee la tabla del registro y la compara con lo que ya hay en la app.</summary>
+    /// <summary>
+    /// Lee la tabla del registro y la compara con lo que ya hay en la app. El hash sale de los mismos bytes que el texto.
+    /// </summary>
     /// <exception cref="ReglaNegocioException">Falta la carpeta, el registro o la tabla.</exception>
     public async Task<VistaPreviaImportacionDto> PrevisualizarTablaAsync()
     {
-        var analisis = AnalizadorRegistro.Analizar(await _lector.LeerRegistroAsync());
+        var leido = await _lector.LeerRegistroConFechaAsync();
+        var analisis = AnalizadorRegistro.Analizar(leido.Texto);
         if (!analisis.TablaEncontrada)
             throw new ReglaNegocioException("No se encuentra la tabla en el registro: tiene que tener las columnas Fecha, Empresa, Puesto y Estado.");
 
@@ -47,7 +50,11 @@ public class ImportacionService
             analisis.Lote,
             ReglasImportacion.Resumir(filas, analisis.SinLeer.Count, analisis.EnviosEnTexto),
             filas,
-            analisis.SinLeer);
+            analisis.SinLeer,
+            OrigenLote.Tabla,
+            leido.Hash,
+            null,
+            []);
     }
 
     /// <summary>
@@ -114,7 +121,7 @@ public class ImportacionService
         {
             if (fila is null)
                 throw new ValidacionException("El lote tiene filas vacías.", "filas");
-            if (fila.Fecha.Year is < 2000 or > 2100)
+            if (fila.Fecha.Year is < CombinadorLotes.AnioMinimo or > CombinadorLotes.AnioMaximo)
                 throw new ValidacionException($"La fecha de la línea {fila.Linea} no es válida.", "fecha");
             ValidacionException.ExigirDefinido(fila.Modalidad, "modalidad");
             ValidacionException.ExigirDefinido(fila.Estado, "estado");

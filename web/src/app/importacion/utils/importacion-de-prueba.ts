@@ -68,6 +68,10 @@ export function crearVista(
     },
     filas,
     sinLeer,
+    origen: 'Tabla',
+    hashRegistro: 'a'.repeat(64),
+    ejecucionId: null,
+    fuera: [],
     ...cambios,
   };
 }
