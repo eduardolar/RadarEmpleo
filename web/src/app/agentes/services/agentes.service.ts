@@ -44,7 +44,8 @@ export function esTerminal(ejecucion: Pick<EjecucionAgente, 'estado'>): boolean 
  *
  * Seguimiento: lo que no ha terminado se pide cada 5 s con un solo temporizador para todas, sin
  * solapar peticiones; se pausa con la pestaña oculta y, al volver, pregunta al momento. Cuando una
- * seguida termina, sale una vez por `terminada$` para que la pantalla refresque lo suyo.
+ * seguida termina, sale una vez por `terminada$` para que la pantalla refresque lo suyo; si la API ya
+ * no la encuentra (404), se quita de `ejecuciones` y sale su id por `perdida$`.
  *
  * Una operación a la vez por ejecución (y por lanzamiento): mientras espera a la API, otra igual no se
  * manda y su Observable acaba sin emitir nada.
@@ -78,6 +79,10 @@ export class AgentesService {
   private readonly _terminada = new Subject<EjecucionAgente>();
   readonly terminada$ = this._terminada.asObservable();
 
+  /** Una seguida que la API ya no encuentra: sin esto, la pantalla la vería en marcha para siempre */
+  private readonly _perdida = new Subject<number>();
+  readonly perdida$ = this._perdida.asObservable();
+
   private readonly seguidas = new Set<number>();
   private readonly operaciones = new Set<string>();
   private temporizador: ReturnType<typeof setTimeout> | undefined;
@@ -97,10 +102,15 @@ export class AgentesService {
       this.peticionSeguimiento?.unsubscribe();
       this.peticionEstado?.unsubscribe();
       this._terminada.complete();
+      this._perdida.complete();
     });
   }
 
-  /** Pide el gasto de hoy, la versión y quién lleva la cola. Sin agentes disponibles no pide nada */
+  /**
+   * Pide el gasto de hoy, la versión y quién lleva la cola. Sin agentes disponibles no pide nada.
+   * Tras un 403 se puede volver a llamar: si entonces contesta bien, `disponibles` vuelve a true. Con
+   * un error que no es 403 se conserva el estado anterior y solo se deja el mensaje
+   */
   cargarEstado(): void {
     if (this.sistema.info()?.agentesDisponibles !== true) {
       return;
@@ -202,8 +212,11 @@ export class AgentesService {
 
   private registrar(ejecucion: EjecucionAgente): void {
     this._ejecuciones.update((actuales) => new Map(actuales).set(ejecucion.id, ejecucion));
+    // Tras un 403, las respuestas que aún estaban en vuelo no vuelven a armar el seguimiento
     if (!esTerminal(ejecucion)) {
-      this.seguir(ejecucion.id);
+      if (!this._rechazados()) {
+        this.seguir(ejecucion.id);
+      }
     } else if (this.seguidas.delete(ejecucion.id)) {
       this._terminada.next(ejecucion);
     }
@@ -253,6 +266,12 @@ export class AgentesService {
   private alFallarSeguimiento(id: number, error: ErrorApi): void {
     if (error.estado === 404) {
       this.seguidas.delete(id);
+      this._ejecuciones.update((actuales) => {
+        const sin = new Map(actuales);
+        sin.delete(id);
+        return sin;
+      });
+      this._perdida.next(id);
     } else {
       this.siRechazados(error);
     }

@@ -127,6 +127,30 @@ describe('AgentesService', () => {
       http.expectNone('/api/agentes/extraer-registro');
     });
 
+    it('tras un 403 se puede volver a pedir y, si contesta bien, vuelve a estar disponible', () => {
+      service.cargarEstado();
+      http.expectOne(URL_ESTADO).flush(null, { status: 403, statusText: 'Forbidden' });
+      expect(service.disponibles()).toBe(false);
+
+      service.cargarEstado();
+      http.expectOne(URL_ESTADO).flush(crearEstadoAgentes());
+
+      expect(service.disponibles()).toBe(true);
+      expect(service.puedeLanzar()).toBe(true);
+    });
+
+    it('un error que no es 403 conserva el estado anterior', () => {
+      const estado = crearEstadoAgentes();
+      service.cargarEstado();
+      http.expectOne(URL_ESTADO).flush(estado);
+
+      service.cargarEstado();
+      http.expectOne(URL_ESTADO).flush(null, { status: 500, statusText: 'x' });
+
+      expect(service.estado()).toEqual(estado);
+      expect(service.errorEstado()).not.toBeNull();
+    });
+
     it('otro error deja el mensaje y sigue disponible', () => {
       service.cargarEstado();
       http.expectOne(URL_ESTADO).flush(null, { status: 503, statusText: 'x' });
@@ -397,11 +421,20 @@ describe('AgentesService', () => {
       seguimiento().flush(crearEjecucion({ estado: 'Ok' }));
     });
 
-    it('un 404 (ya no existe) deja de seguirla', () => {
+    it('un 404 (ya no existe) la quita de las ejecuciones, avisa por perdida$ y deja de seguirla', () => {
+      const perdidas: number[] = [];
+      const terminadas: EjecucionAgente[] = [];
+      service.perdida$.subscribe((id) => perdidas.push(id));
+      service.terminada$.subscribe((e) => terminadas.push(e));
       lanzar();
+      expect(service.ejecuciones().get(1)?.estado).toBe('EnCola');
+
       vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
       seguimiento().flush(null, { status: 404, statusText: 'Not Found' });
 
+      expect(service.ejecuciones().has(1)).toBe(false);
+      expect(perdidas).toEqual([1]);
+      expect(terminadas).toEqual([]);
       vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS * 2);
       ninguno();
     });
@@ -414,6 +447,22 @@ describe('AgentesService', () => {
       vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS * 2);
       ninguno();
       expect(service.disponibles()).toBe(false);
+    });
+
+    it('tras un 403, otra respuesta que seguía en vuelo no vuelve a armar el seguimiento', () => {
+      lanzar(crearEjecucion({ id: 1, candidaturaId: 12 }));
+      lanzar(crearEjecucion({ id: 2, candidaturaId: 13 }));
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+      const otra = seguimiento(2);
+
+      seguimiento(1).flush(null, { status: 403, statusText: 'Forbidden' });
+      otra.flush(crearEjecucion({ id: 2, candidaturaId: 13, estado: 'EnCurso' }));
+
+      expect(vi.getTimerCount()).toBe(0);
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS * 2);
+      ninguno(1);
+      ninguno(2);
+      expect(service.ejecuciones().get(2)?.estado).toBe('EnCurso');
     });
 
     it('al destruirse no queda ningún temporizador', () => {
