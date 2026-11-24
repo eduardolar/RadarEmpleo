@@ -137,13 +137,31 @@
   </ng-template>
 
   @if (vista(); as previa) {
-    <!-- Lo primero de la vista combinada: qué se está viendo y cómo volver a la de la tabla -->
+    <!-- Lo primero de la vista combinada: qué se está viendo y cómo volver a la de la tabla. Marco fino
+         como las tarjetas de /agentes y Ajustes: el trazo grueso es de las filas de la lista, y con él
+         esta línea parecía una fila más. Las capas dicen «dos fuentes juntas» -->
     @if (lineaVistaCombinada(); as linea) {
       <div
-        class="flex flex-col gap-3 rounded-2xl border-2 border-trazo bg-surface-container-lowest p-4 sm:flex-row sm:items-center sm:justify-between"
+        class="flex flex-col gap-3 rounded-2xl border border-borde-fino bg-surface-container-lowest p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
       >
-        <p #lineaCombinada tabindex="-1" class="min-w-0 font-medium text-on-surface outline-none">
-          {{ linea }}
+        <p
+          #lineaCombinada
+          tabindex="-1"
+          class="flex min-w-0 items-start gap-2.5 font-medium text-on-surface outline-none"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linejoin="round"
+            class="mt-0.5 h-5 w-5 shrink-0 text-on-surface-variant"
+          >
+            <path d="M10 3 17.5 7 10 11 2.5 7 10 3Z" />
+            <path stroke-linecap="round" d="m2.5 10.5 7.5 4 7.5-4M2.5 14l7.5 4 7.5-4" />
+          </svg>
+          <span class="min-w-0">{{ linea }}</span>
         </p>
         <button
           mat-stroked-button
