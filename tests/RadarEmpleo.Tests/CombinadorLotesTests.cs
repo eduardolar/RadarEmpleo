@@ -131,6 +131,50 @@ public class CombinadorLotesTests
         Assert.Equal(2, fila.Linea);
     }
 
+    [Theory]
+    [InlineData("- **Gamma**: enviada el 2026-09-12.", "Gamma: enviada el 2026-09-12.")]                         // negrita y viñeta
+    [InlineData("- [Gamma](https://gamma.example/empleo): enviada.", "- Gamma: enviada.")]                       // enlace
+    [InlineData("* Gamma: enviada.", "Gamma: enviada.")]                                                         // otra viñeta
+    [InlineData("1. Gamma: enviada.", "Gamma: enviada.")]                                                        // lista numerada
+    [InlineData("> Gamma: “enviada” por `correo`.", "Gamma: \"enviada\" por correo.")]                          // cita, comillas y código
+    [InlineData("- Gamma: _enviada_ por ~~correo~~ web, en mi_carpeta.", "- Gamma: enviada por correo web, en mi_carpeta.")]
+    public void Combinar_CitaSinElMarcadoDeLaLinea_EntraConEsaLinea(string linea, string cita)
+    {
+        var lote = Combinar($"# Notas\n\n{linea}\n", Extraida(cita));
+
+        var fila = Assert.Single(lote.Filas);
+        Assert.Equal(3, fila.Linea);
+        Assert.False(fila.EmpresaFueraDeLaCita);
+        Assert.Empty(lote.SinLeer);
+    }
+
+    [Fact]
+    public void Combinar_CitaSinMarcadoQueEncajaConDosLineas_VaLaPrimera()
+    {
+        var fila = Assert.Single(Combinar("# Notas\n- **Gamma**: enviada.\n- Gamma: enviada.\n", Extraida("Gamma: enviada.")).Filas);
+
+        Assert.Equal(2, fila.Linea);
+    }
+
+    [Theory]
+    [InlineData("- **Gamma**: enviada el 2026-09-12 por correo.", "Gamma: enviada el 2026-09-12.")] // le faltan palabras
+    [InlineData("- **Gamma**: enviada.", "Gamma enviada.")]                                           // y un signo
+    public void Combinar_CitaQueSoloEncajaQuitandoAlgoMasQueElFormato_VaASinLeer(string linea, string cita)
+    {
+        var lote = Combinar($"# Notas\n{linea}\n", Extraida(cita));
+
+        Assert.Empty(lote.Filas);
+        Assert.StartsWith(CombinadorLotes.MotivoCitaInexistente, Assert.Single(lote.SinLeer).Motivo);
+    }
+
+    [Fact]
+    public void Combinar_SinLeerConLaCitaSinMarcado_LlevaLaLineaDelRegistro()
+    {
+        var lote = Combinar("# Notas\n- **Gamma**: algo raro.\n", [], [new FilaExtraidaSinLeer("Gamma: algo raro.", "No se entiende.")]);
+
+        Assert.Equal(2, Assert.Single(lote.SinLeer).Linea);
+    }
+
     [Fact]
     public void Combinar_EmpresaSoloEnElTitulo_EntraMarcada()
     {

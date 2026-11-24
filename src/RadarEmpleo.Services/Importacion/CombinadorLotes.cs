@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using RadarEmpleo.Domain;
 using RadarEmpleo.Services.Agentes;
 using RadarEmpleo.Services.Contratos;
@@ -20,7 +21,9 @@ public sealed record LoteCombinado(IReadOnlyList<FilaLote> Filas, IReadOnlyList<
 /// <item><b>La <c>cita</c> tiene que ser una línea del texto enviado</b> (<see cref="AnalizadorRegistro.TextoLibre"/>, sin la
 /// tabla ni los rastreos), entera: no vale un trozo ni dos líneas juntas. Las dos se comparan con la limpieza de
 /// <see cref="PlantillaPrompt"/> (sin invisibles, NFKC, delimitadores neutralizados) y los espacios seguidos en uno. Si
-/// encaja con varias líneas, vale la primera. Si no encaja con ninguna, la fila va a SinLeer con la línea 0 y el principio
+/// encaja con varias líneas, vale la primera. Si no encaja así, se prueba con las dos <see cref="SinMarcado"/> (Claude suele
+/// quitar la negrita, los enlaces o la viñeta al copiar la línea): solo se perdona el formato y tiene que seguir siendo la
+/// línea entera. Si no encaja con ninguna, la fila va a SinLeer con la línea 0 y el principio
 /// de la cita en el motivo: es la defensa contra filas inventadas.</item>
 /// <item><b>Manda la tabla</b>: una fila extraída con la misma empresa normalizada que una de la tabla y una fecha a 3 días
 /// o menos se queda fuera con <see cref="AvisoYaEnLaTabla"/>. Eso incluye la misma <see cref="ReglasImportacion.Clave"/>,
@@ -42,7 +45,7 @@ public sealed record LoteCombinado(IReadOnlyList<FilaLote> Filas, IReadOnlyList<
 /// </list>
 /// El enlace va tal cual: se normaliza después, en <see cref="ReglasImportacion"/>.
 /// </summary>
-public static class CombinadorLotes
+public static partial class CombinadorLotes
 {
     public const string AvisoYaEnLaTabla = "Ya está en la tabla del registro";
     public const string AvisoRepetidaEnElTexto = "Aparece dos veces en el texto libre";
@@ -63,29 +66,32 @@ public static class CombinadorLotes
     public static LoteCombinado Combinar(AnalisisRegistro tabla, string registro, ResultadoExtraccionRegistro extraccion)
     {
         var lineas = AnalizadorRegistro.TextoLibre(registro).Lineas
-            .Select(l => (l.Numero, Texto: Comparable(l.Texto)))
+            .Select(l =>
+            {
+                var texto = Comparable(l.Texto);
+                return new LineaComparable(l.Numero, texto, SinMarcado(texto));
+            })
             .Where(l => l.Texto.Length > 0)
             .ToList();
-        var primeraLinea = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var (numero, texto) in lineas) primeraLinea.TryAdd(texto, numero);
+        var indice = new IndiceLineas(lineas);
 
         var sinLeer = new List<FilaSinLeerDto>(tabla.SinLeer);
         foreach (var fila in extraccion.SinLeer)
         {
-            var linea = BuscarPrincipio(lineas, primeraLinea, fila.Cita);
+            var linea = BuscarPrincipio(lineas, indice, fila.Cita)?.Numero;
             sinLeer.Add(new FilaSinLeerDto(linea ?? 0, linea is null ? $"{fila.Motivo} {Citar(fila.Cita)}" : fila.Motivo));
         }
 
         var extraidas = new List<FilaLote>();
         foreach (var fila in extraccion.Candidaturas)
         {
-            var cita = Comparable(fila.Cita);
-            if (!primeraLinea.TryGetValue(cita, out var linea))
+            // La empresa se busca en la línea del registro que ha encajado, no en la cita (que puede venir sin formato)
+            if (indice.Buscar(Comparable(fila.Cita)) is not { } linea)
                 sinLeer.Add(new FilaSinLeerDto(0, $"{MotivoCitaInexistente}: {Citar(fila.Cita)}"));
             else if (Problema(fila) is { } motivo)
-                sinLeer.Add(new FilaSinLeerDto(linea, motivo));
+                sinLeer.Add(new FilaSinLeerDto(linea.Numero, motivo));
             else
-                extraidas.Add(AFilaLote(fila, linea, empresaEnLaLinea: EmpresaEnLinea(fila.Empresa, cita)));
+                extraidas.Add(AFilaLote(fila, linea.Numero, empresaEnLaLinea: EmpresaEnLinea(fila.Empresa, linea.Texto)));
         }
 
         var deLaTabla = tabla.Lote.Filas.ToLookup(f => NombresEmpresa.Normalizar(f.Empresa), f => f.Fecha, StringComparer.Ordinal);
@@ -127,20 +133,80 @@ public static class CombinadorLotes
         return texto;
     }
 
-    /// <summary>La línea de una cita de una fila sin leer: exacta o, si el manejador la recortó (justo
-    /// <see cref="ManejadorExtraerRegistro.LargoCitaSinLeer"/> caracteres acabados en «…»), la primera que empieza por ella.
-    /// Una cita corta que acaba en «…» por sí sola no se busca como principio: daría una línea equivocada.</summary>
-    private static int? BuscarPrincipio(List<(int Numero, string Texto)> lineas, Dictionary<string, int> primeraLinea, string cita)
+    /// <summary>Una línea del texto libre: su número, cómo se compara y cómo se compara sin el marcado de Markdown.</summary>
+    private sealed record LineaComparable(int Numero, string Texto, string SinMarcado);
+
+    /// <summary>La primera línea con cada texto exacto y con cada texto sin marcado (gana la primera: <c>TryAdd</c>).</summary>
+    private sealed class IndiceLineas
     {
-        var comparable = Comparable(cita);
-        if (comparable.Length == 0) return null;
-        if (primeraLinea.TryGetValue(comparable, out var exacta)) return exacta;
+        private readonly Dictionary<string, LineaComparable> _exactas = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, LineaComparable> _sinMarcado = new(StringComparer.Ordinal);
+
+        public IndiceLineas(IEnumerable<LineaComparable> lineas)
+        {
+            foreach (var linea in lineas)
+            {
+                _exactas.TryAdd(linea.Texto, linea);
+                if (linea.SinMarcado.Length > 0) _sinMarcado.TryAdd(linea.SinMarcado, linea);
+            }
+        }
+
+        /// <summary>La línea entera de una cita ya <see cref="Comparable"/>: exacta y, si no, sin marcado.</summary>
+        public LineaComparable? Buscar(string cita)
+        {
+            if (cita.Length == 0) return null;
+            if (_exactas.TryGetValue(cita, out var exacta)) return exacta;
+            return SinMarcado(cita) is { Length: > 0 } limpia && _sinMarcado.TryGetValue(limpia, out var sinMarcado) ? sinMarcado : null;
+        }
+    }
+
+    /// <summary>La línea de una cita de una fila sin leer: entera (exacta o sin marcado) o, si el manejador la recortó (justo
+    /// <see cref="ManejadorExtraerRegistro.LargoCitaSinLeer"/> caracteres acabados en «…»), la primera que empieza por ella,
+    /// tal cual o sin marcado. Una cita corta que acaba en «…» por sí sola no se busca como principio: daría una línea
+    /// equivocada.</summary>
+    private static LineaComparable? BuscarPrincipio(List<LineaComparable> lineas, IndiceLineas indice, string cita)
+    {
+        if (indice.Buscar(Comparable(cita)) is { } entera) return entera;
         if (!cita.EndsWith('…') || cita.EnumerateRunes().Count() != ManejadorExtraerRegistro.LargoCitaSinLeer
             || Comparable(cita[..^1]) is not { Length: > 0 } principio) return null;
-        return lineas.FirstOrDefault(l => l.Texto.StartsWith(principio, StringComparison.Ordinal)) is { Numero: > 0 } encontrada
-            ? encontrada.Numero
-            : null;
+        var principioSinMarcado = SinMarcado(principio);
+        return lineas.FirstOrDefault(l => l.Texto.StartsWith(principio, StringComparison.Ordinal))
+            ?? (principioSinMarcado.Length > 0
+                ? lineas.FirstOrDefault(l => l.SinMarcado.StartsWith(principioSinMarcado, StringComparison.Ordinal))
+                : null);
     }
+
+    /// <summary>
+    /// Una línea ya <see cref="Comparable"/> sin el formato de Markdown, que es lo que Claude suele quitar al copiarla: el
+    /// principio de título, cita o viñeta («# », «> », «- », «* », «+ », «• », «1. », «1) »), los enlaces y las imágenes (se
+    /// queda el texto), «**», «__», «~~» y «`», el énfasis con «*x*» o «_x_» (sin tocar un snake_case) y las comillas
+    /// tipográficas, que pasan a rectas. Solo se quita formato: las palabras tienen que seguir siendo las mismas.
+    /// </summary>
+    internal static string SinMarcado(string linea)
+    {
+        var texto = Enlace().Replace(linea, "$1");
+        texto = MarcasDobles().Replace(texto, "");
+        texto = EnfasisAsterisco().Replace(texto, "$1");
+        texto = EnfasisGuion().Replace(texto, "$1");
+        texto = texto.Replace('“', '"').Replace('”', '"').Replace('‘', '\'').Replace('’', '\'');
+        texto = PrincipioDeBloque().Replace(texto, "");
+        return HtmlATexto.NormalizarEspacios(texto).Trim();
+    }
+
+    [GeneratedRegex(@"!?\[([^\]]*)\]\([^)]*\)")]
+    private static partial Regex Enlace();
+
+    [GeneratedRegex(@"\*\*|__|~~|`")]
+    private static partial Regex MarcasDobles();
+
+    [GeneratedRegex(@"(?<![\p{L}\p{N}*])\*(?=\S)(.+?)(?<=\S)\*(?![\p{L}\p{N}*])")]
+    private static partial Regex EnfasisAsterisco();
+
+    [GeneratedRegex(@"(?<![\p{L}\p{N}_])_(?=\S)(.+?)(?<=\S)_(?![\p{L}\p{N}_])")]
+    private static partial Regex EnfasisGuion();
+
+    [GeneratedRegex(@"^\s*(?:(?:#+|>)\s*|[-*+•]\s+|\d+[.)]\s+)+")]
+    private static partial Regex PrincipioDeBloque();
 
     /// <summary>Lo que haría que el aplicar diera 400 o rompiera la fila: la fila va a SinLeer con este motivo.</summary>
     private static string? Problema(FilaExtraida fila)
