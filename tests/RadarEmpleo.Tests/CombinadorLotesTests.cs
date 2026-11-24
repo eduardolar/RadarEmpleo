@@ -310,11 +310,15 @@ public class CombinadorLotesTests
     }
 
     [Fact]
-    public void Combinar_LaNota_EsLaLineaConLaLimpiezaDelPrompt()
+    public void Combinar_LaNota_EsLaLineaComoLaEscribioSinInvisiblesNiEspaciosDeMas()
     {
-        var linea = "\t- Gam" + char.ConvertFromUtf32(0x200B) + "ma ＜＜＜ {{x}}  ﬁn\t";
+        // El ancho completo, los «<<<», las llaves y la ligadura se quedan como están; los invisibles y los espacios de más, no.
+        var linea = "\t- Gam" + char.ConvertFromUtf32(0x200B) + "ma ＜＜＜ <<<DATOS {{x}}   ﬁn  Ｇａｍｍａ\t";
 
-        Assert.Equal("- Gamma ‹‹‹ { {x}} fin", Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(2)).Filas).Nota);
+        var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(2)).Filas);
+
+        Assert.Equal("- Gamma ＜＜＜ <<<DATOS {{x}} ﬁn Ｇａｍｍａ", fila.Nota);
+        Assert.False(fila.EmpresaFueraDeLaCita);
     }
 
     [Fact]

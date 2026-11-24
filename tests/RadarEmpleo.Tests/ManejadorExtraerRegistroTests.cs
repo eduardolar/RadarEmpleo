@@ -780,8 +780,6 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     [InlineData("linea", "null")]
     [InlineData("linea", "\"8\"")]
     [InlineData("linea", "8.5")]
-    [InlineData("linea", "0")]
-    [InlineData("linea", "-3")]
     [InlineData("linea", "99999999999")]
     public void Validar_UnCampoDeOtroTipo_DaSalidaNoValida(string campo, string valor)
     {
@@ -790,11 +788,34 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         AssertNoValida(Salida([Fila(), fila]));
     }
 
+    [Fact]
+    public void Validar_UnaDudaConUnaLineaQueNoEsUnEntero_DaSalidaNoValida() =>
+        AssertNoValida(JsonDocument.Parse("""{"candidaturas":[],"dudas":[{"linea":"9","texto":"x"}]}""").RootElement);
+
     [Theory]
-    [InlineData("0")]
-    [InlineData("\"9\"")]
-    public void Validar_UnaDudaConUnaLineaQueNoVale_DaSalidaNoValida(string linea) =>
-        AssertNoValida(JsonDocument.Parse($$"""{"candidaturas":[],"dudas":[{"linea":{{linea}},"texto":"x"}]}""").RootElement);
+    [InlineData(0)]
+    [InlineData(-3)]
+    public void Validar_UnaLineaMenorQueUno_SoloTumbaSuFilaYLaDudaQuedaSinNumero(int linea)
+    {
+        var mala = Fila();
+        mala["linea"] = linea;
+
+        var resultado = ManejadorExtraerRegistro.Validar(Salida([Fila(), mala], [Duda(linea, "Sin fecha."), Duda(9, "Otra.")]));
+
+        Assert.Single(resultado.Candidaturas);
+        Assert.Equal(new FilaExtraidaSinLeer(0, ManejadorExtraerRegistro.MotivoLineaNoValida(linea)), Assert.Single(resultado.SinLeer));
+        Assert.Contains($"la línea {linea},", resultado.SinLeer[0].Motivo);
+        Assert.Equal(["Sin fecha.", "Línea 9: Otra."], resultado.Dudas);
+    }
+
+    [Fact]
+    public void Validar_UnaDudaConUnaLineaQueNoEsDeSuParte_VaSinNumero()
+    {
+        var resultado = ManejadorExtraerRegistro.Validar(Salida([], [Duda(51, "No es de esta parte."), Duda(9, "Sí lo es.")]),
+            new HashSet<int> { LineaCita, 9 }, "2 de 4");
+
+        Assert.Equal(["No es de esta parte.", "Línea 9: Sí lo es."], resultado.Dudas);
+    }
 
     [Theory]
     [InlineData("estado", "\"enviada\"", "El campo «estado» no admite «enviada».")]

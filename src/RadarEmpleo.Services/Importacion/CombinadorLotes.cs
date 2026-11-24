@@ -24,7 +24,7 @@ public sealed record LoteCombinado(IReadOnlyList<FilaLote> Filas, IReadOnlyList<
 /// <see cref="MotivoLineaInexistente"/>: es la defensa contra filas inventadas.</item>
 /// <item><b>Lo demás sale de esa línea, no de Claude</b>: la sección es el título («#» a «######», sin las almohadillas) más
 /// cercano por encima en el texto libre; el enlace, el primer https de la línea (<see cref="AnalizadorRastreo.PrimerEnlace"/>);
-/// la nota, la propia línea (<see cref="Comparable"/>, recortada a <see cref="LimitesLote.Nota"/>); la modalidad,
+/// la nota, la propia línea tal como la escribió Eduardo (sin invisibles y recortada a <see cref="LimitesLote.Nota"/>); la modalidad,
 /// <see cref="Modalidad.NoIndicada"/> y sin ubicación (una palabra suelta daría datos equivocados).</item>
 /// <item><b>Manda la tabla</b>: una fila extraída con la misma empresa normalizada que una de la tabla y una fecha a 3 días
 /// o menos se queda fuera con <see cref="AvisoYaEnLaTabla"/>. Eso incluye la misma <see cref="ReglasImportacion.Clave"/>,
@@ -167,12 +167,20 @@ public static partial class CombinadorLotes
             Enlace: enlace?.Length > LimitesLote.Enlace ? null : enlace,
             Estado: f.Estado,
             MotivoDescarte: descartada ? f.MotivoDescarte ?? MotivoDescarte.Otro : null,
-            Nota: Recortar(linea.Texto, LimitesLote.Nota),
+            Nota: Nota(linea.Original),
             Seccion: linea.Seccion is null
                 ? AnalizadorRegistro.SeccionTextoLibre
                 : $"{AnalizadorRegistro.SeccionTextoLibre}: {linea.Seccion}",
             EmpresaFueraDeLaCita: !EmpresaEnLinea(f.Empresa, linea.Texto));
     }
+
+    /// <summary>
+    /// La nota de una extraída: su línea como la escribió Eduardo (sin la limpieza de <see cref="Comparable"/>, que cambia el
+    /// ancho completo, los «&lt;&lt;&lt;» o las llaves), solo sin invisibles, en una línea, con los espacios seguidos en uno y recortada
+    /// a <see cref="LimitesLote.Nota"/>.
+    /// </summary>
+    private static string Nota(string linea) =>
+        Recortar(HtmlATexto.NormalizarEspacios(PlantillaPrompt.QuitarInvisibles(PlantillaPrompt.EnUnaLinea(linea))).Trim(), LimitesLote.Nota);
 
     /// <summary>
     /// Si la empresa sale en su línea (ya <see cref="Comparable"/>): las dos sin tildes ni mayúsculas, la empresa sin

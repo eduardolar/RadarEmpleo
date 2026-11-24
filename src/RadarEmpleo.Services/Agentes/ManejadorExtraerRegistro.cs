@@ -194,12 +194,13 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
 
     /// <summary>
     /// La salida de Claude contra el esquema, en dos niveles. La <b>estructura</b> (lectura estricta: sin campos de más, de
-    /// menos ni repetidos, con sus tipos; números de línea desde 1; como mucho 1000 filas y <see cref="MaximoDudas"/> dudas) o
-    /// vale entera o es <see cref="MensajesEjecucion.SalidaNoValida"/>. Dentro, una <b>fila</b> que no cumple (su línea no es de
-    /// la parte, fecha imposible, enumerado que no es exactamente uno de los nombres, campo obligatorio vacío o más largo que el
+    /// menos ni repetidos, con sus tipos; como mucho 1000 filas y <see cref="MaximoDudas"/> dudas) o
+    /// vale entera o es <see cref="MensajesEjecucion.SalidaNoValida"/>. Dentro, una <b>fila</b> que no cumple (su línea es menor
+    /// que 1 o no es de la parte, fecha imposible, enumerado que no es exactamente uno de los nombres, campo obligatorio vacío o más largo que el
     /// esquema) va a <see cref="ResultadoExtraccionRegistro.SinLeer"/> sin tumbar las demás. Antes de medir, los textos se
     /// quedan sin saltos, controles, invisibles ni marcas de dirección; los largos se cuentan en caracteres Unicode, como el
-    /// esquema. Una duda demasiado larga se recorta y se guarda como «Línea 123: …» si dice su línea.
+    /// esquema. Una duda demasiado larga se recorta y se guarda como «Línea 123: …» si dice una línea de su parte (si no, sin
+    /// número).
     /// </summary>
     /// <param name="lineas">Los números de las líneas que se le han mandado, o null para no comprobarlo (lo vuelve a
     /// comprobar el combinador contra el registro).</param>
@@ -217,14 +218,20 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
             // Un tipo que no es el del esquema, o un campo de más, de menos o repetido.
         }
         if (cruda is null || cruda.Candidaturas.Count > LimitesLote.Filas || cruda.Dudas.Count > MaximoDudas
-            || cruda.Candidaturas.Any(f => f is null || f.Linea < 1) || cruda.Dudas.Any(d => d is null || d.Linea < 1))
+            || cruda.Candidaturas.Any(f => f is null) || cruda.Dudas.Any(d => d is null))
             throw new ReglaNegocioException(MensajesEjecucion.SalidaNoValida);
 
         var filas = new List<FilaExtraida>();
         var sinLeer = new List<FilaExtraidaSinLeer>();
         foreach (var fila in cruda.Candidaturas)
         {
-            if (lineas is not null && !lineas.Contains(fila!.Linea))
+            // Un número que no puede ser una línea tumba esa fila, no la parte entera.
+            if (fila!.Linea < 1)
+            {
+                sinLeer.Add(new FilaExtraidaSinLeer(0, MotivoLineaNoValida(fila.Linea)));
+                continue;
+            }
+            if (lineas is not null && !lineas.Contains(fila.Linea))
             {
                 sinLeer.Add(new FilaExtraidaSinLeer(0, MotivoFueraDeLaParte(fila.Linea, parte)));
                 continue;
@@ -238,13 +245,20 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
                 sinLeer.Add(new FilaExtraidaSinLeer(fila!.Linea, error.Message));
             }
         }
+        // «Línea N:» solo con una línea que puede ser suya: si no, la duda se guarda igual, sin número.
         var dudas = cruda.Dudas
             .Select(d => (d!.Linea, Texto: Recortar(Linea(d.Texto), LargoDuda)))
             .Where(d => d.Texto.Length > 0)
-            .Select(d => d.Linea is { } numero ? $"Línea {numero.ToString(CultureInfo.InvariantCulture)}: {d.Texto}" : d.Texto)
+            .Select(d => d.Linea is { } numero && numero >= 1 && (lineas is null || lineas.Contains(numero))
+                ? $"Línea {numero.ToString(CultureInfo.InvariantCulture)}: {d.Texto}"
+                : d.Texto)
             .ToList();
         return new ResultadoExtraccionRegistro(filas, dudas, sinLeer);
     }
+
+    /// <summary>«Claude ha dado la línea 0, que no existe: las líneas empiezan en la 1.»</summary>
+    public static string MotivoLineaNoValida(int linea) =>
+        $"Claude ha dado la línea {linea.ToString(CultureInfo.InvariantCulture)}, que no existe: las líneas empiezan en la 1.";
 
     /// <summary>«La línea 51 no está en la parte 2 de 4 del texto libre.»</summary>
     public static string MotivoFueraDeLaParte(int linea, string? parte) =>
