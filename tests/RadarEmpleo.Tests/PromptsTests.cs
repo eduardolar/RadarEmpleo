@@ -10,7 +10,7 @@ public class PromptsTests
     public static TheoryData<string, string[]> MarcadoresDeCadaTarea => new()
     {
         { "analizar-encaje", ["empresa", "puesto", "enlace", "ubicacion", "modalidad", "lecturaOferta", "oferta", "perfil"] },
-        { "extraer-registro", ["registro"] }
+        { "extraer-registro", ["registro", "parte"] }
     };
 
     private static DefinicionTarea Definicion(string nombre) => DefinicionesTareas.Todas.Single(d => d.NombrePrompt == nombre);

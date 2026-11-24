@@ -117,14 +117,18 @@ public static class DefinicionesTareas
         Modelo: null,
         NombrePrompt: "analizar-encaje");
 
+    // Por partes (decisión de Eduardo del 24/11, tras cortarse a los 10 min la prueba B con unos 64 KB de texto libre): hasta
+    // 6 partes de unos 16.000 caracteres, 2,00 y 50 min en total y como mucho 1,00 y 10 min cada una. Con una parte, como
+    // antes: 1,00 y 10 min. El bloqueo caduca a los 55 min, por debajo de la duración máxima de 60.
     public static readonly DefinicionTarea ExtraerRegistro = new(
-        TareaAgente.ExtraerRegistro, 1.00m, TimeSpan.FromMinutes(10), CarpetaTrabajo.Ejecucion,
+        TareaAgente.ExtraerRegistro, 2.00m, TimeSpan.FromMinutes(50), CarpetaTrabajo.Ejecucion,
         Herramientas: "",
         Permitidas: null,
         Denegadas: null,
         Modelo: "sonnet",
         NombrePrompt: "extraer-registro",
-        SalidaConDatosPersonales: true);
+        SalidaConDatosPersonales: true,
+        Partes: new PartesTarea(LargoParte: 16_000, MaximoPartes: 6, PresupuestoMaximoParte: 1.00m, TiempoMaximoParte: TimeSpan.FromMinutes(10)));
 
     // F7c: el alcance web del rastreo (WebFetch y WebSearch sin límite de dominio) se decide al llegar a la F7c.
     public static readonly DefinicionTarea Rastreo = new(

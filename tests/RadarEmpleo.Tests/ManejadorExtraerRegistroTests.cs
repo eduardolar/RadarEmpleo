@@ -382,6 +382,233 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         Assert.Empty(db.EjecucionesAgente);
     }
 
+    // ---------------------------------------------------------------- por partes
+
+    /// <summary>Una entrada inventada de unos 100 caracteres del mes <paramref name="mes"/>.</summary>
+    public static string LineaDe(int mes, int i) =>
+        $"- Empresa Parte{mes}-{i} S.L.: ENVIADA el 2026-{mes:00}-{i % 28 + 1:00}. " + new string('n', 50);
+
+    /// <summary>
+    /// Un texto solo de apartados «## Mes m de 2026», uno por mes, con tantas entradas como diga cada número y una línea en
+    /// blanco cada diez (párrafos).
+    /// </summary>
+    public static string RegistroPorMeses(params int[] lineasPorMes)
+    {
+        var texto = new System.Text.StringBuilder();
+        for (var mes = 1; mes <= lineasPorMes.Length; mes++)
+        {
+            texto.Append($"## Mes {mes} de 2026\n");
+            for (var i = 1; i <= lineasPorMes[mes - 1]; i++)
+            {
+                texto.Append(LineaDe(mes, i)).Append('\n');
+                if (i % 10 == 0) texto.Append('\n');
+            }
+        }
+        return texto.ToString();
+    }
+
+    /// <summary>La fila de la entrada <paramref name="i"/> del mes <paramref name="mes"/>, con su línea como cita.</summary>
+    private static JsonObject FilaDe(int mes, int i)
+    {
+        var fila = Fila();
+        fila["seccion"] = $"Mes {mes} de 2026";
+        fila["fecha"] = $"2026-{mes:00}-{i % 28 + 1:00}";
+        fila["empresa"] = $"Empresa Parte{mes}-{i} S.L.";
+        fila["cita"] = LineaDe(mes, i);
+        return fila;
+    }
+
+    private static string Presupuesto(PeticionClaude peticion) =>
+        peticion.Argumentos[peticion.Argumentos.ToList().IndexOf("--max-budget-usd") + 1];
+
+    /// <summary>Lo que va dentro del bloque de datos de un prompt, línea a línea.</summary>
+    private static string[] Datos(PeticionClaude peticion)
+    {
+        var prompt = peticion.EntradaEstandar;
+        var inicio = prompt.IndexOf(PlantillaPrompt.InicioDatos, StringComparison.Ordinal) + PlantillaPrompt.InicioDatos.Length + 1;
+        return prompt[inicio..prompt.IndexOf(PlantillaPrompt.FinDatos, StringComparison.Ordinal)].TrimEnd('\n').Split('\n');
+    }
+
+    [Fact]
+    public async Task UnRegistroPequeno_VaEnUnaSolaParteConUnoYDiezMinutos()
+    {
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([Fila()])));
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
+        Assert.Equal(2.00m, ejecucion.PresupuestoUsd);
+        var peticion = Assert.Single(_claude.Peticiones);
+        Assert.Equal("1 de 1", peticion.Parte);
+        Assert.Equal("1.00", Presupuesto(peticion));
+        Assert.Equal(TimeSpan.FromMinutes(10), peticion.TiempoMaximo);
+        Assert.Equal("Parte 1 de 1 del texto libre.", Datos(peticion)[0]);
+    }
+
+    [Fact]
+    public async Task UnRegistroDeUnos70KB_VaEnVariasPartesSinPartirLineasYConElTituloRepetido()
+    {
+        // El primer mes no cabe en una parte (unos 20.000 caracteres); los otros diez, de unos 5.000, sí.
+        var registro = RegistroPorMeses([200, .. Enumerable.Repeat(50, 10)]);
+        Assert.InRange(registro.Length, 65_000, 75_000);
+        File.WriteAllText(_rutas.Registro!, registro);
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([]), CosteUsd: 0.10m));
+
+        var ejecucion = await ExtraerAsync();
+
+        var peticiones = _claude.Peticiones.ToList();
+        var n = peticiones.Count;
+        Assert.InRange(n, 5, 6);
+        Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
+        Assert.Equal(0.10m * n, ejecucion.CosteUsd);
+        var definicion = DefinicionesTareas.ExtraerRegistro;
+        for (var k = 1; k <= n; k++)
+        {
+            var peticion = peticiones[k - 1];
+            Assert.Equal($"{k} de {n}", peticion.Parte);
+            Assert.Equal(definicion.PresupuestoParte(n).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), Presupuesto(peticion));
+            Assert.Equal(definicion.TiempoParte(n), peticion.TiempoMaximo);
+            var datos = Datos(peticion);
+            Assert.Equal($"Parte {k} de {n} del texto libre.", datos[0]);
+            Assert.InRange(datos.Skip(1).Sum(l => l.Length + 1), 1, 16_000);
+            // Cada parte empieza en un título: el suyo o el de su apartado, repetido.
+            Assert.StartsWith("## Mes ", datos[1]);
+        }
+        Assert.Equal(2, peticiones.Count(p => Datos(p)[1] == "## Mes 1 de 2026"));
+        // Ninguna línea se parte ni se pierde: todas están enteras en alguna parte.
+        var enviadas = peticiones.SelectMany(p => Datos(p).Skip(1)).ToHashSet(StringComparer.Ordinal);
+        Assert.All(registro.Split('\n').Where(l => l.Length > 0), l => Assert.Contains(l, enviadas));
+    }
+
+    [Fact]
+    public async Task UnRegistroQueNecesitaMasDeSeisPartes_DaErrorSinClaudeNiGasto()
+    {
+        File.WriteAllText(_rutas.Registro!, RegistroPorMeses([.. Enumerable.Repeat(100, 12)]));
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Error, ejecucion.Estado);
+        Assert.Equal(ManejadorExtraerRegistro.MensajeDemasiadoLargo, ejecucion.Error);
+        Assert.Contains("más de 6 partes", ejecucion.Error);
+        Assert.Equal(0m, ejecucion.CosteUsd);
+        Assert.Empty(_claude.Peticiones);
+    }
+
+    /// <summary>Tres meses de unos 14.500 caracteres: tres partes, cada una con el suyo.</summary>
+    private void TresPartes() => File.WriteAllText(_rutas.Registro!, RegistroPorMeses(150, 150, 150));
+
+    private static RespuestaFalsa Leida(int mes) =>
+        new(Salida: Salida([FilaDe(mes, 1)], [$"Duda de la parte {mes}."]), CosteUsd: 0.10m);
+
+    private static RespuestaFalsa NoValida()
+    {
+        var mala = Fila();
+        mala["estado"] = 2;
+        return new RespuestaFalsa(Salida: Salida([mala]), CosteUsd: 0.10m);
+    }
+
+    [Fact]
+    public async Task PorPartes_LoDeTodasSeJuntaEnOrdenEnUnSoloResultado()
+    {
+        TresPartes();
+        _claude.ProgramarSecuencia(TareaAgente.ExtraerRegistro, Leida(1), Leida(2), Leida(3));
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(3, _claude.Peticiones.Count);
+        Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
+        Assert.Equal(0.30m, ejecucion.CosteUsd);
+        Assert.Equal("Ha encontrado 3 candidaturas en el texto libre. Tiene 3 dudas.", ejecucion.Resumen);
+        var guardado = ManejadorExtraerRegistro.LeerGuardado(ejecucion.ResultadoJson)!;
+        Assert.Equal(["Empresa Parte1-1 S.L.", "Empresa Parte2-1 S.L.", "Empresa Parte3-1 S.L."], guardado.Candidaturas.Select(f => f.Empresa));
+        Assert.Equal(["Duda de la parte 1.", "Duda de la parte 2.", "Duda de la parte 3."], guardado.Dudas);
+        Assert.Equal(["## Mes 1 de 2026", "## Mes 2 de 2026", "## Mes 3 de 2026"], _claude.Peticiones.Select(p => Datos(p)[1]));
+    }
+
+    [Fact]
+    public async Task PorPartes_UnaConLaEstructuraMal_DejaUnaDudaQueLoDiceYLasDemasSeGuardan()
+    {
+        TresPartes();
+        _claude.ProgramarSecuencia(TareaAgente.ExtraerRegistro, Leida(1), NoValida(), Leida(3));
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
+        Assert.Equal("Ha encontrado 2 candidaturas en el texto libre. 1 parte no se ha podido leer. Tiene 3 dudas.", ejecucion.Resumen);
+        var guardado = Guardado(ejecucion);
+        Assert.Equal(["Empresa Parte1-1 S.L.", "Empresa Parte3-1 S.L."], guardado.Candidaturas.Select(f => f.Empresa));
+        Assert.Equal(
+            [
+                "No se ha podido leer la parte 2 de 3 (desde «## Mes 2 de 2026»): Claude ha respondido en un formato que no entiendo.",
+                "Duda de la parte 1.",
+                "Duda de la parte 3."
+            ],
+            guardado.Dudas);
+    }
+
+    [Fact]
+    public async Task PorPartes_SiNingunaTieneLaEstructuraBien_DaSalidaNoValidaConElCosteSumado()
+    {
+        TresPartes();
+        _claude.ProgramarSecuencia(TareaAgente.ExtraerRegistro, NoValida(), NoValida(), NoValida());
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Error, ejecucion.Estado);
+        Assert.Equal(MensajesEjecucion.SalidaNoValida, ejecucion.Error);
+        Assert.Equal(0.30m, ejecucion.CosteUsd);
+        Assert.Null(ejecucion.ResultadoJson);
+    }
+
+    [Fact]
+    public async Task PorPartes_ComoMuchoCincuentaDudasSinRepetidasYLasDeLasPartesPerdidasPrimero()
+    {
+        TresPartes();
+        var muchas = Enumerable.Range(1, 50).Select(i => $"Duda {i}.").ToList();
+        _claude.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(ModoFalso.Error, CosteUsd: 0.05m),
+            new RespuestaFalsa(Salida: Salida([FilaDe(2, 1)], muchas)),
+            new RespuestaFalsa(Salida: Salida([FilaDe(3, 1)], muchas)));
+
+        var ejecucion = await ExtraerAsync();
+
+        var dudas = Guardado(ejecucion).Dudas;
+        Assert.Equal(ManejadorExtraerRegistro.MaximoDudas, dudas.Count);
+        Assert.Equal("No se ha podido leer la parte 1 de 3 (desde «## Mes 1 de 2026»): Claude ha devuelto un error.", dudas[0]);
+        Assert.Equal(muchas.Take(49), dudas.Skip(1));
+    }
+
+    [Fact]
+    public async Task PorPartes_ElResumenCuentaLasPartesPerdidas()
+    {
+        TresPartes();
+        _claude.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(ModoFalso.PresupuestoAgotado, CosteUsd: 0.66m), Leida(2), new RespuestaFalsa(ModoFalso.Error));
+
+        var ejecucion = await ExtraerAsync();
+
+        Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
+        Assert.Equal("Ha encontrado 1 candidatura en el texto libre. 2 partes no se han podido leer. Tiene 3 dudas.", ejecucion.Resumen);
+        Assert.Equal("No se ha podido leer la parte 1 de 3 (desde «## Mes 1 de 2026»): ha llegado al tope de uso de la parte y la he parado.",
+            Guardado(ejecucion).Dudas[0]);
+    }
+
+    [Fact]
+    public async Task AplicarPartes_SinHaberlasPreparado_DiceLaParteYElMotivoSinDesdeDonde()
+    {
+        var manejador = new ManejadorExtraerRegistro(_lector, _rutas);
+        PeticionClaude Peticion(string parte) =>
+            new(TareaAgente.ExtraerRegistro, ["-p"], _raiz, "prompt", TimeSpan.FromMinutes(10), "log", true, parte);
+        var buena = new RespuestaClaude(true, "success", 0.1m, 1, "s", null, Salida([Fila()]), null, null);
+
+        var resultado = await manejador.AplicarPartesAsync(null!,
+            [(Peticion("1 de 2"), RespuestaClaude.Fallida(FalloClaude.TiempoAgotado)), (Peticion("2 de 2"), buena)], CancellationToken.None);
+
+        var guardado = ManejadorExtraerRegistro.LeerGuardado(resultado.ResultadoJson)!;
+        Assert.Equal("No se ha podido leer la parte 1 de 2: ha tardado más de 10 min y la he parado.", guardado.Dudas[0]);
+        Assert.Single(guardado.Candidaturas);
+    }
+
     // ---------------------------------------------------------------- validación de la salida
 
     [Fact]
