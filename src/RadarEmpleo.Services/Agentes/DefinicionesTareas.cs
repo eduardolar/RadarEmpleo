@@ -44,11 +44,29 @@ public sealed record DefinicionTarea(
     /// céntimo) y como mucho <see cref="PartesTarea.PresupuestoMaximoParte"/>. Así la suma nunca pasa del total. Sin
     /// <see cref="Partes"/>, el total.
     /// </summary>
+    /// <exception cref="ReglaNegocioException">El reparto no llega a un céntimo por parte
+    /// (<see cref="MensajesEjecucion.PresupuestoNoLlegaParaLasPartes"/>).</exception>
     public decimal PresupuestoParte(int partes)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(partes);
         if (Partes is null) return PresupuestoUsd;
-        return Math.Min(Partes.PresupuestoMaximoParte, Math.Floor(PresupuestoUsd * 100 / partes) / 100);
+        var parte = Math.Min(Partes.PresupuestoMaximoParte, Math.Floor(PresupuestoUsd * 100 / partes) / 100);
+        return parte > 0 ? parte : throw new ReglaNegocioException(MensajesEjecucion.PresupuestoNoLlegaParaLasPartes);
+    }
+
+    /// <summary>
+    /// Las peticiones que ha preparado el manejador caben en la tarea: una sola siempre (como antes de las partes); varias,
+    /// solo si la tarea va por partes, no pasan de <see cref="PartesTarea.MaximoPartes"/>, cada una lleva su
+    /// <c>--max-budget-usd</c> y ni la suma de los tiempos ni la de los presupuestos pasan de los de la tarea (el bloqueo
+    /// caduca con <see cref="TiempoMaximo"/> y al encolar se reserva <see cref="PresupuestoUsd"/>).
+    /// </summary>
+    public bool CabenLasPartes(IReadOnlyList<PeticionClaude> peticiones)
+    {
+        if (peticiones.Count <= 1) return true;
+        if (Partes is null || peticiones.Count > Partes.MaximoPartes) return false;
+        if (peticiones.Aggregate(TimeSpan.Zero, (suma, p) => suma + p.TiempoMaximo) > TiempoMaximo) return false;
+        var presupuestos = peticiones.Select(p => ConstructorArgumentos.PresupuestoDe(p.Argumentos)).ToList();
+        return presupuestos.All(p => p is > 0) && presupuestos.Sum() <= PresupuestoUsd;
     }
 
     /// <summary>El tiempo máximo de cada parte: el total repartido y como mucho <see cref="PartesTarea.TiempoMaximoParte"/>. Sin <see cref="Partes"/>, el total.</summary>

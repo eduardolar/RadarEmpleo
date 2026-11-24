@@ -23,9 +23,12 @@ public sealed class ManejadorDePrueba : IManejadorTarea
     public static readonly DefinicionTarea ConCandidatura = new(TareaAgente.AnalizarEncaje, 0.50m, TimeSpan.FromMinutes(5),
         CarpetaTrabajo.Curriculum, "Read", "Read", "Bash", null, "prueba-encaje");
 
-    public ManejadorDePrueba(DefinicionTarea definicion) => Definicion = definicion;
+    private readonly DefinicionTarea _definicion;
 
-    public DefinicionTarea Definicion { get; }
+    public ManejadorDePrueba(DefinicionTarea definicion) => _definicion = definicion;
+
+    /// <summary>La que se le da y, con <see cref="Partes"/>, con el reparto de <see cref="PorPartes"/>.</summary>
+    public DefinicionTarea Definicion => Partes is null ? _definicion : _definicion with { Partes = PorPartes };
 
     /// <summary>Lo que hace al aplicar la respuesta (por defecto, nada).</summary>
     public static Func<RespuestaClaude, Task>? AlAplicar { get; set; }
@@ -38,6 +41,9 @@ public sealed class ManejadorDePrueba : IManejadorTarea
 
     /// <summary>Si no es null, la tarea se lanza en tantas partes, con el reparto de <see cref="PorPartes"/>.</summary>
     public static int? Partes { get; set; }
+
+    /// <summary>Si no es null, las peticiones que prepara, en vez de las suyas (para probar las que no caben).</summary>
+    public static Func<ContextoTarea, DefinicionTarea, IReadOnlyList<PeticionClaude>>? OtrasPeticiones { get; set; }
 
     /// <summary>Lo que ha recibido <see cref="AplicarPartesAsync"/> la última vez.</summary>
     public static IReadOnlyList<(PeticionClaude Peticion, RespuestaClaude Respuesta)>? PartesRecibidas { get; set; }
@@ -52,6 +58,7 @@ public sealed class ManejadorDePrueba : IManejadorTarea
         AlConstruir = null;
         SinClaude = null;
         Partes = null;
+        OtrasPeticiones = null;
         PartesRecibidas = null;
     }
 
@@ -67,9 +74,10 @@ public sealed class ManejadorDePrueba : IManejadorTarea
         if (AlConstruir is { } alConstruir) await alConstruir(cancelacion);
         if (SinClaude is { } sinClaude) return PreparacionTarea.Terminada(sinClaude);
         var valores = new ValoresArgumentos(contexto.CarpetaDatos);
+        if (OtrasPeticiones is { } otras) return PreparacionTarea.ConClaude(otras(contexto, Definicion));
         if (Partes is { } n)
         {
-            var definicion = Definicion with { Partes = PorPartes };
+            var definicion = Definicion;
             return PreparacionTarea.ConClaude(Enumerable.Range(1, n).Select(k => contexto.Peticion(definicion,
                 ConstructorArgumentos.Construir(definicion, Esquema, valores, definicion.PresupuestoParte(n)), $"Prompt de prueba {k}",
                 definicion.TiempoParte(n), $"{k} de {n}")).ToList());
@@ -1423,6 +1431,102 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         Assert.Equal(EstadoEjecucion.Error, final.Estado);
         Assert.Equal(MensajesEjecucion.NoInstalado, final.Error);
         Assert.Null(ManejadorDePrueba.PartesRecibidas);
+    }
+
+    /// <summary>Una petición de prueba con ese presupuesto y ese tiempo.</summary>
+    private static PeticionClaude Parte(ContextoTarea contexto, DefinicionTarea definicion, decimal presupuesto, TimeSpan tiempo, string parte) =>
+        contexto.Peticion(definicion, ConstructorArgumentos.Construir(definicion, """{"type":"object"}""",
+            new ValoresArgumentos(contexto.CarpetaDatos), presupuesto), "Prompt de prueba", tiempo, parte);
+
+    public static TheoryData<int?, int, double, int> PartesQueNoCaben => new()
+    {
+        // Sin partes en la definición.
+        { null, 2, 0.10, 1 },
+        // Más de las seis partes que admite.
+        { 3, 7, 0.05, 0 },
+        // Tres de 2 min con 5 min en total: el bloqueo caducaría antes.
+        { 3, 3, 0.10, 2 },
+        // Tres de 0,20 con 0,50 en total.
+        { 3, 3, 0.20, 1 }
+    };
+
+    [Theory]
+    [MemberData(nameof(PartesQueNoCaben))]
+    public async Task PorPartes_LasQueNoCabenEnLaTarea_FallanSinLanzarNadaNiGastar(int? partes, int peticiones, double presupuesto, int minutos)
+    {
+        ManejadorDePrueba.Partes = partes;
+        ManejadorDePrueba.OtrasPeticiones = (contexto, definicion) => Enumerable.Range(1, peticiones)
+            .Select(k => Parte(contexto, definicion, (decimal)presupuesto, minutos == 0 ? TimeSpan.FromSeconds(10) : TimeSpan.FromMinutes(minutos),
+                $"{k} de {peticiones}"))
+            .ToList();
+        var ejecucion = await EncolarAsync();
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Error, final.Estado);
+        Assert.Equal(MensajesEjecucion.PartesNoCaben, final.Error);
+        Assert.Equal(0m, final.CosteUsd);
+        Assert.Empty(_falso.Peticiones);
+        Assert.False(File.Exists(RutaBloqueo));
+    }
+
+    [Fact]
+    public async Task PorPartes_ConUnPresupuestoQueNoLlegaAUnCentimoPorParte_FallaConSuMensajeSinGastar()
+    {
+        ManejadorDePrueba.Partes = 3;
+        ManejadorDePrueba.OtrasPeticiones = (contexto, definicion) =>
+            [Parte(contexto, definicion with { PresupuestoUsd = 0.02m }, (definicion with { PresupuestoUsd = 0.02m }).PresupuestoParte(3),
+                TimeSpan.FromMinutes(1), "1 de 3")];
+        var ejecucion = await EncolarAsync();
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(MensajesEjecucion.PresupuestoNoLlegaParaLasPartes, final.Error);
+        Assert.Equal(0m, final.CosteUsd);
+        Assert.Empty(_falso.Peticiones);
+    }
+
+    [Fact]
+    public async Task PorPartes_PararLaApiAlAcabarUnaParte_InterrumpeConLoQueHaGastado()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        _falso.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida(1), CosteUsd: 0.10m));
+        using var parada = new CancellationTokenSource();
+        // Se para mientras responde la primera, que aun así sale bien.
+        _falso.AntesDeResponder = async (_, _) => await parada.CancelAsync();
+
+        try
+        {
+            await _procesador.ProcesarSiguienteAsync(parada.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Lo que importa es cómo queda la ejecución.
+        }
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EjecucionAgente.MensajeInterrumpida, final.Error);
+        Assert.Single(_falso.Peticiones);
+        Assert.Equal(0.10m, final.CosteUsd);
+    }
+
+    [Fact]
+    public async Task PorPartes_SiUnaParteNoTraeTurnos_ElTotalNoSeSabe()
+    {
+        ManejadorDePrueba.Partes = 2;
+        var ejecucion = await EncolarAsync();
+        _falso.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(Salida: Salida(1), Turnos: 2),
+            new RespuestaFalsa(Salida: Salida(2), Turnos: null));
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Ok, final.Estado);
+        Assert.Null(final.Turnos);
     }
 
     [Fact]

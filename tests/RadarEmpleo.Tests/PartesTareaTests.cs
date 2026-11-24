@@ -58,6 +58,55 @@ public class PartesTareaTests
     }
 
     [Fact]
+    public void UnRepartoQueNoLlegaAUnCentimo_DiceQueNoDaParaLasPartes()
+    {
+        var error = Assert.Throws<ReglaNegocioException>(() => (PorPartes with { PresupuestoUsd = 0.05m }).PresupuestoParte(6));
+        Assert.Equal(MensajesEjecucion.PresupuestoNoLlegaParaLasPartes, error.Message);
+        Assert.Equal(0.01m, (PorPartes with { PresupuestoUsd = 0.06m }).PresupuestoParte(6));
+    }
+
+    /// <summary>Unas peticiones con ese tiempo y ese <c>--max-budget-usd</c>.</summary>
+    private static List<PeticionClaude> Partes(int numero, int minutos, decimal presupuesto) =>
+        Enumerable.Range(1, numero).Select(k => Peticion($"{k} de {numero}") with
+        {
+            TiempoMaximo = TimeSpan.FromMinutes(minutos),
+            Argumentos = ConstructorArgumentos.Construir(PorPartes, """{"type":"object"}""", new ValoresArgumentos(Carpeta), presupuesto)
+        }).ToList();
+
+    private static readonly string Carpeta = OperatingSystem.IsWindows() ? @"C:\datos" : "/datos";
+
+    [Fact]
+    public void CabenLasPartes_ConElRepartoDeLaTarea()
+    {
+        Assert.True(PorPartes.CabenLasPartes(Partes(6, 8, 0.33m)));
+        Assert.True(PorPartes.CabenLasPartes(Partes(5, 10, 0.40m)));
+        // Una sola cabe siempre, como antes de las partes.
+        Assert.True(DefinicionesTareas.AnalizarEncaje.CabenLasPartes([Peticion()]));
+    }
+
+    [Fact]
+    public void CabenLasPartes_NoSiPasanDelTiempoDelPresupuestoODelNumeroOSinPartes()
+    {
+        // Seis de 10 min con 50 min en total: el bloqueo caducaría antes de acabar.
+        Assert.False(PorPartes.CabenLasPartes(Partes(6, 10, 0.33m)));
+        // Tres de 1,00 con 2,00 en total.
+        Assert.False(PorPartes.CabenLasPartes(Partes(3, 10, 1.00m)));
+        Assert.False(PorPartes.CabenLasPartes(Partes(7, 5, 0.10m)));
+        Assert.False((PorPartes with { Partes = null }).CabenLasPartes(Partes(2, 5, 0.10m)));
+        // Sin --max-budget-usd no se sabe lo que puede gastar.
+        Assert.False(PorPartes.CabenLasPartes([Peticion("1 de 2"), Peticion("2 de 2")]));
+    }
+
+    [Fact]
+    public void PresupuestoDe_LeeElDeLosArgumentos()
+    {
+        Assert.Equal(0.33m, ConstructorArgumentos.PresupuestoDe(Partes(1, 1, 0.33m)[0].Argumentos));
+        Assert.Null(ConstructorArgumentos.PresupuestoDe(["-p"]));
+        Assert.Null(ConstructorArgumentos.PresupuestoDe(["--max-budget-usd"]));
+        Assert.Null(ConstructorArgumentos.PresupuestoDe(["--max-budget-usd", "mucho"]));
+    }
+
+    [Fact]
     public void ExtraerRegistro_TodaviaNoVaPorPartes()
     {
         // Se activa en el PR B, con el manejador que parte el texto libre.

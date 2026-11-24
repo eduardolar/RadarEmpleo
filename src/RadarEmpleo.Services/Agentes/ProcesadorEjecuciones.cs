@@ -225,6 +225,13 @@ public sealed class ProcesadorEjecuciones : BackgroundService
                 return;
             }
             var peticiones = preparacion.Peticiones;
+            if (!definicion.CabenLasPartes(peticiones))
+            {
+                // Es un fallo de código del manejador: no se lanza nada y no gasta.
+                _log.LogError("La ejecución {Id} trae {Numero} peticiones que no caben en su tarea.", id, peticiones.Count);
+                await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.PartesNoCaben, 0m, hashRegistro, hashPerfil));
+                return;
+            }
             var partes = new List<(PeticionClaude Peticion, RespuestaClaude Respuesta)>(peticiones.Count);
             var cortadaEntrePartes = false;
             // «Cancelar» desde otra copia de la API solo marca la BD: se vigila mientras corren todas las partes.
@@ -257,14 +264,13 @@ public sealed class ProcesadorEjecuciones : BackgroundService
 
             var registroDespues = await HashAsync(ArchivoVigilado.Registro);
             var perfilDespues = await HashAsync(ArchivoVigilado.Perfil);
-            if (parada.IsCancellationRequested)
-            {
-                await CambiarAsync(id, e => e.Interrumpir(_reloj.AhoraUtc));
-                return;
-            }
-
             // Una parte cortada sin coste (por tiempo, por ejemplo) deja el total sin saber: null cuenta el presupuesto entero.
             var coste = partes.Aggregate((decimal?)0m, (suma, p) => suma + p.Respuesta.CosteUsd);
+            if (parada.IsCancellationRequested)
+            {
+                await CambiarAsync(id, e => e.Interrumpir(_reloj.AhoraUtc, coste));
+                return;
+            }
             if (cortadaEntrePartes || partes[^1].Respuesta.Fallo == FalloClaude.Cancelado)
             {
                 await CambiarAsync(id, e =>
@@ -300,7 +306,8 @@ public sealed class ProcesadorEjecuciones : BackgroundService
                 await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, error.Message, coste, registroDespues, perfilDespues));
                 return;
             }
-            var turnos = partes.Any(p => p.Respuesta.Turnos is not null) ? partes.Sum(p => p.Respuesta.Turnos ?? 0) : (int?)null;
+            // Como el coste: si alguna parte no los trae, no se sabe el total.
+            var turnos = partes.Aggregate((int?)0, (suma, p) => suma + p.Respuesta.Turnos);
             await CambiarAsync(id, e => e.Terminar(_reloj.AhoraUtc, coste, turnos, buenas[^1].Respuesta.SesionId,
                 resultado.Resumen, resultado.ResultadoJson, registroDespues, perfilDespues));
         }

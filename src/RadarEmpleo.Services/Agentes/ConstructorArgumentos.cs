@@ -53,6 +53,16 @@ public static partial class ConstructorArgumentos
         return argumentos;
     }
 
+    /// <summary>El valor de <c>--max-budget-usd</c> de unos argumentos, o null si no lo llevan o no se entiende.</summary>
+    public static decimal? PresupuestoDe(IReadOnlyList<string> argumentos)
+    {
+        var posicion = argumentos.ToList().IndexOf("--max-budget-usd");
+        return posicion >= 0 && posicion + 1 < argumentos.Count
+            && decimal.TryParse(argumentos[posicion + 1], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var valor)
+            ? valor
+            : null;
+    }
+
     /// <summary>El esquema en una sola línea y sin espacios.</summary>
     public static string Minificar(string esquemaJson)
     {
