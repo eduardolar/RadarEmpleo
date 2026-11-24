@@ -615,10 +615,11 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
         Assert.Equal("Ha encontrado 2 candidaturas en el texto libre. 1 parte no se ha podido leer. Tiene 3 dudas.", ejecucion.Resumen);
         var guardado = Guardado(ejecucion);
+        Assert.Equal(1, guardado.PartesPerdidas);
         Assert.Equal(["Empresa Parte1-1 S.L.", "Empresa Parte3-1 S.L."], guardado.Candidaturas.Select(f => f.Empresa));
         Assert.Equal(
             [
-                "No se ha podido leer la parte 2 de 3 (desde «## Mes 2 de 2026»): Claude ha respondido en un formato que no entiendo.",
+                "No se ha podido leer la parte 2 de 3 (desde «## Mes 2 de 2026»): Claude ha respondido en un formato que no entiendo. " + ManejadorExtraerRegistro.QueHacerConParte,
                 "Duda de la parte 1.",
                 "Duda de la parte 3."
             ],
@@ -654,7 +655,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         var ejecucion = await ExtraerAsync();
 
         var dudas = Guardado(ejecucion).Dudas;
-        Assert.Equal("No se ha podido leer la parte 1 de 3 (desde «## Mes 1 de 2026»): Claude ha devuelto un error.", dudas[0]);
+        Assert.Equal("No se ha podido leer la parte 1 de 3 (desde «## Mes 1 de 2026»): Claude ha devuelto un error. " + ManejadorExtraerRegistro.QueHacerConParte, dudas[0]);
         Assert.Equal(Enumerable.Range(1, 30).Select(i => $"Duda {i}."), dudas.Skip(1));
     }
 
@@ -688,8 +689,9 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
 
         Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
         Assert.Equal("Ha encontrado 1 candidatura en el texto libre. 2 partes no se han podido leer. Tiene 3 dudas.", ejecucion.Resumen);
-        Assert.Equal("No se ha podido leer la parte 1 de 3 (desde «## Mes 1 de 2026»): ha llegado al tope de uso de la parte y la he parado.",
+        Assert.Equal("No se ha podido leer la parte 1 de 3 (desde «## Mes 1 de 2026»): ha llegado al tope de uso de la parte y la he parado. " + ManejadorExtraerRegistro.QueHacerConParte,
             Guardado(ejecucion).Dudas[0]);
+        Assert.Equal(2, Guardado(ejecucion).PartesPerdidas);
     }
 
     [Fact]
@@ -704,7 +706,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
             [(Peticion("1 de 2"), RespuestaClaude.Fallida(FalloClaude.TiempoAgotado)), (Peticion("2 de 2"), buena)], CancellationToken.None);
 
         var guardado = ManejadorExtraerRegistro.LeerGuardado(resultado.ResultadoJson)!;
-        Assert.Equal("No se ha podido leer la parte 1 de 2: ha tardado más de 10 min y la he parado.", guardado.Dudas[0]);
+        Assert.Equal("No se ha podido leer la parte 1 de 2: ha tardado más de 10 min y la he parado. " + ManejadorExtraerRegistro.QueHacerConParte, guardado.Dudas[0]);
         Assert.Single(guardado.Candidaturas);
     }
 

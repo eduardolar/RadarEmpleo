@@ -157,11 +157,11 @@ export default class ImportacionPageComponent {
       : null;
   });
 
-  /** «Tabla + texto libre leído con Claude (N de texto libre)»; null con la vista de la tabla */
+  /** «Tabla + N leídas del texto libre con Claude», con las partes perdidas si las hay; null con la vista de la tabla */
   protected readonly lineaVistaCombinada = computed(() => {
     const vista = this.vista();
     return vista?.origen === 'RegistroConClaude'
-      ? textoVistaCombinada(vista.resumen.delTextoLibre)
+      ? textoVistaCombinada(vista.resumen.delTextoLibre, vista.partesPerdidas)
       : null;
   });
 

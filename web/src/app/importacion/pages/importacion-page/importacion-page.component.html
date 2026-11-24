@@ -389,7 +389,11 @@
       }
 
       @if (previa.dudas.length > 0) {
-        <app-seccion-plegable aspecto="suave" titulo="Dudas de Claude ({{ previa.dudas.length }})">
+        <app-seccion-plegable
+          aspecto="suave"
+          titulo="Dudas de Claude ({{ previa.dudas.length }})"
+          [abierta]="previa.dudas.length > 0"
+        >
           <p class="px-4 pt-1 text-sm text-on-surface-variant">{{ explicacionDudas }}</p>
           <ul class="flex flex-col gap-2 px-2 pt-2 pb-2 text-sm text-on-surface">
             @for (duda of previa.dudas; track $index) {

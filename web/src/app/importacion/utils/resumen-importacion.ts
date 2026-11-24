@@ -132,9 +132,18 @@ export function textoEnviosEnTexto(enviosEnTexto: number, conClaude = false): st
     : `Hay unos ${enviosEnTexto} envíos escritos como texto; esos se podrán importar más adelante.`;
 }
 
-/** La línea que dice que la vista es la combinada: «Tabla + texto libre leído con Claude (34 de texto libre)» */
-export function textoVistaCombinada(delTextoLibre: number): string {
-  return `Tabla + ${delTextoLibre} ${delTextoLibre === 1 ? 'leída' : 'leídas'} del texto libre con Claude`;
+/**
+ * La línea que dice que la vista es la combinada: «Tabla + 34 leídas del texto libre con Claude», y
+ * si se ha perdido alguna parte, « · 1 parte no se ha podido leer»
+ */
+export function textoVistaCombinada(delTextoLibre: number, partesPerdidas = 0): string {
+  const leidas = `Tabla + ${delTextoLibre} ${delTextoLibre === 1 ? 'leída' : 'leídas'} del texto libre con Claude`;
+  if (partesPerdidas <= 0) {
+    return leidas;
+  }
+  return partesPerdidas === 1
+    ? `${leidas} · 1 parte no se ha podido leer`
+    : `${leidas} · ${partesPerdidas} partes no se han podido leer`;
 }
 
 export const EXPLICACION_FUERA =

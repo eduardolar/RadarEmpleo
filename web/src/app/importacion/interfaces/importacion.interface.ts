@@ -63,6 +63,8 @@ export interface VistaPreviaImportacion {
   fuera: FilaFuera[];
   /** Lo que Claude no ha tenido claro al extraer, como texto (nunca HTML); vacío con la tabla */
   dudas: string[];
+  /** Cuántas partes del texto libre no ha podido leer Claude (cada una tiene su duda); 0 con la tabla */
+  partesPerdidas: number;
 }
 
 /** Cuerpo de POST /api/importacion/lote/aplicar: el servidor rehace el lote, el cliente no manda filas */

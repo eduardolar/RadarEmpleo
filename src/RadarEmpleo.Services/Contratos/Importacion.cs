@@ -108,6 +108,7 @@ public sealed record FilaFueraDelLote(int Linea, string Empresa, string Puesto, 
 /// <param name="EjecucionId">La extracción de Claude de la que sale el lote, o null con la tabla.</param>
 /// <param name="Fuera">Las extraídas que se quedan fuera porque ya estaban; vacía con la tabla.</param>
 /// <param name="Dudas">Las dudas de Claude al extraer, como texto para enseñarlo tal cual; vacía con la tabla.</param>
+/// <param name="PartesPerdidas">Cuántas partes del texto libre no ha podido leer Claude (cada una tiene su duda); 0 con la tabla.</param>
 public sealed record VistaPreviaImportacionDto(
     OrigenLote Origen,
     string HashRegistro,
@@ -116,7 +117,8 @@ public sealed record VistaPreviaImportacionDto(
     IReadOnlyList<FilaVistaPreviaDto> Filas,
     IReadOnlyList<FilaSinLeerDto> SinLeer,
     IReadOnlyList<FilaFueraDelLote> Fuera,
-    IReadOnlyList<string> Dudas);
+    IReadOnlyList<string> Dudas,
+    int PartesPerdidas);
 
 /// <summary>
 /// Petición de aplicar: de dónde sale el lote, el hash del registro de la vista previa y las claves sobre las que actuar.

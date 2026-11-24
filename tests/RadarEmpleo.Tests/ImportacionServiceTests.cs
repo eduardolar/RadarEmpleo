@@ -714,6 +714,19 @@ public class ImportacionServiceTests : ArnesSqliteTests
     }
 
     [Fact]
+    public async Task PrevisualizarExtraccion_DiceCuantasPartesSeHanPerdidoYCeroSiLaExtraccionEsDeAntesDeGuardarlo()
+    {
+        UsarTablaYTextoLibre();
+        var conPerdidas = await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x",
+            JsonSerializer.Serialize(new ResultadoExtraccionRegistro([Extraida()], ["Una duda."], [], PartesPerdidas: 2), FabricaApi.Json), null, null));
+        var deAntes = await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x",
+            """{"candidaturas":[],"dudas":[],"sinLeer":[]}""", null, null));
+
+        Assert.Equal(2, (await _importacion.PrevisualizarExtraccionAsync(conPerdidas))!.PartesPerdidas);
+        Assert.Equal(0, (await _importacion.PrevisualizarExtraccionAsync(deAntes))!.PartesPerdidas);
+    }
+
+    [Fact]
     public async Task PrevisualizarExtraccion_TraeLasDudasDeClaudeTalCualYLaTablaNinguna()
     {
         UsarTablaYTextoLibre();
@@ -724,6 +737,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
         Assert.Equal(dudas, (await _importacion.PrevisualizarExtraccionAsync(id))!.Dudas);
         var tabla = await _importacion.PrevisualizarTablaAsync();
         Assert.Empty(tabla.Dudas);
+        Assert.Equal(0, tabla.PartesPerdidas);
         Assert.All(tabla.Filas, f => Assert.False(f.DelTextoLibre));
     }
 

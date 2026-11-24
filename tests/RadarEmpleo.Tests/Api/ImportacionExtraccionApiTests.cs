@@ -312,7 +312,8 @@ public sealed class ImportacionExtraccionApiTests
         var vista = await LeerAsync(await PostAsync(http, UrlPrevisualizar(id)), HttpStatusCode.OK);
         var dudas = vista.GetProperty("dudas").EnumerateArray().Select(d => d.GetString()!).ToList();
         Assert.StartsWith($"No se ha podido leer la parte {n} de {n} (desde «", Assert.Single(dudas));
-        Assert.EndsWith("): Claude ha devuelto un error.", dudas[0]);
+        Assert.EndsWith("): Claude ha devuelto un error. " + ManejadorExtraerRegistro.QueHacerConParte, dudas[0]);
+        Assert.Equal(1, vista.GetProperty("partesPerdidas").GetInt32());
         // Las de la tabla y una por parte leída: la que la segunda parte dice de la primera va a «Sin leer».
         Assert.Equal(n - 1, vista.GetProperty("resumen").GetProperty("delTextoLibre").GetInt32());
         var filas = vista.GetProperty("filas").EnumerateArray().ToList();

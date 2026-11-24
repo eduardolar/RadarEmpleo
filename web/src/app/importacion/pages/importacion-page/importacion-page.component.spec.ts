@@ -677,7 +677,7 @@ describe('ImportacionPageComponent', () => {
       'Revisa la empresa: Claude no la ve escrita en esa línea. Si está mal, corrígela en tu archivo antes de añadir.';
     const NO_VALE =
       'Tu archivo ha cambiado y lo que leyó Claude ya no vale. Vuelve a extraer el texto libre si lo necesitas.';
-    const LINEA = 'Tabla + 1 leída del texto libre con Claude';
+    const LINEA = 'Tabla + 1 leída del texto libre con Claude · 1 parte no se ha podido leer';
 
     const extraccion = (cambios: Partial<EjecucionAgente> = {}) =>
       crearEjecucion({
@@ -715,6 +715,7 @@ describe('ImportacionPageComponent', () => {
             },
           ],
           dudas: ['<b>¿Gamma o Gama?</b>'],
+          partesPerdidas: 1,
         },
       ),
       { delTextoLibre: 1 },
@@ -888,7 +889,7 @@ describe('ImportacionPageComponent', () => {
       await pasan(MARGEN_PINTADO_MS);
     }
 
-    it('marca las leídas con Claude, con el aviso de la empresa, y las de fuera y las dudas plegadas y como texto', async () => {
+    it('marca las leídas con Claude, con el aviso de la empresa, las de fuera plegadas y las dudas abiertas, y como texto', async () => {
       await abrirCombinada();
 
       expect(boton('Ver solo la tabla')).toBeDefined();
@@ -906,7 +907,7 @@ describe('ImportacionPageComponent', () => {
         'Línea 12 · Acme · Backend · 12 sept 2026: Ya está en la tabla del registro.',
       );
       const dudas = grupo('Dudas de Claude (1)')!;
-      expect(dudas.open).toBe(false);
+      expect(dudas.open).toBe(true);
       expect(dudas.querySelector('li')?.textContent?.trim()).toBe('<b>¿Gamma o Gama?</b>');
       expect(dudas.querySelector('b')).toBeNull();
     });

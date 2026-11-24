@@ -48,6 +48,7 @@ export function crearVista(
     sinLeer,
     fuera: [],
     dudas: [],
+    partesPerdidas: 0,
     ...cambios,
   };
 }

@@ -80,5 +80,8 @@ public sealed record FilaExtraidaSinLeer(int Linea, string Motivo);
 /// El <c>ResultadoJson</c> de ExtraerRegistro: las candidaturas leídas, las filas que no se han podido leer (sin tumbar las
 /// demás) y lo que Claude no ha sabido leer.
 /// </summary>
+/// <param name="PartesPerdidas">Cuántas partes del texto libre no se han podido leer (cada una deja además su duda). Las
+/// extracciones guardadas antes de este campo no lo traen: 0.</param>
 public sealed record ResultadoExtraccionRegistro(
-    IReadOnlyList<FilaExtraida> Candidaturas, IReadOnlyList<string> Dudas, IReadOnlyList<FilaExtraidaSinLeer> SinLeer);
+    IReadOnlyList<FilaExtraida> Candidaturas, IReadOnlyList<string> Dudas, IReadOnlyList<FilaExtraidaSinLeer> SinLeer,
+    int PartesPerdidas = 0);
