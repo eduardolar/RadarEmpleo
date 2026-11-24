@@ -1,12 +1,14 @@
 using System.Globalization;
 using RadarEmpleo.Domain;
-using RadarEmpleo.Services.Agentes;
 using RadarEmpleo.Services.Contratos;
 using RadarEmpleo.Services.Importacion;
 
 namespace RadarEmpleo.Tests;
 
-/// <summary><see cref="CombinadorLotes"/> con registros inventados: la tabla manda, la cita se busca línea a línea con la limpieza del prompt y el lote nunca pasa de los límites.</summary>
+/// <summary>
+/// <see cref="CombinadorLotes"/> con registros inventados: la tabla manda, la línea de cada extraída tiene que ser del texto
+/// libre, de ella salen la sección, el enlace y la nota, y el lote nunca pasa de los límites.
+/// </summary>
 public class CombinadorLotesTests
 {
     // Líneas 1-4: la tabla (con una fila de Acme del 2026-09-10); 5 en blanco; 6-8: texto libre.
@@ -21,10 +23,9 @@ public class CombinadorLotesTests
         - Delta: entrevista el 2026-09-15.
         """;
 
-    private static FilaExtraida Extraida(string cita, string empresa = "Gamma", string puesto = "Backend", string fecha = "2026-09-12",
-        EstadoCandidatura estado = EstadoCandidatura.Enviada, MotivoDescarte? motivo = null, string? nota = null, string? enlace = null,
-        string seccion = "Septiembre") =>
-        new(seccion, DateOnly.ParseExact(fecha, "yyyy-MM-dd", CultureInfo.InvariantCulture), false, empresa, puesto, estado, enlace, Modalidad.Remoto, null, motivo, nota, cita);
+    private static FilaExtraida Extraida(int linea, string empresa = "Gamma", string puesto = "Backend", string fecha = "2026-09-12",
+        EstadoCandidatura estado = EstadoCandidatura.Enviada, MotivoDescarte? motivo = null) =>
+        new(linea, DateOnly.ParseExact(fecha, "yyyy-MM-dd", CultureInfo.InvariantCulture), false, empresa, puesto, estado, motivo);
 
     private static LoteCombinado Combinar(string registro, params FilaExtraida[] filas) =>
         Combinar(registro, filas, []);
@@ -56,44 +57,86 @@ public class CombinadorLotesTests
     }
 
     [Fact]
-    public void Combinar_TablaVacia_LaExtraidaEntraConLaLineaDeSuCitaYSusCampos()
+    public void Combinar_TablaVacia_LaExtraidaEntraConSuLineaYLoDemasSaleDeEsaLinea()
     {
-        var fila = Assert.Single(Combinar("# Notas\n\n- Gamma: enviada.\n",
-            Extraida("- Gamma: enviada.", nota: "Por correo.", enlace: "javascript:alert(1)")).Filas);
+        const string linea = "- Gamma:   enviada por correo, https://gamma.example/empleo/7. Sin respuesta.";
+
+        var fila = Assert.Single(Combinar($"# Notas\n\n{linea}\n", Extraida(3)).Filas);
 
         Assert.Equal(3, fila.Linea);
         Assert.Equal(new DateOnly(2026, 9, 12), fila.Fecha);
-        Assert.Equal(("Gamma", "Backend", EstadoCandidatura.Enviada, Modalidad.Remoto), (fila.Empresa, fila.Puesto, fila.Estado, fila.Modalidad));
-        Assert.Equal("Por correo.", fila.Nota);
-        Assert.Equal("javascript:alert(1)", fila.Enlace); // tal cual: lo decide ReglasImportacion
+        Assert.Equal(("Gamma", "Backend", EstadoCandidatura.Enviada), (fila.Empresa, fila.Puesto, fila.Estado));
+        // Lo que no se puede leer bien de una línea suelta, vacío.
+        Assert.Equal(Modalidad.NoIndicada, fila.Modalidad);
+        Assert.Null(fila.Ubicacion);
+        Assert.Null(fila.ModalidadDetalle);
+        // La nota es la línea, con los espacios en uno; el enlace, su https; la sección, el título de encima.
+        Assert.Equal("- Gamma: enviada por correo, https://gamma.example/empleo/7. Sin respuesta.", fila.Nota);
+        Assert.Equal("https://gamma.example/empleo/7", fila.Enlace);
+        Assert.Equal("Texto libre del registro: Notas", fila.Seccion);
         Assert.Null(fila.MotivoDescarte);
-        Assert.Equal("Texto libre del registro: Septiembre", fila.Seccion);
         Assert.False(fila.EmpresaFueraDeLaCita);
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Combinar_SeccionVacia_LlevaTextoLibreDelRegistro(string seccion)
+    [InlineData("- Gamma: enviada. http://gamma.example/1", null)]                                  // http no
+    [InlineData("- Gamma: http://gamma.example/1 y https://gamma.example/2.", "https://gamma.example/2")] // el primer https
+    [InlineData("- Gamma: javascript:alert(1)", null)]
+    [InlineData("- Gamma: enviada por correo.", null)]
+    public void Combinar_ElEnlace_EsElPrimerHttpsDeLaLinea(string linea, string? enlace)
     {
-        var fila = Assert.Single(Combinar("# Notas\n- Gamma: enviada.\n", Extraida("- Gamma: enviada.", seccion: seccion)).Filas);
+        Assert.Equal(enlace, Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(2)).Filas).Enlace);
+    }
+
+    [Fact]
+    public void Combinar_LaSeccion_EsElTituloMasCercanoPorEncimaAunqueSeaDeTercerNivel()
+    {
+        const string registro = "# Registro\n## Agosto ##\n- Gamma: enviada.\n### Semana 2\n- Delta: enviada.\n";
+
+        var lote = Combinar(registro, Extraida(3), Extraida(5, empresa: "Delta"));
+
+        Assert.Equal(["Texto libre del registro: Agosto", "Texto libre del registro: Semana 2"], lote.Filas.Select(f => f.Seccion));
+    }
+
+    [Fact]
+    public void Combinar_SinTituloPorEncima_LlevaTextoLibreDelRegistro()
+    {
+        var fila = Assert.Single(Combinar("- Gamma: enviada.\n#etiqueta\n", Extraida(1)).Filas);
 
         Assert.Equal(AnalizadorRegistro.SeccionTextoLibre, fila.Seccion);
     }
 
     [Fact]
+    public void Combinar_LaSeccionNoSaleDeUnRastreoYSaltaLaTabla()
+    {
+        // El título del rastreo no es del texto libre, y la tabla no corta el apartado: la línea 8 sigue en «Agosto».
+        const string registro = "# Notas\n## Rastreo del lunes\n- Algo.\n## Agosto\n| Fecha | Empresa | Puesto | Estado |\n|---|---|---|---|\n| 2026-09-10 | Acme | Backend | Enviada |\n- Gamma: enviada.\n";
+
+        var fila = Combinar(registro, Extraida(8)).Filas[^1];
+
+        Assert.Equal("Texto libre del registro: Agosto", fila.Seccion);
+    }
+
+    [Fact]
     public void Combinar_SeccionQueImitaLaTabla_LlevaElPrefijo()
     {
-        var fila = Assert.Single(Combinar("# Notas\n- Gamma: enviada.\n",
-            Extraida("- Gamma: enviada.", seccion: AnalizadorRegistro.SeccionTabla)).Filas);
+        var fila = Assert.Single(Combinar($"## {AnalizadorRegistro.SeccionTabla}\n- Gamma: enviada.\n", Extraida(2)).Filas);
 
         Assert.Equal($"Texto libre del registro: {AnalizadorRegistro.SeccionTabla}", fila.Seccion);
     }
 
     [Fact]
+    public void Combinar_UnaSeccionLarga_SeRecorta()
+    {
+        var fila = Assert.Single(Combinar($"## {new string('s', 400)}\n- Gamma: enviada.\n", Extraida(2)).Filas);
+
+        Assert.Equal(AnalizadorRegistro.SeccionTextoLibre.Length + 2 + CombinadorLotes.LargoSeccion, fila.Seccion!.Length);
+    }
+
+    [Fact]
     public void Combinar_FilasDeLaTabla_SinSeccionNiMarca()
     {
-        var lote = Combinar(Tabla, Extraida("- Gamma: enviada el 2026-09-12."));
+        var lote = Combinar(Tabla, Extraida(7));
 
         Assert.All(lote.Filas.Take(2), f => Assert.Equal((null, false), (f.Seccion, f.EmpresaFueraDeLaCita)));
     }
@@ -111,7 +154,7 @@ public class CombinadorLotesTests
     [InlineData("BBVA", "- Hablé con B.B.V.A.: enviada.")]
     public void Combinar_EmpresaEnLaLinea_EntraSinMarca(string empresa, string linea)
     {
-        var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(linea, empresa: empresa)).Filas);
+        var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(2, empresa: empresa)).Filas);
 
         Assert.False(fila.EmpresaFueraDeLaCita);
     }
@@ -125,87 +168,45 @@ public class CombinadorLotesTests
     [InlineData("Acme Labs", "- Pacme labs: enviada.")]                     // pegada, pero sin empezar una palabra
     public void Combinar_EmpresaQueNoEstaEnLaLinea_EntraMarcada(string empresa, string linea)
     {
-        var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(linea, empresa: empresa)).Filas);
+        var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(2, empresa: empresa)).Filas);
 
         Assert.True(fila.EmpresaFueraDeLaCita);
         Assert.Equal(2, fila.Linea);
     }
 
-    [Theory]
-    [InlineData("- **Gamma**: enviada el 2026-09-12.", "Gamma: enviada el 2026-09-12.")]                         // negrita y viñeta
-    [InlineData("- [Gamma](https://gamma.example/empleo): enviada.", "- Gamma: enviada.")]                       // enlace
-    [InlineData("* Gamma: enviada.", "Gamma: enviada.")]                                                         // otra viñeta
-    [InlineData("1. Gamma: enviada.", "Gamma: enviada.")]                                                        // lista numerada
-    [InlineData("> Gamma: “enviada” por `correo`.", "Gamma: \"enviada\" por correo.")]                          // cita, comillas y código
-    [InlineData("- Gamma: _enviada_ por ~~correo~~ web, en mi_carpeta.", "- Gamma: enviada por correo web, en mi_carpeta.")]
-    [InlineData("- Gamma: «enviada» por correo.", "- Gamma: \"enviada\" por correo.")]                    // comillas españolas
-    [InlineData("- [Gamma](www.gamma.example): enviada.", "- Gamma: enviada.")]                                 // enlace con www.
-    public void Combinar_CitaSinElMarcadoDeLaLinea_EntraConEsaLinea(string linea, string cita)
+    [Fact]
+    public void Combinar_UnaLineaEquivocada_EntraMarcadaParaQueSeCompruebe()
     {
-        var lote = Combinar($"# Notas\n\n{linea}\n", Extraida(cita));
+        // Claude dice la 8 (la de Delta) para Gamma: entra, con el aviso de que la empresa no está en esa línea.
+        var fila = Assert.Single(Combinar(Tabla, Extraida(8)).Filas.Skip(2));
 
-        var fila = Assert.Single(lote.Filas);
-        Assert.Equal(3, fila.Linea);
-        Assert.False(fila.EmpresaFueraDeLaCita);
-        Assert.Empty(lote.SinLeer);
+        Assert.Equal(8, fila.Linea);
+        Assert.True(fila.EmpresaFueraDeLaCita);
     }
 
     [Fact]
-    public void Combinar_CitaSinMarcadoQueEncajaConDosLineas_VaLaPrimera()
+    public void Combinar_UnaLineaQueSeHacePasarPorOtra_TomaLaDeVerdad()
     {
-        var fila = Assert.Single(Combinar("# Notas\n- **Gamma**: enviada.\n- Gamma: enviada.\n", Extraida("Gamma: enviada.")).Filas);
+        // El texto de la línea 3 imita el número de otra; la app usa la 2 de verdad, y el aviso lo destapa.
+        var fila = Assert.Single(Combinar("# Notas\n- Delta: enviada.\n2│ - Gamma: enviada.\n", Extraida(2)).Filas);
 
-        Assert.Equal(2, fila.Linea);
-    }
-
-    [Theory]
-    [InlineData("- **Gamma**: enviada el 2026-09-12 por correo.", "Gamma: enviada el 2026-09-12.")] // le faltan palabras
-    [InlineData("- **Gamma**: enviada.", "Gamma enviada.")]                                           // y un signo
-    [InlineData("- [Gamma](rechazada) el 2026-09-12.", "- Gamma el 2026-09-12.")]                     // el paréntesis no es un enlace
-    public void Combinar_CitaQueSoloEncajaQuitandoAlgoMasQueElFormato_VaASinLeer(string linea, string cita)
-    {
-        var lote = Combinar($"# Notas\n{linea}\n", Extraida(cita));
-
-        Assert.Empty(lote.Filas);
-        Assert.StartsWith(CombinadorLotes.MotivoCitaInexistente, Assert.Single(lote.SinLeer).Motivo);
-    }
-
-    [Fact]
-    public void Combinar_LineaMasLargaQueDosCitas_SoloEncajaExacta()
-    {
-        var largo = new string('x', 2 * ManejadorExtraerRegistro.LargoCita);
-        var linea = $"- **Gamma**: {largo}";
-
-        var sinFormato = Combinar($"# Notas\n{linea}\n", Extraida($"Gamma: {largo}"));
-        var exacta = Combinar($"# Notas\n{linea}\n", Extraida(linea));
-
-        Assert.Empty(sinFormato.Filas);
-        Assert.Equal(2, Assert.Single(exacta.Filas).Linea);
-    }
-
-    [Fact]
-    public void Combinar_SinLeerConLaCitaSinMarcado_LlevaLaLineaDelRegistro()
-    {
-        var lote = Combinar("# Notas\n- **Gamma**: algo raro.\n", [], [new FilaExtraidaSinLeer("Gamma: algo raro.", "No se entiende.")]);
-
-        Assert.Equal(2, Assert.Single(lote.SinLeer).Linea);
+        Assert.Equal("- Delta: enviada.", fila.Nota);
+        Assert.True(fila.EmpresaFueraDeLaCita);
     }
 
     [Fact]
     public void Combinar_EmpresaSoloEnElTitulo_EntraMarcada()
     {
-        var fila = Assert.Single(Combinar("### Gamma\n- Enviada el 2026-09-12 por correo.\n",
-            Extraida("- Enviada el 2026-09-12 por correo.")).Filas);
+        var fila = Assert.Single(Combinar("### Gamma\n- Enviada el 2026-09-12 por correo.\n", Extraida(2)).Filas);
 
         Assert.True(fila.EmpresaFueraDeLaCita);
+        Assert.Equal("Texto libre del registro: Gamma", fila.Seccion);
     }
 
     [Fact]
     public void Combinar_TablaYExtraidas_VanPrimeroLasDeLaTablaYLuegoLasExtraidasPorLinea()
     {
-        var lote = Combinar(Tabla,
-            Extraida("- Delta: entrevista el 2026-09-15.", empresa: "Delta"),
-            Extraida("- Gamma: enviada el 2026-09-12."));
+        var lote = Combinar(Tabla, Extraida(8, empresa: "Delta"), Extraida(7));
 
         Assert.Equal([3, 4, 7, 8], lote.Filas.Select(f => f.Linea));
         Assert.Empty(lote.Fuera);
@@ -217,7 +218,7 @@ public class CombinadorLotesTests
     [InlineData("2026-09-07")] // -3
     public void Combinar_MismaEmpresaATresDiasOMenos_SeQuedaFueraConAviso(string fecha)
     {
-        var lote = Combinar(Tabla, Extraida("- Gamma: enviada el 2026-09-12.", empresa: "ACME", fecha: fecha));
+        var lote = Combinar(Tabla, Extraida(7, empresa: "ACME", fecha: fecha));
 
         Assert.Equal(2, lote.Filas.Count);
         var fuera = Assert.Single(lote.Fuera);
@@ -231,7 +232,7 @@ public class CombinadorLotesTests
     [InlineData("Acmé Labs", "2026-09-10")] // otra empresa, mismo día
     public void Combinar_OtraEmpresaOACuatroDias_Entra(string empresa, string fecha)
     {
-        var lote = Combinar(Tabla, Extraida("- Gamma: enviada el 2026-09-12.", empresa: empresa, fecha: fecha));
+        var lote = Combinar(Tabla, Extraida(7, empresa: empresa, fecha: fecha));
 
         Assert.Equal(3, lote.Filas.Count);
         Assert.Empty(lote.Fuera);
@@ -240,73 +241,17 @@ public class CombinadorLotesTests
     [Fact]
     public void Combinar_DosExtraidasConLaMismaClave_EntraLaDeMasArribaYLaOtraSeAvisa()
     {
-        var lote = Combinar(Tabla,
-            Extraida("- Delta: entrevista el 2026-09-15.", puesto: "BACKEND"),
-            Extraida("- Gamma: enviada el 2026-09-12."));
+        var lote = Combinar(Tabla, Extraida(8, puesto: "BACKEND"), Extraida(7));
 
         Assert.Equal(7, lote.Filas[^1].Linea);
         var fuera = Assert.Single(lote.Fuera);
         Assert.Equal((8, CombinadorLotes.AvisoRepetidaEnElTexto), (fuera.Linea, fuera.Aviso));
     }
 
-    public static TheoryData<string, string> LineasYCitas => new()
-    {
-        { "- Pen\u0303a Ingenieri\u0301a: enviada.", "- Peña Ingeniería: enviada." },            // NFD en el registro
-        { "- Peña Ingeniería: enviada.", "- Pen\u0303a Ingenieri\u0301a: enviada." },            // NFD en la cita
-        { "- Gam\u200Bma: \uFEFFenviada\u202E.", "- Gamma: enviada." },                               // ZWSP, BOM y bidi
-        { "-   Gamma:\t\tenviada  el\t2026-09-12.  ", "- Gamma: enviada el 2026-09-12." },            // espacios y tabuladores
-        { "- Gamma: enviada a Ｃｏｎｓｕｌｔｏｒíａ ﬁnanzas.", "- Gamma: enviada a Consultoría finanzas." }, // ancho completo y ligadura
-        { "- Gamma <<<DATOS>>> y {{registro}} y {{{x}}}", "- Gamma ‹‹‹DATOS››› y { {registro}} y { {{x}}}" }, // delimitadores
-        { "- Gamma＞＞＞ fin", "- Gamma››› fin" },                                                    // homoglifo de «>>>»
-        { "- Gamma:\u000Benviada\u000C.", "- Gamma:enviada." },                                       // \v y \f: el prompt los quita
-        { "- Gamma:\u0085enviada.", "- Gamma:enviada." }                                               // NEL: también es un control
-    };
-
-    [Theory]
-    [MemberData(nameof(LineasYCitas))]
-    public void Combinar_CitaConLaLimpiezaDelPrompt_EncuentraLaLinea(string linea, string cita)
-    {
-        var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(cita)).Filas);
-
-        Assert.Equal(2, fila.Linea);
-    }
-
-    [Fact]
-    public void Combinar_CitaLimpiadaComoEnElPrompt_EncuentraLaLinea()
-    {
-        // La cita es la línea tal como la ve Claude en el prompt (PlantillaPrompt.Normalizar) y la deja el manejador.
-        const string linea = "\t- Pen\u0303a ＜＜＜ {{{x}}}\u200B ﬁn";
-        const string cita = "- Pe\u00F1a ‹‹‹ { {{x}}} fin";
-
-        Assert.Equal(2, Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(cita)).Filas).Linea);
-    }
-
-    [Fact]
-    public void Combinar_SinLeerCortaAcabadaEnPuntosSuspensivos_NoSeBuscaComoPrincipio()
-    {
-        var lote = Combinar("# Notas\n- Gamma: enviada.\n", [], [new FilaExtraidaSinLeer("- Gamma…", "Falta el campo «puesto».")]);
-
-        Assert.Equal(0, Assert.Single(lote.SinLeer).Linea);
-    }
-
-    [Fact]
-    public void Combinar_SinLeerRecortadaQueNoEmpiezaNingunaLinea_VaSinLineaYConLaCita()
-    {
-        var cortada = string.Concat(Enumerable.Repeat("y", ManejadorExtraerRegistro.LargoCitaSinLeer - 1)) + "…";
-
-        var lote = Combinar($"# Notas\n{new string('x', 300)}\n", [], [new FilaExtraidaSinLeer(cortada, "Motivo.")]);
-
-        var sinLeer = Assert.Single(lote.SinLeer);
-        Assert.Equal(0, sinLeer.Linea);
-        Assert.StartsWith("Motivo. «yyyy", sinLeer.Motivo, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void Combinar_DosExtraidasIgualesQueYaEstanEnLaTabla_LasDosQuedanFueraPorLaTabla()
     {
-        var lote = Combinar(Tabla,
-            Extraida("- Gamma: enviada el 2026-09-12.", empresa: "Beta", fecha: "2026-09-20"),
-            Extraida("- Delta: entrevista el 2026-09-15.", empresa: "Beta", fecha: "2026-09-20"));
+        var lote = Combinar(Tabla, Extraida(7, empresa: "Beta", fecha: "2026-09-20"), Extraida(8, empresa: "Beta", fecha: "2026-09-20"));
 
         Assert.Equal(2, lote.Filas.Count);
         Assert.Equal(2, lote.Fuera.Count);
@@ -314,74 +259,82 @@ public class CombinadorLotesTests
     }
 
     [Theory]
-    [InlineData("- Ómega: enviada el 2026-09-30.")]              // inventada
-    [InlineData("Gamma: enviada")]                               // un trozo de la línea 7
-    [InlineData("- Gamma: enviada el 2026-09-12. - Delta: entrevista el 2026-09-15.")] // dos líneas juntas
-    [InlineData("| 2026-09-20 | Beta | Frontend | Enviada |")]   // está en la tabla, que no se envía
-    [InlineData("   ")]
-    public void Combinar_CitaQueNoEsUnaLineaDelTextoLibre_VaASinLeerSinLinea(string cita)
+    [InlineData(3)]    // una fila de la tabla, que no se envía
+    [InlineData(5)]    // en blanco
+    [InlineData(9)]    // pasado el final
+    [InlineData(999)]
+    public void Combinar_LineaQueNoEsDelTextoLibreOEstaEnBlanco_VaASinLeerSinLinea(int linea)
     {
-        var lote = Combinar(Tabla, Extraida(cita));
+        var lote = Combinar(Tabla, Extraida(linea));
 
         Assert.Equal(2, lote.Filas.Count);
         var sinLeer = Assert.Single(lote.SinLeer);
         Assert.Equal(0, sinLeer.Linea);
-        Assert.StartsWith(CombinadorLotes.MotivoCitaInexistente, sinLeer.Motivo);
+        Assert.Equal($"{CombinadorLotes.MotivoLineaInexistente} {linea}.", sinLeer.Motivo);
     }
 
     [Fact]
-    public void Combinar_CitaDentroDeUnRastreo_VaASinLeer()
+    public void Combinar_LineaConSoloInvisibles_VaASinLeer()
     {
-        const string registro = "# Notas\n## Rastreo del lunes\n- Gamma: enviada.\n";
+        var invisibles = char.ConvertFromUtf32(0x200B) + char.ConvertFromUtf32(0xFEFF);
 
-        var lote = Combinar(registro, Extraida("- Gamma: enviada."));
+        var lote = Combinar($"# Notas\n{invisibles}\n", Extraida(2));
 
         Assert.Empty(lote.Filas);
         Assert.Equal(0, Assert.Single(lote.SinLeer).Linea);
     }
 
     [Fact]
-    public void Combinar_CitaEnVariasLineas_TomaLaPrimeraDelTextoLibre()
+    public void Combinar_LineaDentroDeUnRastreo_VaASinLeer()
     {
-        const string registro = "## Rastreo\n- Gamma: enviada.\n# Notas\n- Gamma: enviada.\n- Gamma: enviada.\n";
+        const string registro = "# Notas\n## Rastreo del lunes\n- Gamma: enviada.\n";
 
-        Assert.Equal(4, Assert.Single(Combinar(registro, Extraida("- Gamma: enviada.")).Filas).Linea);
+        var lote = Combinar(registro, Extraida(3));
+
+        Assert.Empty(lote.Filas);
+        Assert.Equal(0, Assert.Single(lote.SinLeer).Linea);
     }
 
     [Fact]
     public void Combinar_RegistroConBomYCrlf_DaLaMismaLineaQueElAnalizador()
     {
-        var registro = "\uFEFF" + Tabla.ReplaceLineEndings("\r\n");
+        var registro = char.ConvertFromUtf32(0xFEFF) + Tabla.ReplaceLineEndings("\r\n");
 
-        var lote = Combinar(registro, Extraida("- Delta: entrevista el 2026-09-15.", empresa: "Delta"));
+        var lote = Combinar(registro, Extraida(8, empresa: "Delta"));
 
         Assert.Equal([3, 4], AnalizadorRegistro.Analizar(registro).Lote.Filas.Select(f => f.Linea));
-        Assert.Equal(8, lote.Filas[^1].Linea);
+        var fila = lote.Filas[^1];
+        Assert.Equal(8, fila.Linea);
+        Assert.Equal("- Delta: entrevista el 2026-09-15.", fila.Nota);
+        Assert.False(fila.EmpresaFueraDeLaCita);
     }
 
     [Fact]
-    public void Combinar_SinLeerDeLaExtraccion_VanASinLeerConLaLineaDeSuCita()
+    public void Combinar_LaNota_EsLaLineaConLaLimpiezaDelPrompt()
     {
-        var cortada = string.Concat(Enumerable.Repeat("x", ManejadorExtraerRegistro.LargoCitaSinLeer - 1)) + "…";
-        var registro = $"# Notas\n- Gamma: enviada.\n{new string('x', 300)}\n";
+        var linea = "\t- Gam" + char.ConvertFromUtf32(0x200B) + "ma ＜＜＜ {{x}}  ﬁn\t";
 
-        var lote = Combinar(registro, [], [
-            new FilaExtraidaSinLeer("- Gamma:   enviada.", "Falta el campo «puesto»."),
-            new FilaExtraidaSinLeer(cortada, "El campo «empresa» pasa de 200 caracteres."),
-            new FilaExtraidaSinLeer("(sin cita)", "Falta el campo «cita».")
+        Assert.Equal("- Gamma ‹‹‹ { {x}} fin", Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(2)).Filas).Nota);
+    }
+
+    [Fact]
+    public void Combinar_SinLeerDeLaExtraccion_VanASinLeerConSuLinea()
+    {
+        var lote = Combinar("# Notas\n- Gamma: enviada.\n", [], [
+            new FilaExtraidaSinLeer(2, "Falta el campo «puesto»."),
+            new FilaExtraidaSinLeer(0, "La línea 51 no está en la parte 1 de 2 del texto libre.")
         ]);
 
-        Assert.Equal([2, 3, 0], lote.SinLeer.Select(f => f.Linea));
+        Assert.Equal([2, 0], lote.SinLeer.Select(f => f.Linea));
         Assert.Equal("Falta el campo «puesto».", lote.SinLeer[0].Motivo);
-        Assert.Equal("Falta el campo «cita». «(sin cita)».", lote.SinLeer[2].Motivo);
     }
 
     [Fact]
     public void Combinar_DescartadaSinMotivo_LlevaOtroYUnMotivoSinDescartarSeQuita()
     {
         var lote = Combinar(Tabla,
-            Extraida("- Gamma: enviada el 2026-09-12.", estado: EstadoCandidatura.Descartada),
-            Extraida("- Delta: entrevista el 2026-09-15.", empresa: "Delta", motivo: MotivoDescarte.Salario));
+            Extraida(7, estado: EstadoCandidatura.Descartada),
+            Extraida(8, empresa: "Delta", motivo: MotivoDescarte.Salario));
 
         Assert.Equal(MotivoDescarte.Otro, lote.Filas[2].MotivoDescarte);
         Assert.Null(lote.Filas[3].MotivoDescarte);
@@ -393,7 +346,7 @@ public class CombinadorLotesTests
     [InlineData("0001-01-01")]
     public void Combinar_FechaQueElAplicarNoAdmite_VaASinLeerConSuLinea(string fecha)
     {
-        var lote = Combinar(Tabla, Extraida("- Gamma: enviada el 2026-09-12.", fecha: fecha));
+        var lote = Combinar(Tabla, Extraida(7, fecha: fecha));
 
         Assert.Equal(2, lote.Filas.Count);
         Assert.Equal(7, Assert.Single(lote.SinLeer).Linea);
@@ -402,9 +355,7 @@ public class CombinadorLotesTests
     [Fact]
     public void Combinar_FechasEnLosBordesDelAplicar_Entran()
     {
-        var lote = Combinar(Tabla,
-            Extraida("- Gamma: enviada el 2026-09-12.", fecha: "2000-01-01"),
-            Extraida("- Delta: entrevista el 2026-09-15.", empresa: "Delta", fecha: "2100-12-31"));
+        var lote = Combinar(Tabla, Extraida(7, fecha: "2000-01-01"), Extraida(8, empresa: "Delta", fecha: "2100-12-31"));
 
         Assert.Equal(4, lote.Filas.Count);
     }
@@ -414,22 +365,24 @@ public class CombinadorLotesTests
     {
         // 150 emojis son 150 caracteres para el esquema y 300 para la API.
         var emojis = string.Concat(Enumerable.Repeat("😀", 150));
-        var nota = string.Concat(Enumerable.Repeat("😀", 4000));
+        var larga = "- Delta: " + string.Concat(Enumerable.Repeat("😀", 4000));
+        var enlaceLargo = "- Epsilon: https://epsilon.example/" + new string('x', 2100);
 
-        var lote = Combinar(Tabla,
-            Extraida("- Gamma: enviada el 2026-09-12.", empresa: emojis + "a"),
-            Extraida("- Delta: entrevista el 2026-09-15.", empresa: "Delta", nota: nota));
+        var lote = Combinar($"# Notas\n- Gamma: enviada.\n{larga}\n{enlaceLargo}\n",
+            Extraida(2, empresa: emojis + "a"), Extraida(3, empresa: "Delta"), Extraida(4, empresa: "Epsilon"));
 
-        Assert.Equal(7, Assert.Single(lote.SinLeer).Linea);
-        var recortada = lote.Filas[^1].Nota!;
+        Assert.Equal(2, Assert.Single(lote.SinLeer).Linea);
+        var recortada = lote.Filas[0].Nota!;
         Assert.True(recortada.Length <= LimitesLote.Nota);
         Assert.EndsWith("😀…", recortada);
+        // Un enlace demasiado largo no se pone: la fila entra sin él.
+        Assert.Null(lote.Filas[1].Enlace);
     }
 
     [Fact]
     public void Combinar_EmpresaSinLetras_VaASinLeer()
     {
-        var lote = Combinar(Tabla, Extraida("- Gamma: enviada el 2026-09-12.", empresa: "—, ."));
+        var lote = Combinar(Tabla, Extraida(7, empresa: "—, ."));
 
         Assert.Equal(7, Assert.Single(lote.SinLeer).Linea);
     }
@@ -448,7 +401,7 @@ public class CombinadorLotesTests
     [Fact]
     public void Combinar_PasaDelTope_LoQueSobraVaASinLeerYLaTablaEntraPrimero()
     {
-        var (libre, filas) = Muchas(LimitesLote.Filas - 1);
+        var (libre, filas) = Muchas(LimitesLote.Filas - 1, desde: 9);
         var registro = Tabla + "\n" + libre;
 
         var lote = Combinar(registro, filas);
@@ -457,15 +410,18 @@ public class CombinadorLotesTests
         Assert.Equal([3, 4], lote.Filas.Take(2).Select(f => f.Linea));
         var sobra = Assert.Single(lote.SinLeer);
         Assert.Equal(CombinadorLotes.MotivoNoCabe, sobra.Motivo);
-        Assert.Equal(filas[^1].Cita, registro.Split('\n')[sobra.Linea - 1]);
+        Assert.Equal(filas[^1].Linea, sobra.Linea);
     }
 
-    /// <summary>Un texto libre con <paramref name="cuantas"/> líneas y una fila extraída por línea, todas distintas.</summary>
-    private static (string Registro, FilaExtraida[] Filas) Muchas(int cuantas)
+    /// <summary>
+    /// Un texto libre con <paramref name="cuantas"/> líneas y una fila extraída por línea, todas distintas. La primera es la
+    /// línea <paramref name="desde"/> del registro.
+    /// </summary>
+    private static (string Registro, FilaExtraida[] Filas) Muchas(int cuantas, int desde = 1)
     {
         var filas = Enumerable.Range(1, cuantas)
-            .Select(i => Extraida($"- Empresa {i}: enviada.", empresa: $"Empresa {i}", fecha: "2025-01-01"))
+            .Select(i => Extraida(desde + i - 1, empresa: $"Empresa {i}", fecha: "2025-01-01"))
             .ToArray();
-        return (string.Join('\n', filas.Select(f => f.Cita)) + "\n", filas);
+        return (string.Join('\n', Enumerable.Range(1, cuantas).Select(i => $"- Empresa {i}: enviada.")) + "\n", filas);
     }
 }

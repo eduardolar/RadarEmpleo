@@ -45,7 +45,7 @@ public static class LimitesLote
 /// <param name="EstadoDeducido">El estado sale de una palabra del medio del texto, no de cómo empieza:
 /// la vista previa avisa para que se compruebe.</param>
 /// <param name="Seccion">Lo que se guarda en <c>SeccionOrigen</c>; null en las de la tabla («Tabla del registro»).</param>
-/// <param name="EmpresaFueraDeLaCita">Solo en las extraídas: la empresa no aparece en la línea citada. La fila entra
+/// <param name="EmpresaFueraDeLaCita">Solo en las extraídas: la empresa no aparece en su línea. La fila entra
 /// igual, con un aviso para que se compruebe.</param>
 public sealed record FilaLote(
     int Linea,
@@ -100,7 +100,7 @@ public sealed record FilaVistaPreviaDto(
 public sealed record FilaSinLeerDto(int Linea, string Motivo);
 
 /// <summary>Una fila extraída que se ha quedado fuera del lote porque ya estaba, con el aviso para enseñarlo tal cual.</summary>
-/// <param name="Linea">Línea de su <c>cita</c> en el registro, empezando en 1.</param>
+/// <param name="Linea">Su línea en el registro, empezando en 1.</param>
 public sealed record FilaFueraDelLote(int Linea, string Empresa, string Puesto, DateOnly Fecha, string Aviso);
 
 /// <summary>Respuesta de la vista previa. No se ha escrito nada.</summary>

@@ -42,9 +42,13 @@ public class PromptsTests
     }
 
     [Fact]
-    public void Plantilla_DeExtraerRegistro_PideLaLineaTalCual()
+    public void Plantilla_DeExtraerRegistro_PideElNumeroDeLineaYNuncaElTexto()
     {
-        Assert.Contains("copiada tal cual", Prompts.Plantilla(DefinicionesTareas.ExtraerRegistro));
+        var plantilla = Prompts.Plantilla(DefinicionesTareas.ExtraerRegistro);
+
+        Assert.Contains("empieza por su número y «│»", plantilla);
+        Assert.Contains("**Nunca copies el texto de la línea**", plantilla);
+        Assert.DoesNotContain("`cita`", plantilla);
     }
 
     [Fact]
@@ -69,25 +73,30 @@ public class PromptsTests
         Assert.Equal(["candidaturas", "dudas"], Textos(esquema.GetProperty("required")));
         var candidaturas = esquema.GetProperty("properties").GetProperty("candidaturas");
         Assert.Equal(1000, candidaturas.GetProperty("maxItems").GetInt32());
-        Assert.Equal(50, esquema.GetProperty("properties").GetProperty("dudas").GetProperty("maxItems").GetInt32());
+        var dudas = esquema.GetProperty("properties").GetProperty("dudas");
+        Assert.Equal(ManejadorExtraerRegistro.MaximoDudas, dudas.GetProperty("maxItems").GetInt32());
+        var duda = dudas.GetProperty("items");
+        Assert.False(duda.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(["linea", "texto"], Textos(duda.GetProperty("required")));
+        Assert.Equal(ManejadorExtraerRegistro.LargoDuda, duda.GetProperty("properties").GetProperty("texto").GetProperty("maxLength").GetInt32());
+        Assert.Equal(1, duda.GetProperty("properties").GetProperty("linea").GetProperty("minimum").GetInt32());
 
         var fila = candidaturas.GetProperty("items");
         Assert.False(fila.GetProperty("additionalProperties").GetBoolean());
-        string[] esperados = ["seccion", "fecha", "fechaAproximada", "empresa", "puesto", "estado", "enlace", "modalidad",
-            "ubicacion", "motivoDescarte", "nota", "cita"];
+        // Solo lo que hay que interpretar: la sección, el enlace y la nota los saca la app de la línea.
+        string[] esperados = ["linea", "fecha", "fechaAproximada", "empresa", "puesto", "estado", "motivoDescarte"];
         Assert.Equal(esperados, Textos(fila.GetProperty("required")));
         Assert.Equal(esperados.Order(), fila.GetProperty("properties").EnumerateObject().Select(p => p.Name).Order());
 
         var campos = fila.GetProperty("properties");
         Assert.Equal(Enum.GetNames<Domain.EstadoCandidatura>(), Textos(campos.GetProperty("estado").GetProperty("enum")));
-        Assert.Equal(Enum.GetNames<Domain.Modalidad>(), Textos(campos.GetProperty("modalidad").GetProperty("enum")));
+        Assert.Equal("integer", campos.GetProperty("linea").GetProperty("type").GetString());
+        Assert.Equal(1, campos.GetProperty("linea").GetProperty("minimum").GetInt32());
         Assert.Equal([.. Enum.GetNames<Domain.MotivoDescarte>(), null],
             campos.GetProperty("motivoDescarte").GetProperty("enum").EnumerateArray().Select(v => v.GetString()));
         Assert.Equal(@"^\d{4}-\d{2}-\d{2}$", campos.GetProperty("fecha").GetProperty("pattern").GetString());
         Assert.Equal(200, campos.GetProperty("empresa").GetProperty("maxLength").GetInt32());
         Assert.Equal(300, campos.GetProperty("puesto").GetProperty("maxLength").GetInt32());
-        Assert.Equal(2000, campos.GetProperty("enlace").GetProperty("maxLength").GetInt32());
-        Assert.Equal(5000, campos.GetProperty("nota").GetProperty("maxLength").GetInt32());
     }
 
     [Theory]

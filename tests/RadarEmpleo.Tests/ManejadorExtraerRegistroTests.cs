@@ -24,6 +24,9 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
 {
     private const string Cita = "- Empresa Texto Uno S.L.: ENVIADA por correo el 2026-09-10, sin respuesta.";
 
+    /// <summary>La línea de <see cref="Cita"/> en el registro de ejemplo.</summary>
+    private const int LineaCita = 8;
+
     private readonly string _raiz = Path.Combine(Path.GetTempPath(), $"radar-extraer-{Guid.NewGuid():N}");
     /// <summary>18/11/2026 a las 12:00 de Madrid: una hora fija, lejos de medianoche y de los cambios de hora.</summary>
     private readonly RelojFijo _reloj = new(new DateTime(2026, 11, 18, 11, 0, 0, DateTimeKind.Utc));
@@ -80,25 +83,27 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     /// <summary>Una fila que cumple el esquema, para cambiarle un campo cada vez.</summary>
     private static JsonObject Fila() => new()
     {
-        ["seccion"] = "Notas sueltas de septiembre",
+        ["linea"] = LineaCita,
         ["fecha"] = "2026-09-10",
         ["fechaAproximada"] = false,
         ["empresa"] = "Empresa Texto Uno S.L.",
         ["puesto"] = "Sin indicar",
         ["estado"] = "Enviada",
-        ["enlace"] = null,
-        ["modalidad"] = "NoIndicada",
-        ["ubicacion"] = null,
-        ["motivoDescarte"] = null,
-        ["nota"] = "Enviada por correo, sin respuesta.",
-        ["cita"] = Cita
+        ["motivoDescarte"] = null
     };
 
+    /// <summary>Una duda con su línea (o sin ella), como la pide el esquema.</summary>
+    private static JsonObject Duda(int? linea, string texto) => new() { ["linea"] = linea, ["texto"] = texto };
+
+    /// <summary>La salida con esas filas y esas dudas, todas sin línea.</summary>
     private static JsonElement Salida(IEnumerable<JsonNode> filas, IEnumerable<string>? dudas = null) =>
+        Salida(filas, (dudas ?? []).Select(d => Duda(null, d)));
+
+    private static JsonElement Salida(IEnumerable<JsonNode> filas, IEnumerable<JsonObject> dudas) =>
         JsonSerializer.SerializeToElement(new JsonObject
         {
             ["candidaturas"] = new JsonArray([.. filas]),
-            ["dudas"] = new JsonArray([.. (dudas ?? []).Select(d => JsonValue.Create(d))])
+            ["dudas"] = new JsonArray([.. dudas])
         });
 
     private async Task<EjecucionAgente> ExtraerAsync()
@@ -134,13 +139,14 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         Assert.Equal(0.42m, ejecucion.CosteUsd);
         var guardado = Guardado(ejecucion);
         var fila = Assert.Single(guardado.Candidaturas);
-        Assert.Equal(new FilaExtraida("Notas sueltas de septiembre", new DateOnly(2026, 9, 10), false, "Empresa Texto Uno S.L.",
-            "Sin indicar", EstadoCandidatura.Enviada, null, Modalidad.NoIndicada, null, null, "Enviada por correo, sin respuesta.", Cita), fila);
+        Assert.Equal(new FilaExtraida(LineaCita, new DateOnly(2026, 9, 10), false, "Empresa Texto Uno S.L.", "Sin indicar",
+            EstadoCandidatura.Enviada, null), fila);
         Assert.Equal(["Empresa Texto Dos no dice la fecha."], guardado.Dudas);
         Assert.Contains("\"estado\":\"Enviada\"", ejecucion.ResultadoJson);
 
         var peticion = Assert.Single(_claude.Peticiones);
-        Assert.Contains(Cita, peticion.EntradaEstandar);
+        // Cada línea con su número del registro delante.
+        Assert.Contains($"\n{LineaCita}│ {Cita}\n", peticion.EntradaEstandar);
         Assert.Contains("ENVIADA el 2026-08-30. Pedían disponibilidad inmediata.", peticion.EntradaEstandar);
         Assert.DoesNotContain("Talleres Ficticios", peticion.EntradaEstandar);
         Assert.DoesNotContain("Empresa Rastreo", peticion.EntradaEstandar);
@@ -189,7 +195,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     {
         var mala = Fila();
         mala["fecha"] = "2025-02-29";
-        mala["cita"] = "- Empresa Texto Tres: ENVIADA por la web.";
+        mala["linea"] = 9;
         _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([Fila(), mala, Fila()]), CosteUsd: 0.30m));
 
         var ejecucion = await ExtraerAsync();
@@ -199,7 +205,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         var guardado = Guardado(ejecucion);
         Assert.Equal(2, guardado.Candidaturas.Count);
         var sinLeer = Assert.Single(guardado.SinLeer);
-        Assert.Equal("- Empresa Texto Tres: ENVIADA por la web.", sinLeer.Cita);
+        Assert.Equal(9, sinLeer.Linea);
         Assert.Equal("La fecha «2025-02-29» no es un día válido con la forma AAAA-MM-DD.", sinLeer.Motivo);
     }
 
@@ -220,14 +226,15 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     [Fact]
     public async Task TextoLibreEnElTopeExacto_VaEnteroAClaude()
     {
-        var texto = new string('x', ManejadorExtraerRegistro.LargoRegistro);
+        // Se mide numerado: «1│ » y el texto.
+        var texto = new string('x', ManejadorExtraerRegistro.LargoRegistro - 3);
         File.WriteAllText(_rutas.Registro!, texto);
         _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([])));
 
         var ejecucion = await ExtraerAsync();
 
         Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
-        Assert.Contains(texto + "\n", Assert.Single(_claude.Peticiones).EntradaEstandar);
+        Assert.Contains("1│ " + texto + "\n", Assert.Single(_claude.Peticiones).EntradaEstandar);
     }
 
     [Theory]
@@ -249,7 +256,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     [Fact]
     public async Task RegistroConSoloInvisiblesFueraDeLaTabla_TerminaEnOkSinClaude()
     {
-        File.WriteAllText(_rutas.Registro!, "​‮\n﻿ ⁦\n| Fecha | Empresa | Puesto | Estado |\n|---|---|---|---|\n| 2026-09-01 | Acme | Uno | Enviada |\n");
+        File.WriteAllText(_rutas.Registro!, "\u200B\u202E\n\uFEFF \u2066\n| Fecha | Empresa | Puesto | Estado |\n|---|---|---|---|\n| 2026-09-01 | Acme | Uno | Enviada |\n");
 
         var ejecucion = await ExtraerAsync();
 
@@ -453,14 +460,17 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         return texto.ToString();
     }
 
-    /// <summary>La fila de la entrada <paramref name="i"/> del mes <paramref name="mes"/>, con su línea como cita.</summary>
-    public static JsonObject FilaDe(int mes, int i)
+    /// <summary>El número de línea de la entrada <paramref name="i"/> del mes <paramref name="mes"/> en <see cref="RegistroPorMeses"/>.</summary>
+    public static int NumeroDeLinea(int[] lineasPorMes, int mes, int i) =>
+        lineasPorMes.Take(mes - 1).Sum(k => 1 + k + k / 10) + 1 + i + (i - 1) / 10;
+
+    /// <summary>La fila de la entrada <paramref name="i"/> del mes <paramref name="mes"/>, que está en la línea <paramref name="linea"/>.</summary>
+    public static JsonObject FilaDe(int mes, int i, int linea)
     {
         var fila = Fila();
-        fila["seccion"] = $"Mes {mes} de 2026";
+        fila["linea"] = linea;
         fila["fecha"] = $"2026-{mes:00}-{i % 28 + 1:00}";
         fila["empresa"] = $"Empresa Parte{mes}-{i} S.L.";
-        fila["cita"] = LineaDe(mes, i);
         return fila;
     }
 
@@ -517,13 +527,15 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
             var datos = Datos(peticion);
             Assert.Equal($"Parte {k} de {n} del texto libre.", datos[0]);
             Assert.InRange(datos.Skip(1).Sum(l => l.Length + 1), 1, 16_000);
-            // Cada parte empieza en un título: el suyo o el de su apartado, repetido.
-            Assert.StartsWith("## Mes ", datos[1]);
+            // Cada parte empieza en un título: el suyo o el de su apartado, repetido con su número.
+            Assert.Matches(@"^\d+│ ## Mes ", datos[1]);
         }
-        Assert.Equal(2, peticiones.Count(p => Datos(p)[1] == "## Mes 1 de 2026"));
-        // Ninguna línea se parte ni se pierde: todas están enteras en alguna parte.
+        Assert.Equal(2, peticiones.Count(p => Datos(p)[1] == "1│ ## Mes 1 de 2026"));
+        // Ninguna línea se parte ni se pierde: todas están enteras, con su número, en alguna parte.
         var enviadas = peticiones.SelectMany(p => Datos(p).Skip(1)).ToHashSet(StringComparer.Ordinal);
-        Assert.All(registro.Split('\n').Where(l => l.Length > 0), l => Assert.Contains(l, enviadas));
+        var lineas = registro.Split('\n');
+        Assert.All(Enumerable.Range(0, lineas.Length).Where(i => lineas[i].Length > 0),
+            i => Assert.Contains($"{i + 1}│ {lineas[i]}", enviadas));
     }
 
     [Fact]
@@ -540,11 +552,16 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         Assert.Empty(_claude.Peticiones);
     }
 
-    /// <summary>Tres meses de unos 14.500 caracteres: tres partes, cada una con el suyo.</summary>
-    private void TresPartes() => File.WriteAllText(_rutas.Registro!, RegistroPorMeses(150, 150, 150));
+    private static readonly int[] TresMeses = [140, 140, 140];
+
+    /// <summary>Tres meses de unos 15.000 caracteres numerados: tres partes, cada una con el suyo.</summary>
+    private void TresPartes() => File.WriteAllText(_rutas.Registro!, RegistroPorMeses(TresMeses));
+
+    /// <summary>La fila de la primera entrada del mes, en su línea de verdad.</summary>
+    private static JsonObject PrimeraDe(int mes) => FilaDe(mes, 1, NumeroDeLinea(TresMeses, mes, 1));
 
     private static RespuestaFalsa Leida(int mes) =>
-        new(Salida: Salida([FilaDe(mes, 1)], [$"Duda de la parte {mes}."]), CosteUsd: 0.10m);
+        new(Salida: Salida([PrimeraDe(mes)], [$"Duda de la parte {mes}."]), CosteUsd: 0.10m);
 
     private static RespuestaFalsa NoValida()
     {
@@ -568,7 +585,23 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         var guardado = ManejadorExtraerRegistro.LeerGuardado(ejecucion.ResultadoJson)!;
         Assert.Equal(["Empresa Parte1-1 S.L.", "Empresa Parte2-1 S.L.", "Empresa Parte3-1 S.L."], guardado.Candidaturas.Select(f => f.Empresa));
         Assert.Equal(["Duda de la parte 1.", "Duda de la parte 2.", "Duda de la parte 3."], guardado.Dudas);
-        Assert.Equal(["## Mes 1 de 2026", "## Mes 2 de 2026", "## Mes 3 de 2026"], _claude.Peticiones.Select(p => Datos(p)[1]));
+        Assert.Equal(["Mes 1 de 2026", "Mes 2 de 2026", "Mes 3 de 2026"], _claude.Peticiones.Select(p => Datos(p)[1][(Datos(p)[1].IndexOf("## ", StringComparison.Ordinal) + 3)..]));
+    }
+
+    [Fact]
+    public async Task PorPartes_UnaFilaConUnaLineaQueNoEsDeSuParte_VaASinLeerSinLinea()
+    {
+        TresPartes();
+        // La primera parte dice una línea de la segunda.
+        var ajena = NumeroDeLinea(TresMeses, 2, 1);
+        _claude.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(Salida: Salida([PrimeraDe(1), FilaDe(2, 1, ajena)])), Leida(2), Leida(3));
+
+        var ejecucion = await ExtraerAsync();
+
+        var guardado = Guardado(ejecucion);
+        Assert.Equal(3, guardado.Candidaturas.Count);
+        Assert.Equal(new FilaExtraidaSinLeer(0, $"La línea {ajena} no está en la parte 1 de 3 del texto libre."), Assert.Single(guardado.SinLeer));
     }
 
     [Fact]
@@ -607,21 +640,41 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     [Fact]
-    public async Task PorPartes_ComoMuchoCincuentaDudasSinRepetidasYLasDeLasPartesPerdidasPrimero()
+    public async Task PorPartes_LasDudasSinRepetidasYLasDeLasPartesPerdidasPrimero()
     {
         TresPartes();
-        var muchas = Enumerable.Range(1, 50).Select(i => $"Duda {i}.").ToList();
+        // 20 por parte (el tope del esquema), con 10 repetidas entre la segunda y la tercera.
+        var segunda = Enumerable.Range(1, 20).Select(i => $"Duda {i}.").ToList();
+        var tercera = Enumerable.Range(11, 20).Select(i => $"Duda {i}.").ToList();
         _claude.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
             new RespuestaFalsa(ModoFalso.Error, CosteUsd: 0.05m),
-            new RespuestaFalsa(Salida: Salida([FilaDe(2, 1)], muchas)),
-            new RespuestaFalsa(Salida: Salida([FilaDe(3, 1)], muchas)));
+            new RespuestaFalsa(Salida: Salida([PrimeraDe(2)], segunda)),
+            new RespuestaFalsa(Salida: Salida([PrimeraDe(3)], tercera)));
 
         var ejecucion = await ExtraerAsync();
 
         var dudas = Guardado(ejecucion).Dudas;
-        Assert.Equal(ManejadorExtraerRegistro.MaximoDudas, dudas.Count);
         Assert.Equal("No se ha podido leer la parte 1 de 3 (desde «## Mes 1 de 2026»): Claude ha devuelto un error.", dudas[0]);
-        Assert.Equal(muchas.Take(49), dudas.Skip(1));
+        Assert.Equal(Enumerable.Range(1, 30).Select(i => $"Duda {i}."), dudas.Skip(1));
+    }
+
+    [Fact]
+    public async Task AplicarPartes_ComoMuchoCincuentaDudasGuardadas()
+    {
+        var manejador = new ManejadorExtraerRegistro(_lector, _rutas, _opciones);
+        PeticionClaude Peticion(string parte) =>
+            new(TareaAgente.ExtraerRegistro, ["-p"], _raiz, "prompt", TimeSpan.FromMinutes(5), "log", true, parte);
+        RespuestaClaude Con(int desde) => new(true, "success", 0.1m, 1, "s", null,
+            Salida([Fila()], Enumerable.Range(desde, ManejadorExtraerRegistro.MaximoDudas).Select(i => $"Duda {i}.")), null, null);
+
+        var resultado = await manejador.AplicarPartesAsync(null!,
+            [(Peticion("1 de 4"), RespuestaClaude.Fallida(FalloClaude.ErrorDeClaude)), (Peticion("2 de 4"), Con(1)),
+             (Peticion("3 de 4"), Con(21)), (Peticion("4 de 4"), Con(41))], CancellationToken.None);
+
+        var dudas = ManejadorExtraerRegistro.LeerGuardado(resultado.ResultadoJson)!.Dudas;
+        Assert.Equal(ManejadorExtraerRegistro.MaximoDudasGuardadas, dudas.Count);
+        Assert.StartsWith("No se ha podido leer la parte 1 de 4: ", dudas[0]);
+        Assert.Equal("Duda 49.", dudas[^1]);
     }
 
     [Fact]
@@ -661,13 +714,9 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     public void Validar_EnLosBordesExactos_Pasa()
     {
         var larga = Fila();
-        larga["seccion"] = new string('s', ManejadorExtraerRegistro.LargoSeccion);
         larga["empresa"] = new string('e', LimitesLote.Empresa);
         larga["puesto"] = new string('p', LimitesLote.Puesto);
-        larga["enlace"] = new string('l', LimitesLote.Enlace);
-        larga["ubicacion"] = new string('u', LimitesLote.Ubicacion);
-        larga["nota"] = new string('n', LimitesLote.Nota);
-        larga["cita"] = new string('c', ManejadorExtraerRegistro.LargoCita);
+        larga["linea"] = int.MaxValue;
         var filas = Enumerable.Range(0, LimitesLote.Filas - 1).Select(_ => (JsonNode)Fila()).Append(larga);
         var dudas = Enumerable.Repeat(new string('d', ManejadorExtraerRegistro.LargoDuda), ManejadorExtraerRegistro.MaximoDudas);
 
@@ -678,33 +727,47 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     [Fact]
-    public void Validar_LaRespuestaDeEjemploDelFalso_Pasa()
+    public void Validar_LaRespuestaDeEjemploDelFalso_PasaYSuLineaEsLaDeEsaEmpresa()
     {
         using var ejemplo = JsonDocument.Parse(File.ReadAllText(Path.Combine(FabricaApi.CarpetaDatosEjemplo, "agentes", "extraer-registro.json")));
+        var registro = File.ReadAllLines(Path.Combine(FabricaApi.CarpetaDatosEjemplo, "registro-ejemplo.md"));
 
         var resultado = ManejadorExtraerRegistro.Validar(ejemplo.RootElement.GetProperty("salida"));
 
-        Assert.Equal(Cita, Assert.Single(resultado.Candidaturas).Cita);
+        var fila = Assert.Single(resultado.Candidaturas);
+        Assert.Equal(LineaCita, fila.Linea);
+        Assert.Equal(Cita, registro[fila.Linea - 1]);
+        Assert.StartsWith(fila.Empresa, registro[fila.Linea - 1][2..], StringComparison.Ordinal);
+        var duda = Assert.Single(resultado.Dudas);
+        Assert.StartsWith("Línea 9: Empresa Texto Dos", duda, StringComparison.Ordinal);
+        Assert.Contains("Empresa Texto Dos", registro[8], StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Validar_QuitaInvisiblesControlesYMarcasDeDireccion_YLosVaciosOpcionalesQuedanNull()
+    public void Validar_QuitaInvisiblesControlesYMarcasDeDireccion()
     {
         var fila = Fila();
-        fila["empresa"] = "  Empresa​ Texto‮ Uno\u0007 S.L.﻿ ";
-        fila["cita"] = "⁦" + Cita + "⁩";
+        fila["empresa"] = "  Empresa\u200B Texto\u202E Uno\u0007 S.L.\uFEFF ";
         fila["estado"] = "Descartada";
         fila["motivoDescarte"] = "Ingles";
-        fila["ubicacion"] = "​";
         fila["fechaAproximada"] = true;
 
-        var leida = Assert.Single(ManejadorExtraerRegistro.Validar(Salida([fila], ["‮Duda"])).Candidaturas);
+        var resultado = ManejadorExtraerRegistro.Validar(Salida([fila], ["\u202EDuda"]));
 
+        var leida = Assert.Single(resultado.Candidaturas);
         Assert.Equal("Empresa Texto Uno S.L.", leida.Empresa);
-        Assert.Equal(Cita, leida.Cita);
         Assert.Equal(MotivoDescarte.Ingles, leida.MotivoDescarte);
-        Assert.Null(leida.Ubicacion);
         Assert.True(leida.FechaAproximada);
+        Assert.Equal(["Duda"], resultado.Dudas);
+    }
+
+    [Fact]
+    public void Validar_LasDudas_ConSuLineaDelanteYSinLasVacias()
+    {
+        var resultado = ManejadorExtraerRegistro.Validar(Salida([],
+            [Duda(9, "No dice la fecha."), Duda(null, "Una entrada sin empresa clara."), Duda(3, "  \u200B ")]));
+
+        Assert.Equal(["Línea 9: No dice la fecha.", "Una entrada sin empresa clara."], resultado.Dudas);
     }
 
     [Theory]
@@ -714,7 +777,12 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     [InlineData("fechaAproximada", "\"false\"")]
     [InlineData("empresa", "null")]
     [InlineData("empresa", "7")]
-    [InlineData("seccion", "null")]
+    [InlineData("linea", "null")]
+    [InlineData("linea", "\"8\"")]
+    [InlineData("linea", "8.5")]
+    [InlineData("linea", "0")]
+    [InlineData("linea", "-3")]
+    [InlineData("linea", "99999999999")]
     public void Validar_UnCampoDeOtroTipo_DaSalidaNoValida(string campo, string valor)
     {
         var fila = Fila();
@@ -723,11 +791,15 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     [Theory]
+    [InlineData("0")]
+    [InlineData("\"9\"")]
+    public void Validar_UnaDudaConUnaLineaQueNoVale_DaSalidaNoValida(string linea) =>
+        AssertNoValida(JsonDocument.Parse($$"""{"candidaturas":[],"dudas":[{"linea":{{linea}},"texto":"x"}]}""").RootElement);
+
+    [Theory]
     [InlineData("estado", "\"enviada\"", "El campo «estado» no admite «enviada».")]
     [InlineData("estado", "\" Enviada\"", "El campo «estado» no admite «Enviada».")]
     [InlineData("estado", "\"Enviada, Cerrada\"", "El campo «estado» no admite «Enviada, Cerrada».")]
-    [InlineData("modalidad", "\"Híbrido\"", "El campo «modalidad» no admite «Híbrido».")]
-    [InlineData("modalidad", "\"Remoto,Presencial\"", "El campo «modalidad» no admite «Remoto,Presencial».")]
     [InlineData("motivoDescarte", "\"Ninguno\"", "El campo «motivoDescarte» no admite «Ninguno».")]
     [InlineData("fecha", "\"2026-9-10\"", "La fecha «2026-9-10» no es un día válido con la forma AAAA-MM-DD.")]
     [InlineData("fecha", "\"10/09/2026\"", "La fecha «10/09/2026» no es un día válido con la forma AAAA-MM-DD.")]
@@ -736,7 +808,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     [InlineData("empresa", "\"\"", "Falta el campo «empresa».")]
     [InlineData("empresa", "\"\\u200B\\u202E \\n\"", "Falta el campo «empresa».")]
     [InlineData("puesto", "\"\"", "Falta el campo «puesto».")]
-    public void Validar_UnaFilaQueNoCumple_VaASinLeerSinTumbarLasDemas(string campo, string valor, string motivo)
+    public void Validar_UnaFilaQueNoCumple_VaASinLeerConSuLineaSinTumbarLasDemas(string campo, string valor, string motivo)
     {
         var fila = Fila();
         fila[campo] = JsonNode.Parse(valor);
@@ -744,18 +816,13 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         var resultado = ManejadorExtraerRegistro.Validar(Salida([Fila(), fila, Fila()], ["Una duda"]));
 
         Assert.Equal(2, resultado.Candidaturas.Count);
-        Assert.Equal(new FilaExtraidaSinLeer(Cita, motivo), Assert.Single(resultado.SinLeer));
+        Assert.Equal(new FilaExtraidaSinLeer(LineaCita, motivo), Assert.Single(resultado.SinLeer));
         Assert.Equal(["Una duda"], resultado.Dudas);
     }
 
     [Theory]
-    [InlineData("seccion", 300)]
     [InlineData("empresa", 200)]
     [InlineData("puesto", 300)]
-    [InlineData("enlace", 2000)]
-    [InlineData("ubicacion", 200)]
-    [InlineData("nota", 5000)]
-    [InlineData("cita", 2000)]
     public void Validar_UnCampoDemasiadoLargo_VaASinLeer_YLosLargosSeCuentanEnCaracteresUnicode(string campo, int largo)
     {
         // Un emoji son dos unidades UTF-16 y un solo carácter, como lo cuenta el esquema.
@@ -771,39 +838,32 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     [Fact]
-    public void Validar_LaCitaDeUnaFilaSinLeerSaleRecortadaOVacia()
+    public void Validar_ConLasLineasDeLaParte_UnaQueNoEsSuyaVaASinLeerSinLinea()
     {
-        var larga = Fila();
-        larga["cita"] = new string('c', 3000);
-        var sinCita = Fila();
-        sinCita["cita"] = "";
+        var ajena = Fila();
+        ajena["linea"] = 51;
 
-        var sinLeer = ManejadorExtraerRegistro.Validar(Salida([larga, sinCita])).SinLeer;
+        var resultado = ManejadorExtraerRegistro.Validar(Salida([Fila(), ajena]), new HashSet<int> { LineaCita, 9 }, "2 de 4");
 
-        Assert.Equal(ManejadorExtraerRegistro.LargoCitaSinLeer, sinLeer[0].Cita.Length);
-        Assert.EndsWith("…", sinLeer[0].Cita);
-        Assert.Equal("(sin cita)", sinLeer[1].Cita);
+        Assert.Single(resultado.Candidaturas);
+        Assert.Equal(new FilaExtraidaSinLeer(0, "La línea 51 no está en la parte 2 de 4 del texto libre."), Assert.Single(resultado.SinLeer));
+        // Sin las líneas no se comprueba: lo vuelve a mirar el combinador.
+        Assert.Equal(2, ManejadorExtraerRegistro.Validar(Salida([Fila(), ajena.DeepClone()])).Candidaturas.Count);
     }
 
     [Fact]
-    public void Validar_LosCamposDeUnaLineaPierdenLosSaltosYTabuladores_LaNotaLosConserva()
+    public void Validar_LosCamposPierdenLosSaltosYTabuladores()
     {
         var fila = Fila();
         fila["empresa"] = "Empresa\nTexto\tUno\u2028S.L.\r\n";
         fila["puesto"] = "Desarrollador\u2029.NET";
-        fila["ubicacion"] = "Málaga\r(híbrido)";
-        fila["seccion"] = "Notas\u0085sueltas";
-        fila["cita"] = "- Empresa Texto Uno\nS.L.";
-        fila["nota"] = "Primera línea.\nSegunda línea.";
 
-        var leida = Assert.Single(ManejadorExtraerRegistro.Validar(Salida([fila], ["Una\nduda"])).Candidaturas);
+        var resultado = ManejadorExtraerRegistro.Validar(Salida([fila], ["Una\nduda"]));
 
+        var leida = Assert.Single(resultado.Candidaturas);
         Assert.Equal("Empresa Texto Uno S.L.", leida.Empresa);
         Assert.Equal("Desarrollador .NET", leida.Puesto);
-        Assert.Equal("Málaga (híbrido)", leida.Ubicacion);
-        Assert.Equal("Notas sueltas", leida.Seccion);
-        Assert.Equal("- Empresa Texto Uno S.L.", leida.Cita);
-        Assert.Equal("Primera línea.\nSegunda línea.", leida.Nota);
+        Assert.Equal(["Una duda"], resultado.Dudas);
     }
 
     [Fact]
@@ -820,11 +880,16 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     {
         """{"candidaturas":[],"dudas":[],"extra":1}""",
         """{"candidaturas":[]}""",
-        """{"candidaturas":[],"dudas":[],"dudas":["otra"]}""",
+        """{"candidaturas":[],"dudas":[],"dudas":[]}""",
         """{"Candidaturas":[],"dudas":[]}""",
         """{"candidaturas":[null],"dudas":[]}""",
         """{"candidaturas":[],"dudas":[null]}""",
         """{"candidaturas":{},"dudas":[]}""",
+        // Las dudas de antes, como texto suelto, o sin alguno de sus dos campos.
+        """{"candidaturas":[],"dudas":["otra"]}""",
+        """{"candidaturas":[],"dudas":[{"texto":"x"}]}""",
+        """{"candidaturas":[],"dudas":[{"linea":null}]}""",
+        """{"candidaturas":[],"dudas":[{"linea":null,"texto":"x","extra":1}]}""",
         "[]",
         "\"texto\""
     };
@@ -838,11 +903,12 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     public void Validar_UnaFilaSinUnCampoOConUnoDeMasOConUnCampoRepetido_DaSalidaNoValida()
     {
         var sinCampo = Fila();
-        sinCampo.Remove("enlace");
+        sinCampo.Remove("motivoDescarte");
         AssertNoValida(Salida([sinCampo]));
 
+        // Los campos de antes ya no valen: ni la cita ni la sección.
         var conDeMas = Fila();
-        conDeMas["linea"] = 3;
+        conDeMas["cita"] = Cita;
         AssertNoValida(Salida([conDeMas]));
 
         // Con la clave repetida, sin esta comprobación ganaría la última.
@@ -885,6 +951,9 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     [InlineData("[]")]
     [InlineData("""{"candidaturas":[],"dudas":[]}""")]
     [InlineData("""{"candidaturas":[{"estado":3}],"dudas":[],"sinLeer":[]}""")]
+    // Lo guardado antes del 24/11, con la cita en vez del número de línea: hay que volver a extraer.
+    [InlineData("""{"candidaturas":[{"seccion":"Notas","fecha":"2026-09-10","fechaAproximada":false,"empresa":"Acme","puesto":"Sin indicar","estado":"Enviada","enlace":null,"modalidad":"NoIndicada","ubicacion":null,"motivoDescarte":null,"nota":null,"cita":"- Acme"}],"dudas":[],"sinLeer":[]}""")]
+    [InlineData("""{"candidaturas":[],"dudas":[],"sinLeer":[{"cita":"- Acme","motivo":"m"}]}""")]
     [InlineData("""{"candidaturas":[null],"dudas":[],"sinLeer":[]}""")]
     [InlineData("""{"candidaturas":[{}],"dudas":[],"sinLeer":[]}""")]
     [InlineData("""{"candidaturas":[],"dudas":[null],"sinLeer":[]}""")]

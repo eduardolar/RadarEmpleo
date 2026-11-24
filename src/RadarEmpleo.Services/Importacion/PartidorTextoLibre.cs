@@ -26,7 +26,7 @@ public sealed record TrozoTextoLibre(IReadOnlyList<LineaRegistro> Lineas, string
 /// <see cref="AnalizadorRastreo.SeccionesRastreo"/>; los «###» no cortan) y llega hasta el siguiente; lo de antes del primer
 /// título es un apartado más. Los apartados enteros se juntan mientras quepan. Uno que no cabe solo se parte por párrafos
 /// (separados por líneas en blanco); un párrafo que no cabe, por líneas (el título, con la siguiente), y una línea que no cabe va sola. <b>Nunca se parte
-/// una línea</b>: cada una sigue siendo una línea del registro, con su número, para buscar después la cita. Los trozos que
+/// una línea</b>: cada una sigue siendo una línea del registro, con su número, para encontrar después la de cada fila. Los trozos que
 /// siguen a uno de un apartado partido llevan delante su línea de título, repetida, para que se sepa de qué apartado son.
 /// </summary>
 public static class PartidorTextoLibre
