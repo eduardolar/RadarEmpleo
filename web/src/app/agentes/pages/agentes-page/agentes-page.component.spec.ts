@@ -340,7 +340,7 @@ describe('AgentesPageComponent', () => {
       expect(estado.getAttribute('aria-label')).toBe('Tarea de Claude: Análisis del encaje · Acme');
       expect(primera.querySelector('[role="status"]')).toBeNull();
 
-      expect(segunda.querySelector('h3')!.textContent).toContain('Lectura del registro');
+      expect(segunda.querySelector('h3')!.textContent).toContain('Lectura del texto libre');
       expect(segunda.querySelector('a')).toBeNull();
     });
 

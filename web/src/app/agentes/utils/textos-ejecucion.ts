@@ -32,7 +32,7 @@ export const TEXTO_PERDIDA_CORTO = 'Ya no se encuentra esta tarea.';
 export const NOMBRE_TAREA: Record<TareaAgente, string> = {
   Rastreo: 'Rastreo de ofertas',
   AnalizarEncaje: 'Análisis del encaje',
-  ExtraerRegistro: 'Lectura del registro',
+  ExtraerRegistro: 'Lectura del texto libre',
   Redactar: 'Redacción',
   Revisar: 'Revisión',
   RellenarEnvio: 'Preparar el envío',
@@ -46,7 +46,7 @@ export const AVISO_GASTO = 'Gasta un poco de tu tope diario de Claude.';
 const TRABAJANDO: Record<TareaAgente, string> = {
   Rastreo: 'Rastreando ofertas',
   AnalizarEncaje: 'Analizando el encaje',
-  ExtraerRegistro: 'Leyendo el registro',
+  ExtraerRegistro: 'Leyendo el texto libre',
   Redactar: 'Redactando',
   Revisar: 'Revisando',
   RellenarEnvio: 'Preparando el envío',

@@ -823,7 +823,7 @@ describe('ImportacionPageComponent', () => {
 
       expect(botonExtraer()).toBeUndefined();
       expect(document.activeElement?.getAttribute('aria-label')).toBe(
-        'Tarea de Claude: Lectura del registro',
+        'Tarea de Claude: Lectura del texto libre',
       );
       expect(elemento().textContent).toContain('Puedes salir: la tarea sigue');
       boton('Cancelar la tarea')!.click();
