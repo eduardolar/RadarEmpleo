@@ -10,8 +10,14 @@ namespace RadarEmpleo.Services.Importacion;
 /// null si el trozo empieza en lo que va antes del primer título.</param>
 public sealed record TrozoTextoLibre(IReadOnlyList<LineaRegistro> Lineas, string? Titulo)
 {
-    /// <summary>Las líneas unidas con saltos LF, como van al prompt.</summary>
+    /// <summary>Las líneas unidas con saltos LF, tal cual.</summary>
     public string Texto => new TextoLibreRegistro(Lineas).Texto;
+
+    /// <summary>
+    /// Como va al prompt: cada línea con su número del registro delante («123│ …», <see cref="PartidorTextoLibre.Numerar"/>),
+    /// unidas con saltos LF. El título repetido lleva su número de verdad.
+    /// </summary>
+    public string TextoNumerado => string.Join('\n', Lineas.Select(PartidorTextoLibre.Numerar));
 }
 
 /// <summary>
@@ -20,7 +26,7 @@ public sealed record TrozoTextoLibre(IReadOnlyList<LineaRegistro> Lineas, string
 /// <see cref="AnalizadorRastreo.SeccionesRastreo"/>; los «###» no cortan) y llega hasta el siguiente; lo de antes del primer
 /// título es un apartado más. Los apartados enteros se juntan mientras quepan. Uno que no cabe solo se parte por párrafos
 /// (separados por líneas en blanco); un párrafo que no cabe, por líneas (el título, con la siguiente), y una línea que no cabe va sola. <b>Nunca se parte
-/// una línea</b>: cada una sigue siendo una línea del registro, con su número, para buscar después la cita. Los trozos que
+/// una línea</b>: cada una sigue siendo una línea del registro, con su número, para encontrar después la de cada fila. Los trozos que
 /// siguen a uno de un apartado partido llevan delante su línea de título, repetida, para que se sepa de qué apartado son.
 /// </summary>
 public static class PartidorTextoLibre
@@ -67,8 +73,18 @@ public static class PartidorTextoLibre
         return trozos;
     }
 
-    /// <summary>Lo que mide una línea en el prompt: su texto como lo deja <see cref="PlantillaPrompt"/>, más el salto.</summary>
-    public static int Medir(LineaRegistro linea) => PlantillaPrompt.Normalizar(linea.Texto, unaLinea: false).Length + 1;
+    /// <summary>Lo que separa el número de línea del texto en el prompt.</summary>
+    public const string SeparadorNumero = "│ ";
+
+    /// <summary>
+    /// La línea con su número delante: «123│ texto». Sin saltos de ningún tipo (<see cref="PlantillaPrompt.EnUnaLinea"/>): un
+    /// U+2028 dentro de la línea no puede parecer otra línea sin número.
+    /// </summary>
+    public static string Numerar(LineaRegistro linea) =>
+        $"{linea.Numero.ToString(System.Globalization.CultureInfo.InvariantCulture)}{SeparadorNumero}{PlantillaPrompt.EnUnaLinea(linea.Texto)}";
+
+    /// <summary>Lo que mide una línea en el prompt: numerada y como la deja <see cref="PlantillaPrompt"/>, más el salto.</summary>
+    public static int Medir(LineaRegistro linea) => PlantillaPrompt.Normalizar(Numerar(linea), unaLinea: false).Length + 1;
 
     private sealed record Apartado(List<LineaRegistro> Lineas, string? Titulo);
 

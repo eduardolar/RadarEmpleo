@@ -375,13 +375,18 @@ public static partial class AnalizadorRastreo
     private static bool EsDescarte(string? etiqueta) =>
         TextoComparable.Normalizar(etiqueta).StartsWith("descartad", StringComparison.Ordinal);
 
-    private static string? PrimerEnlace(string texto)
+    /// <summary>
+    /// El primer enlace web de un texto, ya normalizado (<see cref="Enlaces.Normalizar"/>), sin la puntuación del final ni
+    /// los demasiado largos. Con <paramref name="vale"/>, el primero que lo cumpla (el combinador de la importación solo quiere
+    /// los https).
+    /// </summary>
+    internal static string? PrimerEnlace(string texto, Func<string, bool>? vale = null)
     {
         foreach (Match coincidencia in EnlaceWeb().Matches(texto))
         {
             var enlace = coincidencia.Value.TrimEnd(FinalesDeEnlace);
             if (enlace.Length > OfertaRastreo.LargoEnlace) continue;
-            if (Enlaces.Normalizar(enlace) is { Length: > 0 } normalizado) return normalizado;
+            if (Enlaces.Normalizar(enlace) is { Length: > 0 } normalizado && (vale is null || vale(normalizado))) return normalizado;
         }
         return null;
     }

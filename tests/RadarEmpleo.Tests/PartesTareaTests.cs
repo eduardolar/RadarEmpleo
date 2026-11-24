@@ -11,20 +11,20 @@ namespace RadarEmpleo.Tests;
 /// </summary>
 public class PartesTareaTests
 {
-    /// <summary>Con los valores aprobados el 24/11 para ExtraerRegistro: 2,00 y 50 min en total, 1,00 y 10 min como mucho por parte.</summary>
+    /// <summary>Con los valores de ExtraerRegistro tras la salida corta (24/11): 1,50 y 30 min en total, 0,50 y 5 min como mucho por parte.</summary>
     private static readonly DefinicionTarea PorPartes = DefinicionesTareas.ExtraerRegistro with
     {
-        PresupuestoUsd = 2.00m,
-        TiempoMaximo = TimeSpan.FromMinutes(50),
-        Partes = new PartesTarea(16_000, 6, 1.00m, TimeSpan.FromMinutes(10))
+        PresupuestoUsd = 1.50m,
+        TiempoMaximo = TimeSpan.FromMinutes(30),
+        Partes = new PartesTarea(16_000, 6, 0.50m, TimeSpan.FromMinutes(5))
     };
 
     [Theory]
-    [InlineData(1, "1.00", 600)]
-    [InlineData(2, "1.00", 600)]
-    [InlineData(3, "0.66", 600)]
-    [InlineData(4, "0.50", 600)]
-    [InlineData(6, "0.33", 500)]
+    [InlineData(1, "0.50", 300)]
+    [InlineData(3, "0.50", 300)]
+    [InlineData(4, "0.37", 300)]
+    [InlineData(5, "0.30", 300)]
+    [InlineData(6, "0.25", 300)]
     public void ElRepartoPorParte_TieneSusTopes(int partes, string presupuesto, int segundos)
     {
         Assert.Equal(decimal.Parse(presupuesto, System.Globalization.CultureInfo.InvariantCulture), PorPartes.PresupuestoParte(partes));
@@ -78,8 +78,8 @@ public class PartesTareaTests
     [Fact]
     public void CabenLasPartes_ConElRepartoDeLaTarea()
     {
-        Assert.True(PorPartes.CabenLasPartes(Partes(6, 8, 0.33m)));
-        Assert.True(PorPartes.CabenLasPartes(Partes(5, 10, 0.40m)));
+        Assert.True(PorPartes.CabenLasPartes(Partes(6, 5, 0.25m)));
+        Assert.True(PorPartes.CabenLasPartes(Partes(4, 5, 0.37m)));
         // Una sola cabe siempre, como antes de las partes.
         Assert.True(DefinicionesTareas.AnalizarEncaje.CabenLasPartes([Peticion()]));
     }
@@ -87,10 +87,10 @@ public class PartesTareaTests
     [Fact]
     public void CabenLasPartes_NoSiPasanDelTiempoDelPresupuestoODelNumeroOSinPartes()
     {
-        // Seis de 10 min con 50 min en total: el bloqueo caducaría antes de acabar.
-        Assert.False(PorPartes.CabenLasPartes(Partes(6, 10, 0.33m)));
-        // Tres de 1,00 con 2,00 en total.
-        Assert.False(PorPartes.CabenLasPartes(Partes(3, 10, 1.00m)));
+        // Seis de 6 min con 30 min en total: el bloqueo caducaría antes de acabar.
+        Assert.False(PorPartes.CabenLasPartes(Partes(6, 6, 0.25m)));
+        // Cuatro de 0,50 con 1,50 en total.
+        Assert.False(PorPartes.CabenLasPartes(Partes(4, 5, 0.50m)));
         Assert.False(PorPartes.CabenLasPartes(Partes(7, 5, 0.10m)));
         Assert.False((PorPartes with { Partes = null }).CabenLasPartes(Partes(2, 5, 0.10m)));
         // Sin --max-budget-usd no se sabe lo que puede gastar.
@@ -109,11 +109,11 @@ public class PartesTareaTests
     [Fact]
     public void ExtraerRegistro_VaPorPartesConLoAprobado_YLasDemasDeUnaVez()
     {
-        // Decisión de Eduardo del 24/11.
+        // Decisiones de Eduardo del 24/11: por partes y, con la salida corta, topes más bajos.
         var extraer = DefinicionesTareas.ExtraerRegistro;
-        Assert.Equal(2.00m, extraer.PresupuestoUsd);
-        Assert.Equal(TimeSpan.FromMinutes(50), extraer.TiempoMaximo);
-        Assert.Equal(new PartesTarea(16_000, 6, 1.00m, TimeSpan.FromMinutes(10)), extraer.Partes);
+        Assert.Equal(1.50m, extraer.PresupuestoUsd);
+        Assert.Equal(TimeSpan.FromMinutes(30), extraer.TiempoMaximo);
+        Assert.Equal(new PartesTarea(16_000, 6, 0.50m, TimeSpan.FromMinutes(5)), extraer.Partes);
         // El bloqueo caduca 5 min después del tiempo máximo: por debajo de la hora en la que cualquiera lo da por caducado.
         Assert.True(extraer.TiempoMaximo + TimeSpan.FromMinutes(5) < BloqueoEjecucion.DuracionMaxima);
         Assert.Null(DefinicionesTareas.AnalizarEncaje.Partes);

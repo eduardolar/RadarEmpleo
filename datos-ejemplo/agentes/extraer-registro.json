@@ -6,20 +6,15 @@
   "salida": {
     "candidaturas": [
       {
-        "seccion": "Notas sueltas de septiembre",
+        "linea": 8,
         "fecha": "2026-09-10",
         "fechaAproximada": false,
         "empresa": "Empresa Texto Uno S.L.",
         "puesto": "Sin indicar",
         "estado": "Enviada",
-        "enlace": null,
-        "modalidad": "NoIndicada",
-        "ubicacion": null,
-        "motivoDescarte": null,
-        "nota": "Enviada por correo, sin respuesta.",
-        "cita": "- Empresa Texto Uno S.L.: ENVIADA por correo el 2026-09-10, sin respuesta."
+        "motivoDescarte": null
       }
     ],
-    "dudas": ["La línea de Empresa Texto Dos no dice la fecha (ejemplo inventado)."]
+    "dudas": [{ "linea": 9, "texto": "Empresa Texto Dos no dice la fecha (ejemplo inventado)." }]
   }
 }

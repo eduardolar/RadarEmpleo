@@ -50,7 +50,7 @@ public class ConstructorArgumentosTests
     public void ExtraerRegistro_ListaExacta()
     {
         // Haiku desde el 24/11: con Sonnet, la salida se comía el presupuesto de la parte.
-        Assert.Equal(Con("2.00", "--tools", "", "--model", "haiku"), Construir(DefinicionesTareas.ExtraerRegistro));
+        Assert.Equal(Con("1.50", "--tools", "", "--model", "haiku"), Construir(DefinicionesTareas.ExtraerRegistro));
     }
 
     [Fact]
@@ -62,9 +62,33 @@ public class ConstructorArgumentosTests
     }
 
     [Theory]
+    [InlineData("-p")]
+    [InlineData("--dangerously-skip-permissions")]
+    [InlineData("son net")]
+    [InlineData("Sonnet")]
+    [InlineData("")]
+    public void UnModeloQueNoEsUnNombre_Lanza(string modelo)
+    {
+        Assert.False(ConstructorArgumentos.EsModeloValido(modelo));
+        Assert.Throws<ArgumentException>(() =>
+            ConstructorArgumentos.Construir(DefinicionesTareas.ExtraerRegistro with { Modelo = modelo }, Esquema, Valores()));
+    }
+
+    [Theory]
+    [InlineData("sonnet")]
+    [InlineData("claude-haiku-4-5")]
+    [InlineData("claude-sonnet-4-5[1m]")]
+    public void UnNombreDeModelo_VaEnSuArgumento(string modelo)
+    {
+        Assert.True(ConstructorArgumentos.EsModeloValido(modelo));
+        Assert.Equal(["--model", modelo],
+            ConstructorArgumentos.Construir(DefinicionesTareas.ExtraerRegistro with { Modelo = modelo }, Esquema, Valores()).TakeLast(2));
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(-0.5)]
-    [InlineData(2.01)]
+    [InlineData(1.51)]
     public void UnPresupuestoQueNoEsPositivoOPasaDelDeLaTarea_Lanza(double presupuesto)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>

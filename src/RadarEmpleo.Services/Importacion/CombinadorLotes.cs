@@ -5,6 +5,7 @@ using RadarEmpleo.Domain;
 using RadarEmpleo.Services.Agentes;
 using RadarEmpleo.Services.Contratos;
 using RadarEmpleo.Services.Ofertas;
+using RadarEmpleo.Services.Rastreos;
 
 namespace RadarEmpleo.Services.Importacion;
 
@@ -18,38 +19,36 @@ public sealed record LoteCombinado(IReadOnlyList<FilaLote> Filas, IReadOnlyList<
 /// Une la tabla del registro (<see cref="AnalizadorRegistro.Analizar"/>) y lo que ExtraerRegistro ha leído del texto libre
 /// (función pura: ni disco ni BD). Las reglas:
 /// <list type="bullet">
-/// <item><b>La <c>cita</c> tiene que ser una línea del texto enviado</b> (<see cref="AnalizadorRegistro.TextoLibre"/>, sin la
-/// tabla ni los rastreos), entera: no vale un trozo ni dos líneas juntas. Las dos se comparan con la limpieza de
-/// <see cref="PlantillaPrompt"/> (sin invisibles, NFKC, delimitadores neutralizados) y los espacios seguidos en uno. Si
-/// encaja con varias líneas, vale la primera. Si no encaja así, se prueba con las dos <see cref="SinMarcado"/> (Claude suele
-/// quitar la negrita, los enlaces o la viñeta al copiar la línea): solo se perdona el formato y tiene que seguir siendo la
-/// línea entera. Si no encaja con ninguna, la fila va a SinLeer con la línea 0 y el principio
-/// de la cita en el motivo: es la defensa contra filas inventadas.</item>
+/// <item><b>La <c>linea</c> tiene que ser una línea del texto enviado</b> (<see cref="AnalizadorRegistro.TextoLibre"/>, sin la
+/// tabla ni los rastreos) y no estar en blanco. Si no, la fila va a SinLeer con la línea 0 y
+/// <see cref="MotivoLineaInexistente"/>: es la defensa contra filas inventadas.</item>
+/// <item><b>Lo demás sale de esa línea, no de Claude</b>: la sección es el título («#» a «######», sin las almohadillas) más
+/// cercano por encima en el texto libre; el enlace, el primer https de la línea (<see cref="AnalizadorRastreo.PrimerEnlace"/>);
+/// la nota, la propia línea tal como la escribió Eduardo (sin invisibles y recortada a <see cref="LimitesLote.Nota"/>); la modalidad,
+/// <see cref="Modalidad.NoIndicada"/> y sin ubicación (una palabra suelta daría datos equivocados).</item>
 /// <item><b>Manda la tabla</b>: una fila extraída con la misma empresa normalizada que una de la tabla y una fecha a 3 días
 /// o menos se queda fuera con <see cref="AvisoYaEnLaTabla"/>. Eso incluye la misma <see cref="ReglasImportacion.Clave"/>,
 /// que lleva la empresa normalizada y la fecha exacta.</item>
-/// <item><b>La empresa tiene que salir en la línea citada</b>: si no (otra línea, el título, unas siglas), la fila entra
-/// igual con <see cref="FilaLote.EmpresaFueraDeLaCita"/>, que la vista previa enseña como
+/// <item><b>La empresa tiene que salir en su línea</b>: si no (Claude se ha equivocado de número, el título, unas siglas), la
+/// fila entra igual con <see cref="FilaLote.EmpresaFueraDeLaCita"/>, que la vista previa enseña como
 /// <see cref="ReglasImportacion.AvisoEmpresaNoEnLaLinea"/>. Se comparan las palabras enteras, sin forma jurídica, tildes
 /// ni signos; si no, la empresa sin espacios (4 caracteres o más) dentro de la línea sin espacios, para «B.B.V.A.».</item>
 /// <item>Las extraídas llevan su sección con el prefijo <see cref="AnalizadorRegistro.SeccionTextoLibre"/>.</item>
 /// <item>Dos extraídas con la misma clave: vale la de la línea más arriba y la otra se queda fuera con
 /// <see cref="AvisoRepetidaEnElTexto"/>.</item>
-/// <item>Las <see cref="ResultadoExtraccionRegistro.SinLeer"/> van a SinLeer con la línea de su cita (recortada a
-/// <see cref="ManejadorExtraerRegistro.LargoCitaSinLeer"/>, se busca como principio de línea) o, si no se encuentra, con la
-/// línea 0 y la cita en el motivo.</item>
+/// <item>Las <see cref="ResultadoExtraccionRegistro.SinLeer"/> van a SinLeer con su línea.</item>
 /// <item><b>Nada que dé 400 al aplicar</b>: una fecha fuera de 2000-2100, un enumerado desconocido o un campo más largo que
-/// <see cref="LimitesLote"/> (contado como lo cuenta la API) van a SinLeer; la nota larga se recorta; una descartada sin
-/// motivo lleva <see cref="MotivoDescarte.Otro"/>. Lo que pasa de <see cref="LimitesLote.Filas"/> va a SinLeer con
-/// <see cref="MotivoNoCabe"/>: primero entran las de la tabla.</item>
+/// <see cref="LimitesLote"/> (contado como lo cuenta la API) van a SinLeer; la nota y la sección largas se recortan y un
+/// enlace largo no se pone; una descartada sin motivo lleva <see cref="MotivoDescarte.Otro"/>. Lo que pasa de
+/// <see cref="LimitesLote.Filas"/> va a SinLeer con <see cref="MotivoNoCabe"/>: primero entran las de la tabla.</item>
 /// </list>
-/// El enlace va tal cual: se normaliza después, en <see cref="ReglasImportacion"/>.
+/// El enlace va normalizado, y se vuelve a normalizar en <see cref="ReglasImportacion"/>.
 /// </summary>
 public static partial class CombinadorLotes
 {
     public const string AvisoYaEnLaTabla = "Ya está en la tabla del registro";
     public const string AvisoRepetidaEnElTexto = "Aparece dos veces en el texto libre";
-    public const string MotivoCitaInexistente = "No encuentro esta línea en el registro";
+    public const string MotivoLineaInexistente = "No hay texto libre en la línea";
     public static readonly string MotivoNoCabe = $"No cabe: el lote ya tiene {LimitesLote.Filas} filas.";
 
     /// <summary>Días de margen entre una fila de la tabla y una extraída de la misma empresa para tomarlas por la misma.</summary>
@@ -58,42 +57,28 @@ public static partial class CombinadorLotes
     /// <summary>Años que admite el aplicar (<c>ImportacionService.ValidarLote</c>).</summary>
     public const int AnioMinimo = 2000, AnioMaximo = 2100;
 
-    private const int LargoCitaEnMotivo = 80;
+    /// <summary>Lo que se guarda como mucho del título de la sección (sin el prefijo).</summary>
+    public const int LargoSeccion = 300;
 
     /// <summary>Lo mínimo que tiene que medir una empresa sin espacios para buscarla pegada dentro de la línea.</summary>
     private const int LargoEmpresaPegada = 4;
 
     public static LoteCombinado Combinar(AnalisisRegistro tabla, string registro, ResultadoExtraccionRegistro extraccion)
     {
-        var lineas = AnalizadorRegistro.TextoLibre(registro).Lineas
-            .Select(l =>
-            {
-                var texto = Comparable(l.Texto);
-                // Una más larga que dos citas no puede encajar, y las regex de énfasis tardarían mucho con ella
-                var sinMarcado = texto.Length > 2 * ManejadorExtraerRegistro.LargoCita ? "" : SinMarcado(texto);
-                return new LineaComparable(l.Numero, texto, sinMarcado);
-            })
-            .Where(l => l.Texto.Length > 0)
-            .ToList();
-        var indice = new IndiceLineas(lineas);
+        var lineas = LineasDelTextoLibre(registro);
 
         var sinLeer = new List<FilaSinLeerDto>(tabla.SinLeer);
-        foreach (var fila in extraccion.SinLeer)
-        {
-            var linea = BuscarPrincipio(lineas, indice, fila.Cita)?.Numero;
-            sinLeer.Add(new FilaSinLeerDto(linea ?? 0, linea is null ? $"{fila.Motivo} {Citar(fila.Cita)}" : fila.Motivo));
-        }
+        sinLeer.AddRange(extraccion.SinLeer.Select(f => new FilaSinLeerDto(f.Linea, f.Motivo)));
 
         var extraidas = new List<FilaLote>();
         foreach (var fila in extraccion.Candidaturas)
         {
-            // La empresa se busca en la línea del registro que ha encajado, no en la cita (que puede venir sin formato)
-            if (indice.Buscar(Comparable(fila.Cita)) is not { } linea)
-                sinLeer.Add(new FilaSinLeerDto(0, $"{MotivoCitaInexistente}: {Citar(fila.Cita)}"));
+            if (!lineas.TryGetValue(fila.Linea, out var linea) || linea.Texto.Length == 0)
+                sinLeer.Add(new FilaSinLeerDto(0, $"{MotivoLineaInexistente} {fila.Linea.ToString(CultureInfo.InvariantCulture)}."));
             else if (Problema(fila) is { } motivo)
-                sinLeer.Add(new FilaSinLeerDto(linea.Numero, motivo));
+                sinLeer.Add(new FilaSinLeerDto(fila.Linea, motivo));
             else
-                extraidas.Add(AFilaLote(fila, linea.Numero, empresaEnLaLinea: EmpresaEnLinea(fila.Empresa, linea.Texto)));
+                extraidas.Add(AFilaLote(fila, linea));
         }
 
         var deLaTabla = tabla.Lote.Filas.ToLookup(f => NombresEmpresa.Normalizar(f.Empresa), f => f.Fecha, StringComparer.Ordinal);
@@ -117,12 +102,34 @@ public static partial class CombinadorLotes
             fuera);
     }
 
+    /// <summary>Una línea del texto libre: tal cual, como se compara y el título más cercano por encima (null si no hay).</summary>
+    private sealed record LineaLibre(string Original, string Texto, string? Seccion);
+
+    /// <summary>Las líneas del texto libre por su número, cada una con la sección en la que está.</summary>
+    private static Dictionary<int, LineaLibre> LineasDelTextoLibre(string registro)
+    {
+        var lineas = new Dictionary<int, LineaLibre>();
+        string? seccion = null;
+        foreach (var linea in AnalizadorRegistro.TextoLibre(registro).Lineas)
+        {
+            var texto = Comparable(linea.Texto);
+            if (Titulo().Match(texto) is { Success: true } titulo && titulo.Groups[1].Value.Length > 0)
+                seccion = Recortar(titulo.Groups[1].Value, LargoSeccion);
+            lineas[linea.Numero] = new LineaLibre(linea.Texto, texto, seccion);
+        }
+        return lineas;
+    }
+
+    // Un título de Markdown («#» a «######» y un espacio), sin las almohadillas del principio ni las del final.
+    [GeneratedRegex(@"^#{1,6}\s+(.*?)[\s#]*$", RegexOptions.CultureInvariant)]
+    private static partial Regex Titulo();
+
     /// <summary>
-    /// Una línea (o una cita) tal como se compara: con la limpieza de <see cref="PlantillaPrompt.Normalizar"/> en una línea y
-    /// los espacios y tabuladores seguidos en uno. Los invisibles se quitan antes de pasar a una línea, como en el prompt
-    /// (que limpia el texto entero): así un tabulador vertical (U+000B) o un salto de página (U+000C) del registro
-    /// desaparece en vez de volverse un espacio. Se repite hasta que no cambia, porque la cita ya viene limpiada una vez y
-    /// limpiar otra vez no siempre deja lo mismo («{{{» pasa a «{ {{» y luego a «{ { {»).
+    /// Una línea tal como se compara: con la limpieza de <see cref="PlantillaPrompt.Normalizar"/> en una línea y los espacios
+    /// y tabuladores seguidos en uno. Los invisibles se quitan antes de pasar a una línea, como en el prompt (que limpia el
+    /// texto entero): así un tabulador vertical (U+000B) o un salto de página (U+000C) del registro desaparece en vez de
+    /// volverse un espacio. Se repite hasta que no cambia, porque limpiar otra vez no siempre deja lo mismo («{{{» pasa a
+    /// «{ {{» y luego a «{ { {»).
     /// </summary>
     private static string Comparable(string texto)
     {
@@ -135,121 +142,48 @@ public static partial class CombinadorLotes
         return texto;
     }
 
-    /// <summary>Una línea del texto libre: su número, cómo se compara y cómo se compara sin el marcado de Markdown.</summary>
-    private sealed record LineaComparable(int Numero, string Texto, string SinMarcado);
-
-    /// <summary>La primera línea con cada texto exacto y con cada texto sin marcado (gana la primera: <c>TryAdd</c>).</summary>
-    private sealed class IndiceLineas
-    {
-        private readonly Dictionary<string, LineaComparable> _exactas = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, LineaComparable> _sinMarcado = new(StringComparer.Ordinal);
-
-        public IndiceLineas(IEnumerable<LineaComparable> lineas)
-        {
-            foreach (var linea in lineas)
-            {
-                _exactas.TryAdd(linea.Texto, linea);
-                if (linea.SinMarcado.Length > 0) _sinMarcado.TryAdd(linea.SinMarcado, linea);
-            }
-        }
-
-        /// <summary>La línea entera de una cita ya <see cref="Comparable"/>: exacta y, si no, sin marcado.</summary>
-        public LineaComparable? Buscar(string cita)
-        {
-            if (cita.Length == 0) return null;
-            if (_exactas.TryGetValue(cita, out var exacta)) return exacta;
-            return SinMarcado(cita) is { Length: > 0 } limpia && _sinMarcado.TryGetValue(limpia, out var sinMarcado) ? sinMarcado : null;
-        }
-    }
-
-    /// <summary>La línea de una cita de una fila sin leer: entera (exacta o sin marcado) o, si el manejador la recortó (justo
-    /// <see cref="ManejadorExtraerRegistro.LargoCitaSinLeer"/> caracteres acabados en «…»), la primera que empieza por ella,
-    /// tal cual o sin marcado. Una cita corta que acaba en «…» por sí sola no se busca como principio: daría una línea
-    /// equivocada.</summary>
-    private static LineaComparable? BuscarPrincipio(List<LineaComparable> lineas, IndiceLineas indice, string cita)
-    {
-        if (indice.Buscar(Comparable(cita)) is { } entera) return entera;
-        if (!cita.EndsWith('…') || cita.EnumerateRunes().Count() != ManejadorExtraerRegistro.LargoCitaSinLeer
-            || Comparable(cita[..^1]) is not { Length: > 0 } principio) return null;
-        var principioSinMarcado = SinMarcado(principio);
-        return lineas.FirstOrDefault(l => l.Texto.StartsWith(principio, StringComparison.Ordinal))
-            ?? (principioSinMarcado.Length > 0
-                ? lineas.FirstOrDefault(l => l.SinMarcado.StartsWith(principioSinMarcado, StringComparison.Ordinal))
-                : null);
-    }
-
-    /// <summary>
-    /// Una línea ya <see cref="Comparable"/> sin el formato de Markdown, que es lo que Claude suele quitar al copiarla: el
-    /// principio de título, cita o viñeta («# », «> », «- », «* », «+ », «• », «1. », «1) »), los enlaces y las imágenes (se
-    /// queda el texto), «**», «__», «~~» y «`», el énfasis con «*x*» o «_x_» (sin tocar un snake_case) y las comillas
-    /// tipográficas y las españolas, que pasan a rectas. Solo se quita formato: las palabras tienen que seguir siendo las
-    /// mismas.
-    /// </summary>
-    internal static string SinMarcado(string linea)
-    {
-        var texto = Enlace().Replace(linea, "$1");
-        texto = MarcasDobles().Replace(texto, "");
-        texto = EnfasisAsterisco().Replace(texto, "$1");
-        texto = EnfasisGuion().Replace(texto, "$1");
-        texto = texto.Replace('“', '"').Replace('”', '"').Replace('‘', '\'').Replace('’', '\'')
-            .Replace('«', '"').Replace('»', '"');
-        texto = PrincipioDeBloque().Replace(texto, "");
-        return HtmlATexto.NormalizarEspacios(texto).Trim();
-    }
-
-    // Solo con una dirección dentro del paréntesis: en «[Gamma](rechazada)» el paréntesis es texto
-    [GeneratedRegex(@"!?\[([^\]]*)\]\((?:https?://|www\.)[^)]*\)")]
-    private static partial Regex Enlace();
-
-    [GeneratedRegex(@"\*\*|__|~~|`")]
-    private static partial Regex MarcasDobles();
-
-    [GeneratedRegex(@"(?<![\p{L}\p{N}*])\*(?=\S)(.+?)(?<=\S)\*(?![\p{L}\p{N}*])")]
-    private static partial Regex EnfasisAsterisco();
-
-    [GeneratedRegex(@"(?<![\p{L}\p{N}_])_(?=\S)(.+?)(?<=\S)_(?![\p{L}\p{N}_])")]
-    private static partial Regex EnfasisGuion();
-
-    [GeneratedRegex(@"^\s*(?:(?:#+|>)\s*|[-*+•]\s+|\d+[.)]\s+)+")]
-    private static partial Regex PrincipioDeBloque();
-
     /// <summary>Lo que haría que el aplicar diera 400 o rompiera la fila: la fila va a SinLeer con este motivo.</summary>
     private static string? Problema(FilaExtraida fila)
     {
         if (fila.Fecha.Year is < AnioMinimo or > AnioMaximo)
             return $"La fecha {fila.Fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} no es válida para importarla.";
-        if (!Enum.IsDefined(fila.Estado) || !Enum.IsDefined(fila.Modalidad)
-            || fila.MotivoDescarte is { } motivo && !Enum.IsDefined(motivo))
-            return "El estado, la modalidad o el motivo no se reconocen.";
+        if (!Enum.IsDefined(fila.Estado) || fila.MotivoDescarte is { } motivo && !Enum.IsDefined(motivo))
+            return "El estado o el motivo no se reconocen.";
         if (!NombresEmpresa.Normalizar(fila.Empresa).Any(char.IsLetterOrDigit))
             return "El nombre de la empresa no es válido.";
 
         var demasiadoLargo =
             fila.Empresa.Length > LimitesLote.Empresa ? "La empresa" :
-            fila.Puesto.Length > LimitesLote.Puesto ? "El puesto" :
-            fila.Ubicacion?.Length > LimitesLote.Ubicacion ? "La ubicación" :
-            fila.Enlace?.Length > LimitesLote.Enlace ? "El enlace" : null;
+            fila.Puesto.Length > LimitesLote.Puesto ? "El puesto" : null;
         return demasiadoLargo is null ? null : $"{demasiadoLargo}: demasiado largo para importarlo.";
     }
 
-    private static FilaLote AFilaLote(FilaExtraida f, int linea, bool empresaEnLaLinea)
+    private static FilaLote AFilaLote(FilaExtraida f, LineaLibre linea)
     {
         var descartada = f.Estado == EstadoCandidatura.Descartada;
+        var enlace = AnalizadorRastreo.PrimerEnlace(linea.Original, e => e.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
         return new FilaLote(
-            linea, f.Fecha, f.FechaAproximada, f.Empresa, f.Puesto, f.Modalidad,
-            Ubicacion: f.Ubicacion,
-            Enlace: f.Enlace,
+            f.Linea, f.Fecha, f.FechaAproximada, f.Empresa, f.Puesto, Modalidad.NoIndicada,
+            Enlace: enlace?.Length > LimitesLote.Enlace ? null : enlace,
             Estado: f.Estado,
             MotivoDescarte: descartada ? f.MotivoDescarte ?? MotivoDescarte.Otro : null,
-            Nota: f.Nota is null ? null : Recortar(f.Nota, LimitesLote.Nota),
-            Seccion: string.IsNullOrWhiteSpace(f.Seccion)
+            Nota: Nota(linea.Original),
+            Seccion: linea.Seccion is null
                 ? AnalizadorRegistro.SeccionTextoLibre
-                : $"{AnalizadorRegistro.SeccionTextoLibre}: {f.Seccion}",
-            EmpresaFueraDeLaCita: !empresaEnLaLinea);
+                : $"{AnalizadorRegistro.SeccionTextoLibre}: {linea.Seccion}",
+            EmpresaFueraDeLaCita: !EmpresaEnLinea(f.Empresa, linea.Texto));
     }
 
     /// <summary>
-    /// Si la empresa sale en la línea citada (ya <see cref="Comparable"/>): las dos sin tildes ni mayúsculas, la empresa sin
+    /// La nota de una extraída: su línea como la escribió Eduardo (sin la limpieza de <see cref="Comparable"/>, que cambia el
+    /// ancho completo, los «&lt;&lt;&lt;» o las llaves), solo sin invisibles, en una línea, con los espacios seguidos en uno y recortada
+    /// a <see cref="LimitesLote.Nota"/>.
+    /// </summary>
+    private static string Nota(string linea) =>
+        Recortar(HtmlATexto.NormalizarEspacios(PlantillaPrompt.QuitarInvisibles(PlantillaPrompt.EnUnaLinea(linea))).Trim(), LimitesLote.Nota);
+
+    /// <summary>
+    /// Si la empresa sale en su línea (ya <see cref="Comparable"/>): las dos sin tildes ni mayúsculas, la empresa sin
     /// forma jurídica y todo lo que no es letra o dígito como un espacio. Vale con las palabras enteras o, si la empresa
     /// tiene <see cref="LargoEmpresaPegada"/> caracteres o más, con las dos sin espacios y empezando donde empieza una palabra
     /// («B.B.V.A.» y «BBVA»). «Grupo» no se quita: «Grupo Inditec» en la empresa y solo «Inditec» en la línea no encaja.
@@ -294,8 +228,6 @@ public static partial class CombinadorLotes
         }
         return resultado.ToString().TrimEnd();
     }
-
-    private static string Citar(string cita) => $"«{Recortar(cita, LargoCitaEnMotivo)}».";
 
     /// <summary>Recorta a <paramref name="maximo"/> unidades UTF-16 (como cuenta la API), sin partir un carácter.</summary>
     private static string Recortar(string texto, int maximo)

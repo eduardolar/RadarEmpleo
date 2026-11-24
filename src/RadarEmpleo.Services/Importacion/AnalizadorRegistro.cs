@@ -175,7 +175,7 @@ public static partial class AnalizadorRegistro
     /// <summary>
     /// Las líneas que no son la tabla de candidaturas (la de <see cref="Analizar"/>, con su cabecera) ni están en una
     /// sección «## Rastreo …» (<see cref="AnalizadorRastreo.SeccionesRastreo"/>): lo que ExtraerRegistro manda a Claude.
-    /// Van tal cual, con su número de línea en el registro, para poder buscar después la <c>cita</c> de cada fila.
+    /// Van tal cual, con su número de línea en el registro, para poder encontrar después la línea de cada fila.
     /// </summary>
     public static TextoLibreRegistro TextoLibre(string texto)
     {

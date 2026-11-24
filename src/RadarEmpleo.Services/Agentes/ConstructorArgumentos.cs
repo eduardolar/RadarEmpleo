@@ -23,8 +23,8 @@ public static partial class ConstructorArgumentos
     /// <param name="esquemaJson">El esquema de la salida; se minifica en un solo argumento.</param>
     /// <param name="presupuesto">El de <c>--max-budget-usd</c> si no es el de la definición: el de cada parte de una tarea
     /// por partes (<see cref="DefinicionTarea.PresupuestoParte"/>). Nunca puede pasar del de la definición.</param>
-    /// <exception cref="ArgumentException">El esquema no es JSON, falta o no vale el nombre del informe, o la carpeta de
-    /// datos no se puede escribir como regla.</exception>
+    /// <exception cref="ArgumentException">El esquema no es JSON, falta o no vale el nombre del informe, la carpeta de datos
+    /// no se puede escribir como regla o el modelo no es un nombre de modelo (<see cref="EsModeloValido"/>).</exception>
     /// <exception cref="ArgumentOutOfRangeException">El presupuesto no es positivo o pasa del de la definición.</exception>
     public static IReadOnlyList<string> Construir(DefinicionTarea definicion, string esquemaJson, ValoresArgumentos valores,
         decimal? presupuesto = null)
@@ -49,9 +49,25 @@ public static partial class ConstructorArgumentos
         if (definicion.Denegadas is { } denegadas)
             argumentos.AddRange(["--disallowedTools", Sustituir(denegadas, valores)]);
         if (definicion.Modelo is { } modelo)
+        {
+            // Puede venir de la configuración (Agentes:ModeloExtraerRegistro): se vuelve a mirar aquí, donde se usa.
+            if (!EsModeloValido(modelo)) throw new ArgumentException("El modelo de la tarea no es un nombre de modelo válido.", nameof(definicion));
             argumentos.AddRange(["--model", modelo]);
+        }
         return argumentos;
     }
+
+    /// <summary>
+    /// Un nombre de modelo para <c>--model</c> («sonnet», «haiku», «claude-haiku-4-5», «claude-sonnet-4-5[1m]»): minúsculas,
+    /// números, «.», «-», «[» y «]», sin empezar por «-» (no puede pasar por otro argumento) y como mucho
+    /// <see cref="RadarEmpleo.Domain.EjecucionAgente.LargoModelo"/> caracteres (lo que se guarda en la ejecución). Lo usa
+    /// también la API al arrancar.
+    /// </summary>
+    public static bool EsModeloValido(string? modelo) =>
+        modelo is not null && modelo.Length <= RadarEmpleo.Domain.EjecucionAgente.LargoModelo && NombreModelo().IsMatch(modelo);
+
+    [GeneratedRegex(@"\A[a-z0-9][a-z0-9.\-\[\]]{0,49}\z", RegexOptions.CultureInvariant)]
+    private static partial Regex NombreModelo();
 
     /// <summary>El valor de <c>--max-budget-usd</c> de unos argumentos, o null si no lo llevan o no se entiende.</summary>
     public static decimal? PresupuestoDe(IReadOnlyList<string> argumentos)

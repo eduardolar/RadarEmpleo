@@ -119,19 +119,20 @@ public static class DefinicionesTareas
         NombrePrompt: "analizar-encaje");
 
     // Por partes (decisión de Eduardo del 24/11, tras cortarse a los 10 min la prueba B con unos 64 KB de texto libre): hasta
-    // 6 partes de unos 16.000 caracteres, 2,00 y 50 min en total y como mucho 1,00 y 10 min cada una. Con una parte, como
-    // antes: 1,00 y 10 min. El bloqueo caduca a los 55 min, por debajo de la duración máxima de 60. Con «haiku» (decisión del
-    // 24/11, tras cortarse la prueba B2 por presupuesto en la primera parte con «sonnet»); se cambia con
-    // Agentes:ModeloExtraerRegistro.
+    // 6 partes de unos 16.000 caracteres. Con «haiku» (decisión del 24/11, tras cortarse la prueba B2 por presupuesto en la
+    // primera parte con «sonnet»); se cambia con Agentes:ModeloExtraerRegistro. Con la salida corta (solo el número de línea
+    // y lo que hay que interpretar), 1,50 y 30 min en total y como mucho 0,50 y 5 min cada una: con 4 partes, 0,37 y 5 min;
+    // con 6, 0,25 y 5 min. El bloqueo caduca a los 35 min. El corte por presupuesto no ahorra nada (llega tras el turno, que
+    // se paga entero), así que los topes llevan margen.
     public static readonly DefinicionTarea ExtraerRegistro = new(
-        TareaAgente.ExtraerRegistro, 2.00m, TimeSpan.FromMinutes(50), CarpetaTrabajo.Ejecucion,
+        TareaAgente.ExtraerRegistro, 1.50m, TimeSpan.FromMinutes(30), CarpetaTrabajo.Ejecucion,
         Herramientas: "",
         Permitidas: null,
         Denegadas: null,
         Modelo: "haiku",
         NombrePrompt: "extraer-registro",
         SalidaConDatosPersonales: true,
-        Partes: new PartesTarea(LargoParte: 16_000, MaximoPartes: 6, PresupuestoMaximoParte: 1.00m, TiempoMaximoParte: TimeSpan.FromMinutes(10)));
+        Partes: new PartesTarea(LargoParte: 16_000, MaximoPartes: 6, PresupuestoMaximoParte: 0.50m, TiempoMaximoParte: TimeSpan.FromMinutes(5)));
 
     // F7c: el alcance web del rastreo (WebFetch y WebSearch sin límite de dominio) se decide al llegar a la F7c.
     public static readonly DefinicionTarea Rastreo = new(

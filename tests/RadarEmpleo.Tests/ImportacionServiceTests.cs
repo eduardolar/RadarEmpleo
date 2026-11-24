@@ -665,10 +665,10 @@ public class ImportacionServiceTests : ArnesSqliteTests
     private void UsarTablaYTextoLibre(string tabla = "| 2026-09-01 | Acme | Backend | Remoto | Enviada | — |") =>
         _lector.Texto = $"{Cabecera}\n{tabla}\n\n## Notas sueltas\n{LineaGamma}\n";
 
-    private static FilaExtraida Extraida(string empresa = "Gamma", string cita = LineaGamma, string fecha = "2026-09-12",
-        EstadoCandidatura estado = EstadoCandidatura.Enviada, MotivoDescarte? motivo = null, string? nota = null, string seccion = "Notas sueltas") =>
-        new(seccion, DateOnly.Parse(fecha, System.Globalization.CultureInfo.InvariantCulture), false, empresa, "Sin indicar", estado, null,
-            Modalidad.NoIndicada, null, motivo, nota, cita);
+    /// <summary>Una extraída de la línea <paramref name="linea"/> (por defecto, la 6: Gamma con <see cref="UsarTablaYTextoLibre"/>).</summary>
+    private static FilaExtraida Extraida(string empresa = "Gamma", int linea = 6, string fecha = "2026-09-12",
+        EstadoCandidatura estado = EstadoCandidatura.Enviada, MotivoDescarte? motivo = null) =>
+        new(linea, DateOnly.Parse(fecha, System.Globalization.CultureInfo.InvariantCulture), false, empresa, "Sin indicar", estado, motivo);
 
     /// <summary>Una ejecución en la BD, empezada con el hash del registro de ahora (o <paramref name="hash"/>) y terminada así.</summary>
     private async Task<int> SembrarEjecucionAsync(Action<EjecucionAgente> terminar, TareaAgente tarea = TareaAgente.ExtraerRegistro,
@@ -740,6 +740,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
     [InlineData("otraTarea")]
     [InlineData("sinResultado")]
     [InlineData("resultadoRoto")]
+    [InlineData("formatoViejo")]
     public async Task PrevisualizarExtraccion_EnErrorOTareaDistintaOSinResultado_Da409(string caso)
     {
         UsarTablaYTextoLibre();
@@ -749,6 +750,10 @@ public class ImportacionServiceTests : ArnesSqliteTests
             "otraTarea" => await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x", Guardado(Extraida()), null, null),
                 TareaAgente.AnalizarEncaje),
             "sinResultado" => await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x", null, null, null)),
+            // Una extracción de antes del 24/11, con la cita en vez del número de línea: hay que volver a extraer.
+            "formatoViejo" => await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x",
+                """{"candidaturas":[{"seccion":"Notas sueltas","fecha":"2026-09-12","fechaAproximada":false,"empresa":"Gamma","puesto":"Sin indicar","estado":"Enviada","enlace":null,"modalidad":"NoIndicada","ubicacion":null,"motivoDescarte":null,"nota":null,"cita":"- Gamma: ENVIADA el 2026-09-12 por correo."}],"dudas":[],"sinLeer":[]}""",
+                null, null)),
             _ => await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x", """{"candidaturas":[null],"dudas":[],"sinLeer":[]}""", null, null))
         };
 
@@ -773,7 +778,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
     public async Task PrevisualizarExtraccion_SinTabla_EnsenaSoloLasExtraidas()
     {
         _lector.Texto = $"## Notas sueltas\n{LineaGamma}\n";
-        var id = await SembrarExtraccionAsync(Extraida());
+        var id = await SembrarExtraccionAsync(Extraida(linea: 2));
 
         var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
 
@@ -856,7 +861,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
     {
         UsarTablaYTextoLibre();
         var fuera = Extraida(empresa: "ACME S.L.", fecha: "2026-09-02");
-        var sinLeer = Extraida(empresa: "Omega", cita: "- Omega: inventada.");
+        var sinLeer = Extraida(empresa: "Omega", linea: 99);
         var id = await SembrarExtraccionAsync(Extraida(), fuera, sinLeer);
         var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
         Assert.Single(vista.Fuera);
@@ -877,7 +882,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
     public async Task Aplicar_RegistroConClaude_CreaLasDeLaTablaYLasExtraidasConSuSeccion()
     {
         UsarTablaYTextoLibre();
-        var id = await SembrarExtraccionAsync(Extraida(), Extraida(empresa: "Omega", cita: "## Notas sueltas", seccion: ""));
+        var id = await SembrarExtraccionAsync(Extraida(), Extraida(empresa: "Omega", linea: 5));
         var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
         Assert.Equal([ReglasImportacion.AvisoEmpresaNoEnLaLinea], Assert.Single(vista.Filas, f => f.Empresa == "Omega").Avisos);
 
@@ -889,25 +894,25 @@ public class ImportacionServiceTests : ArnesSqliteTests
         await using var db = CreateContext();
         var secciones = await db.Candidaturas.Include(c => c.Empresa).OrderBy(c => c.Id)
             .Select(c => new { c.Empresa.Nombre, c.SeccionOrigen, c.Origen }).ToListAsync();
-        // Las extraídas van por línea: Omega cita el título (línea 5) y Gamma la línea 6.
+        // Las extraídas van por línea: Omega dice el título (línea 5) y Gamma la línea 6; las dos, en «Notas sueltas».
         Assert.Equal(["Acme", "Omega", "Gamma"], secciones.Select(c => c.Nombre));
-        Assert.Equal([AnalizadorRegistro.SeccionTabla, AnalizadorRegistro.SeccionTextoLibre, "Texto libre del registro: Notas sueltas"],
+        Assert.Equal([AnalizadorRegistro.SeccionTabla, "Texto libre del registro: Notas sueltas", "Texto libre del registro: Notas sueltas"],
             secciones.Select(c => c.SeccionOrigen));
         Assert.All(secciones, c => Assert.Equal(Origen.Registro, c.Origen));
     }
 
     [Fact]
-    public async Task Aplicar_ExtraidaDescartadaConNota_LaNotaSaleUnaSolaVez()
+    public async Task Aplicar_ExtraidaDescartada_LaNotaEsSuLineaYSaleUnaSolaVez()
     {
         _lector.Texto = $"## Notas sueltas\n{LineaGamma}\n";
-        var id = await SembrarExtraccionAsync(Extraida(estado: EstadoCandidatura.Descartada, motivo: MotivoDescarte.Salario, nota: "Piden 20.000 €."));
+        var id = await SembrarExtraccionAsync(Extraida(linea: 2, estado: EstadoCandidatura.Descartada, motivo: MotivoDescarte.Salario));
 
         await _importacion.AplicarAsync(PeticionConClaude((await _importacion.PrevisualizarExtraccionAsync(id))!));
 
         var ficha = await FichaAsync("Sin indicar");
         Assert.Equal((EstadoCandidatura.Descartada, MotivoDescarte.Salario), (ficha.Estado, ficha.MotivoDescarte));
         Assert.Null(ficha.MotivoDescarteTexto);
-        Assert.Equal("Piden 20.000 €.", Assert.Single(ficha.Notas).Texto);
+        Assert.Equal(LineaGamma, Assert.Single(ficha.Notas).Texto);
     }
 
     private sealed class LectorFalso : ILectorCurriculum

@@ -248,7 +248,7 @@ public sealed class ImportacionExtraccionApiTests
         Assert.Equal(HashRegistro(fabrica), vista.GetProperty("hashRegistro").GetString());
         Assert.Equal(0, vista.GetProperty("resumen").GetProperty("enviosEnTexto").GetInt32());
         Assert.Equal(1, vista.GetProperty("resumen").GetProperty("delTextoLibre").GetInt32());
-        Assert.Equal(["La línea de Empresa Texto Dos no dice la fecha (ejemplo inventado)."],
+        Assert.Equal(["Línea 9: Empresa Texto Dos no dice la fecha (ejemplo inventado)."],
             vista.GetProperty("dudas").EnumerateArray().Select(d => d.GetString()));
         var filas = vista.GetProperty("filas").EnumerateArray().ToList();
         Assert.Equal(9, filas.Count);
@@ -280,8 +280,8 @@ public sealed class ImportacionExtraccionApiTests
         Assert.InRange(n, 3, 6);
         Assert.Equal("## Mes 1 de 2026", trozos[1].Lineas[0].Texto);
 
-        // Cada parte menos la última lee la última entrada de las suyas; la segunda repite además la de la primera, y la
-        // última falla.
+        // Cada parte menos la última lee la última entrada de las suyas; la segunda dice además la de la primera, que no es
+        // suya, y la última falla.
         var elegidas = trozos.Take(n - 1)
             .Select(t => t.Lineas.Last(l => l.Texto.StartsWith("- Empresa Parte", StringComparison.Ordinal)))
             .Select(l => (Linea: l, Mes: int.Parse(l.Texto[15..l.Texto.IndexOf('-', 15)]),
@@ -289,8 +289,8 @@ public sealed class ImportacionExtraccionApiTests
             .ToList();
         var respuestas = elegidas.Select((e, k) =>
         {
-            var filas = new JsonArray(ManejadorExtraerRegistroTests.FilaDe(e.Mes, e.Numero));
-            if (k == 1) filas.Add(ManejadorExtraerRegistroTests.FilaDe(elegidas[0].Mes, elegidas[0].Numero));
+            var filas = new JsonArray(ManejadorExtraerRegistroTests.FilaDe(e.Mes, e.Numero, e.Linea.Numero));
+            if (k == 1) filas.Add(ManejadorExtraerRegistroTests.FilaDe(elegidas[0].Mes, elegidas[0].Numero, elegidas[0].Linea.Numero));
             return new RespuestaFalsa(Salida: JsonSerializer.SerializeToElement(new JsonObject { ["candidaturas"] = filas, ["dudas"] = new JsonArray() }),
                 CosteUsd: 0.10m);
         }).Append(new RespuestaFalsa(ModoFalso.Error, CosteUsd: 0.02m)).ToArray();
@@ -313,11 +313,17 @@ public sealed class ImportacionExtraccionApiTests
         var dudas = vista.GetProperty("dudas").EnumerateArray().Select(d => d.GetString()!).ToList();
         Assert.StartsWith($"No se ha podido leer la parte {n} de {n} (desde «", Assert.Single(dudas));
         Assert.EndsWith("): Claude ha devuelto un error.", dudas[0]);
-        // Las de la tabla y una por parte leída: la repetida entre la primera y la segunda parte sale una sola vez.
+        // Las de la tabla y una por parte leída: la que la segunda parte dice de la primera va a «Sin leer».
         Assert.Equal(n - 1, vista.GetProperty("resumen").GetProperty("delTextoLibre").GetInt32());
         var filas = vista.GetProperty("filas").EnumerateArray().ToList();
         Assert.Equal(8 + n - 1, filas.Count);
         Assert.All(elegidas, e => Assert.Single(filas, f => f.GetProperty("empresa").GetString() == $"Empresa Parte{e.Mes}-{e.Numero} S.L."));
+        var sinLeer = Assert.Single(vista.GetProperty("sinLeer").EnumerateArray());
+        Assert.Equal(0, sinLeer.GetProperty("linea").GetInt32());
+        Assert.Equal($"La línea {elegidas[0].Linea.Numero} no está en la parte 2 de {n} del texto libre.", sinLeer.GetProperty("motivo").GetString());
+        // La sección, de su título; la nota, la línea; ninguna con el aviso de empresa.
+        var primera = filas.Single(f => f.GetProperty("empresa").GetString() == $"Empresa Parte{elegidas[0].Mes}-{elegidas[0].Numero} S.L.");
+        Assert.Empty(primera.GetProperty("avisos").EnumerateArray());
 
         // Cada cita encaja con su línea del registro.
         await using var bd = await BdAsync(fabrica);
@@ -325,6 +331,9 @@ public sealed class ImportacionExtraccionApiTests
         var combinado = CombinadorLotes.Combinar(AnalizadorRegistro.Analizar(registro), registro, extraccion);
         Assert.All(elegidas, e => Assert.Equal(e.Linea.Numero,
             combinado.Filas.Single(f => f.Empresa == $"Empresa Parte{e.Mes}-{e.Numero} S.L.").Linea));
-        Assert.Equal(elegidas[0].Linea.Numero, Assert.Single(combinado.Fuera).Linea);
+        Assert.Empty(combinado.Fuera);
+        var fila = combinado.Filas.Single(f => f.Linea == elegidas[0].Linea.Numero);
+        Assert.Equal($"Texto libre del registro: Mes {elegidas[0].Mes} de 2026", fila.Seccion);
+        Assert.Equal(elegidas[0].Linea.Texto, fila.Nota);
     }
 }

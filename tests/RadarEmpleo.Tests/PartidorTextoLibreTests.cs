@@ -19,19 +19,50 @@ public class PartidorTextoLibreTests
     private static int[] Numeros(TrozoTextoLibre trozo) => trozo.Lineas.Select(l => l.Numero).ToArray();
 
     [Fact]
-    public void Medir_EsElLargoEnElPromptMasElSalto()
+    public void Medir_EsElLargoEnElPromptConSuNumeroMasElSalto()
     {
-        Assert.Equal(4, PartidorTextoLibre.Medir(new LineaRegistro(1, "abc")));
+        // «1│ abc» y el salto.
+        Assert.Equal(7, PartidorTextoLibre.Medir(new LineaRegistro(1, "abc")));
+        Assert.Equal(9, PartidorTextoLibre.Medir(new LineaRegistro(123, "abc")));
         // Sin los invisibles, como va al prompt.
-        Assert.Equal(4, PartidorTextoLibre.Medir(new LineaRegistro(1, "a​bc")));
-        Assert.Equal(1, PartidorTextoLibre.Medir(new LineaRegistro(1, "")));
+        Assert.Equal(7, PartidorTextoLibre.Medir(new LineaRegistro(1, "a\u200Bbc")));
+        // Una en blanco va con su número: «1│» (el espacio del final se recorta) y el salto.
+        Assert.Equal(3, PartidorTextoLibre.Medir(new LineaRegistro(1, "")));
+    }
+
+    [Fact]
+    public void TextoNumerado_CadaLineaConSuNumeroDeVerdad()
+    {
+        var trozo = new TrozoTextoLibre([new LineaRegistro(3, "## Agosto"), new LineaRegistro(40, "- Acme: enviada."), new LineaRegistro(41, "")],
+            "## Agosto");
+
+        Assert.Equal("3│ ## Agosto\n40│ - Acme: enviada.\n41│ ", trozo.TextoNumerado);
+    }
+
+    [Fact]
+    public void TextoNumerado_UnSaltoDentroDeUnaLinea_NoPareceOtraLineaSinNumero()
+    {
+        var trozo = new TrozoTextoLibre([new LineaRegistro(7, "- Acme\u2028- Beta: enviada\u0085.")], null);
+
+        Assert.Equal("7│ - Acme - Beta: enviada .", trozo.TextoNumerado);
+    }
+
+    [Fact]
+    public void ElTituloRepetido_LlevaSuNumeroDeVerdad()
+    {
+        var texto = Texto(5, "## Agosto", "- " + new string('a', 30), "", "- " + new string('b', 30));
+
+        var trozos = PartidorTextoLibre.Partir(texto, Medida(texto, 5, 6, 7) + 2);
+
+        Assert.Equal(2, trozos.Count);
+        Assert.StartsWith("5│ ## Agosto\n8│ - bbb", trozos[1].TextoNumerado);
     }
 
     [Fact]
     public void TextoVacio_NoDaNingunTrozo()
     {
         Assert.Empty(PartidorTextoLibre.Partir(Texto(), 100));
-        Assert.Empty(PartidorTextoLibre.Partir(Texto("", "   ", "​"), 100));
+        Assert.Empty(PartidorTextoLibre.Partir(Texto("", "   ", "\u200B"), 100));
     }
 
     [Fact]
