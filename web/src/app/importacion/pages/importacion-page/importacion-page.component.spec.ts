@@ -2,6 +2,10 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { EjecucionAgente } from '../../../agentes/interfaces/ejecucion.interface';
+import { INTERVALO_SEGUIMIENTO_MS } from '../../../agentes/services/agentes.service';
+import { crearEjecucion, crearEstadoAgentes } from '../../../agentes/utils/ejecucion-de-prueba';
+import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import { AvisosService } from '../../../shared/services/avisos.service';
 import { FilaVistaPrevia, VistaPreviaImportacion } from '../../interfaces/importacion.interface';
 import { crearFila, crearResultado, crearVista } from '../../utils/importacion-de-prueba';
@@ -30,7 +34,8 @@ describe('ImportacionPageComponent', () => {
   });
   const AL_DIA = crearVista([crearFila({ clave: 'existe', resultado: 'YaExiste' })]);
 
-  async function crear(): Promise<void> {
+  /** Con `conAgentes`, /api/sistema/info se queda sin responder: lo responde `conAgentes()` */
+  async function crear(conAgentes = false): Promise<void> {
     avisos = { exito: vi.fn(), error: vi.fn() };
     TestBed.configureTestingModule({
       imports: [ImportacionPageComponent],
@@ -44,9 +49,15 @@ describe('ImportacionPageComponent', () => {
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(ImportacionPageComponent);
     await fixture.whenStable();
+    if (!conAgentes) {
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
+    }
   }
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    vi.useRealTimers();
+    http.verify();
+  });
 
   function elemento(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
@@ -651,6 +662,318 @@ describe('ImportacionPageComponent', () => {
 
       expect(estado()).not.toContain('Se ha añadido');
       expect(estado()).toContain('Todo al día');
+    });
+  });
+
+  describe('extraer el texto libre con Claude', () => {
+    const URL_EJECUCIONES = '/api/agentes/ejecuciones';
+    const URL_EXTRAER = '/api/agentes/extraer-registro';
+    const urlCombinada = (id: number) => `/api/importacion/extraccion/${id}/previsualizar`;
+    const AHORA = new Date('2026-11-23T10:01:20Z');
+    /** Un temporizador que se programa dentro de otro corre 1 ms después: así llega el pintado */
+    const MARGEN_PINTADO_MS = 1;
+    const REVISA = 'Revisa la empresa: no aparece en la línea.';
+    const NO_VALE = 'El registro ha cambiado desde la extracción. Vuelve a extraer con Claude.';
+
+    const extraccion = (cambios: Partial<EjecucionAgente> = {}) =>
+      crearEjecucion({
+        id: 7,
+        tarea: 'ExtraerRegistro',
+        candidaturaId: null,
+        candidatura: null,
+        ...cambios,
+      });
+
+    function conResumen(
+      vista: VistaPreviaImportacion,
+      cambios: Partial<VistaPreviaImportacion['resumen']>,
+    ): VistaPreviaImportacion {
+      return { ...vista, resumen: { ...vista.resumen, ...cambios } };
+    }
+
+    const TABLA = conResumen(crearVista([NUEVA]), { enviosEnTexto: 3 });
+    const COMBINADA = conResumen(
+      crearVista([NUEVA, crearFila({ clave: 'gamma', empresa: 'Gamma', avisos: [REVISA] })], {
+        origen: 'RegistroConClaude',
+        ejecucionId: 7,
+        fuera: [
+          {
+            linea: 12,
+            empresa: 'Acme',
+            puesto: 'Backend',
+            fecha: '2026-09-12',
+            aviso: 'Ya está en la tabla del registro',
+          },
+        ],
+        dudas: ['<b>¿Gamma o Gama?</b>'],
+      }),
+      { delTextoLibre: 1 },
+    );
+
+    /** Con reloj simulado no se puede usar whenStable: el pintado espera también a un temporizador */
+    async function pasan(ms: number): Promise<void> {
+      await vi.advanceTimersByTimeAsync(ms);
+    }
+
+    /** Como al entrar en frío (F5): la tabla, /api/sistema/info, el estado y la última extracción */
+    async function conAgentes(ultima: EjecucionAgente | null = null, vista = TABLA): Promise<void> {
+      await crear(true);
+      vi.useFakeTimers();
+      vi.setSystemTime(AHORA);
+      http.expectOne(URL_PREVISUALIZAR).flush(vista);
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ agentesDisponibles: true }));
+      await pasan(0);
+      http.expectOne('/api/agentes/estado').flush(crearEstadoAgentes());
+      const ultimas = http.expectOne((r) => r.url === URL_EJECUCIONES);
+      expect(ultimas.request.params.toString()).toBe('tarea=ExtraerRegistro&limite=1');
+      ultimas.flush(ultima ? [ultima] : []);
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    const botonExtraer = () => boton('Extraer el texto libre con Claude');
+    const tarjeta = () => elemento().querySelector('app-estado-ejecucion');
+
+    async function lanzar(): Promise<void> {
+      botonExtraer()!.click();
+      const peticion = http.expectOne(URL_EXTRAER);
+      expect(peticion.request.body).toEqual({});
+      peticion.flush(extraccion());
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    async function seguimiento(id: number, respuesta: EjecucionAgente | null): Promise<void> {
+      await pasan(INTERVALO_SEGUIMIENTO_MS);
+      const peticion = http.expectOne(`${URL_EJECUCIONES}/${id}`);
+      if (respuesta) {
+        peticion.flush(respuesta);
+      } else {
+        peticion.flush({ detail: 'No existe.' }, { status: 404, statusText: 'Not Found' });
+      }
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    async function responder(url: string, vista: VistaPreviaImportacion): Promise<void> {
+      const peticion = http.expectOne(url);
+      expect(peticion.request.method).toBe('POST');
+      peticion.flush(vista);
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    async function abrirCombinada(): Promise<void> {
+      await conAgentes();
+      await lanzar();
+      await seguimiento(7, extraccion({ estado: 'Ok' }));
+      await responder(urlCombinada(7), COMBINADA);
+    }
+
+    it('sin agentes disponibles no sale y el aviso sigue diciendo «más adelante»', async () => {
+      await abrir(TABLA);
+
+      expect(botonExtraer()).toBeUndefined();
+      expect(elemento().textContent).toContain('se podrán importar más adelante');
+    });
+
+    it('con agentes va con borde, dice lo que gasta y el único relleno es «Aplicar»', async () => {
+      await conAgentes();
+
+      expect(botonExtraer()!.hasAttribute('mat-stroked-button')).toBe(true);
+      const gasto = elemento().querySelector(
+        `#${botonExtraer()!.getAttribute('aria-describedby')}`,
+      );
+      expect(gasto?.textContent?.trim()).toBe('Gasta un poco de tu tope diario de Claude.');
+      expect(elemento().textContent).toContain('fuera de la tabla: Claude puede leerlos.');
+      const rellenos = elemento().querySelectorAll('[mat-flat-button]');
+      expect(rellenos).toHaveLength(1);
+      expect(rellenos[0].textContent).toContain('Añadir 1 candidatura');
+    });
+
+    it('sin envíos en texto no sale', async () => {
+      await conAgentes(null, crearVista([NUEVA]));
+
+      expect(botonExtraer()).toBeUndefined();
+    });
+
+    it('al pulsar, la tarjeta sale en su sitio con el foco y un doble toque no la cancela', async () => {
+      await conAgentes();
+
+      await lanzar();
+
+      expect(botonExtraer()).toBeUndefined();
+      expect(document.activeElement?.getAttribute('aria-label')).toBe(
+        'Tarea de Claude: Lectura del registro',
+      );
+      boton('Cancelar la tarea')!.click();
+      http.expectNone(`${URL_EJECUCIONES}/7/cancelar`);
+    });
+
+    it('si no se puede lanzar, lo avisa y el botón sigue', async () => {
+      await conAgentes();
+
+      botonExtraer()!.click();
+      http
+        .expectOne(URL_EXTRAER)
+        .flush({ detail: 'Se ha llegado al tope.' }, { status: 409, statusText: 'Conflict' });
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(avisos.error).toHaveBeenCalledExactlyOnceWith('Se ha llegado al tope.');
+      expect(botonExtraer()).toBeDefined();
+      expect(tarjeta()).toBeNull();
+    });
+
+    it('al terminar en Ok pide la vista combinada y la enseña con su línea, que se lleva el foco', async () => {
+      await conAgentes();
+      await lanzar();
+      await seguimiento(7, extraccion({ estado: 'Ok' }));
+
+      const peticion = http.expectOne(urlCombinada(7));
+      expect(peticion.request.method).toBe('POST');
+      expect(peticion.request.body).toEqual({});
+      expect(estado()).toContain('Leyendo tu registro...');
+      expect(tarjeta()).toBeNull();
+      peticion.flush(COMBINADA);
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(document.activeElement?.textContent?.trim()).toBe(
+        'Tabla + texto libre leído con Claude (1 de texto libre)',
+      );
+    });
+
+    it('si al salir la vista combinada el foco está en otro sitio, no se mueve', async () => {
+      await conAgentes();
+      await lanzar();
+      await seguimiento(7, extraccion({ estado: 'Ok' }));
+      const volver = enlace('Volver a Más')!;
+      volver.focus();
+
+      await responder(urlCombinada(7), COMBINADA);
+
+      expect(document.activeElement).toBe(volver);
+    });
+
+    it('enseña el aviso de la empresa, y las de fuera y las dudas plegadas y como texto', async () => {
+      await abrirCombinada();
+
+      expect(boton('Volver a solo la tabla')).toBeDefined();
+      expect(seccion('Se van a añadir (2)')?.textContent).toContain(REVISA);
+      expect(botonExtraer()).toBeUndefined();
+      expect(elemento().querySelectorAll('[mat-flat-button]')).toHaveLength(1);
+
+      const fuera = grupo('Se quedan fuera (1)')!;
+      expect(fuera.open).toBe(false);
+      expect(fuera.querySelector('li')?.textContent?.trim()).toBe(
+        'Línea 12 · Acme · Backend · 12 sept 2026: Ya está en la tabla del registro.',
+      );
+      const dudas = grupo('Dudas de Claude (1)')!;
+      expect(dudas.open).toBe(false);
+      expect(dudas.querySelector('li')?.textContent?.trim()).toBe('<b>¿Gamma o Gama?</b>');
+      expect(dudas.querySelector('b')).toBeNull();
+    });
+
+    it('«Aplicar» manda el origen, la ejecución, el hash y las claves, y vuelve a leer la combinada', async () => {
+      await abrirCombinada();
+
+      botonAplicar()!.click();
+      const peticion = http.expectOne(URL_APLICAR);
+      expect(peticion.request.body).toEqual({
+        origen: 'RegistroConClaude',
+        ejecucionId: 7,
+        hashRegistro: 'a'.repeat(64),
+        claves: ['nueva', 'gamma'],
+      });
+      peticion.flush(crearResultado({ creadas: 2 }));
+      await responder(urlCombinada(7), conResumen(COMBINADA, { nuevas: 0, yaExisten: 2 }));
+
+      expect(estado()).toContain('Se han añadido 2 candidaturas.');
+    });
+
+    it('«Volver a leer» en la vista combinada vuelve a pedir la combinada', async () => {
+      await abrirCombinada();
+
+      boton('Volver a leer')!.click();
+      await responder(urlCombinada(7), COMBINADA);
+
+      expect(elemento().textContent).toContain('Tabla + texto libre leído con Claude');
+    });
+
+    it('un 409 al aplicar avisa y vuelve a leer; si la extracción ya no vale, vuelve a la tabla con el botón', async () => {
+      const detail = 'El registro ha cambiado desde que lo leíste. Vuelvo a leerlo.';
+      await abrirCombinada();
+
+      botonAplicar()!.click();
+      http.expectOne(URL_APLICAR).flush({ detail }, { status: 409, statusText: 'Conflict' });
+      http
+        .expectOne(urlCombinada(7))
+        .flush({ detail: NO_VALE }, { status: 409, statusText: 'Conflict' });
+      await responder(URL_PREVISUALIZAR, TABLA);
+
+      expect(avisos.error).toHaveBeenCalledExactlyOnceWith(detail);
+      expect(elemento().textContent).not.toContain('Tabla + texto libre');
+      expect(botonExtraer()).toBeDefined();
+      expect(tarjeta()).toBeNull();
+    });
+
+    it('si al pedir la vista combinada la extracción ya no vale, vuelve a la tabla y lo avisa', async () => {
+      await conAgentes();
+      await lanzar();
+      await seguimiento(7, extraccion({ estado: 'Ok' }));
+
+      http
+        .expectOne(urlCombinada(7))
+        .flush({ detail: NO_VALE }, { status: 409, statusText: 'Conflict' });
+      await responder(URL_PREVISUALIZAR, TABLA);
+
+      expect(avisos.error).toHaveBeenCalledExactlyOnceWith(NO_VALE);
+      expect(elemento().querySelector('[role="alert"]')).toBeNull();
+      expect(botonExtraer()).toBeDefined();
+    });
+
+    it('«Volver a solo la tabla» pide la tabla, lleva el foco al inicio y vuelve el botón', async () => {
+      await abrirCombinada();
+
+      boton('Volver a solo la tabla')!.click();
+      await responder(URL_PREVISUALIZAR, TABLA);
+
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Importar del registro');
+      expect(elemento().textContent).not.toContain('Tabla + texto libre');
+      expect(botonExtraer()).toBeDefined();
+    });
+
+    it('al entrar retoma la extracción en marcha', async () => {
+      await conAgentes(extraccion({ estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z' }));
+
+      expect(tarjeta()).not.toBeNull();
+      expect(botonExtraer()).toBeUndefined();
+    });
+
+    it('al entrar, una ya terminada no sale ni pide la combinada', async () => {
+      await conAgentes(extraccion({ estado: 'Ok' }));
+
+      expect(tarjeta()).toBeNull();
+      expect(botonExtraer()).toBeDefined();
+      http.expectNone(urlCombinada(7));
+    });
+
+    it('en Error la tarjeta ofrece «Reintentar» y, con la nueva en Ok, pide su vista combinada', async () => {
+      await conAgentes();
+      await lanzar();
+      await seguimiento(7, extraccion({ estado: 'Error', error: 'Se interrumpió.' }));
+      expect(botonExtraer()).toBeUndefined();
+
+      boton('Reintentar', tarjeta()!)!.click();
+      http.expectOne(`${URL_EJECUCIONES}/7/reintentar`).flush(extraccion({ id: 8 }));
+      await seguimiento(8, extraccion({ id: 8, estado: 'Ok' }));
+
+      await responder(urlCombinada(8), { ...COMBINADA, ejecucionId: 8 });
+      expect(elemento().textContent).toContain('Tabla + texto libre leído con Claude');
+    });
+
+    it('si la API ya no encuentra la tarea, vuelve el botón', async () => {
+      await conAgentes();
+      await lanzar();
+
+      await seguimiento(7, null);
+
+      expect(botonExtraer()).toBeDefined();
     });
   });
 });
