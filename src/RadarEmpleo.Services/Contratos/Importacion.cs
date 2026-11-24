@@ -82,6 +82,7 @@ public sealed record ResumenImportacionDto(int Nuevas, int Avanzan, int YaExiste
 /// <param name="EstadoActual">Estado en la app, si ya hay una candidatura igual o parecida.</param>
 /// <param name="CandidaturaId">Esa candidatura, si la hay.</param>
 /// <param name="Motivo">Por qué es un conflicto, para enseñarlo tal cual.</param>
+/// <param name="DelTextoLibre">La ha leído Claude en el texto libre (no viene de la tabla).</param>
 public sealed record FilaVistaPreviaDto(
     string Clave,
     ResultadoFila Resultado,
@@ -92,7 +93,8 @@ public sealed record FilaVistaPreviaDto(
     EstadoCandidatura? EstadoActual,
     int? CandidaturaId,
     string? Motivo,
-    IReadOnlyList<string> Avisos);
+    IReadOnlyList<string> Avisos,
+    bool DelTextoLibre = false);
 
 /// <summary>Una fila de la tabla que no se ha podido leer.</summary>
 public sealed record FilaSinLeerDto(int Linea, string Motivo);

@@ -228,7 +228,7 @@ public sealed class ImportacionExtraccionApiTests
         var otraVista = await LeerAsync(await PostAsync(http, UrlPrevisualizar(id)), HttpStatusCode.Conflict);
 
         Assert.Equal(ImportacionService.MensajeExtraccionCambiada, conElNuevo.GetProperty("detail").GetString());
-        Assert.Equal(ImportacionService.MensajeRegistroCambiado, conElViejo.GetProperty("detail").GetString());
+        Assert.Equal(ImportacionService.MensajeExtraccionCambiada, conElViejo.GetProperty("detail").GetString());
         Assert.Equal(ImportacionService.MensajeExtraccionCambiada, otraVista.GetProperty("detail").GetString());
         await using var db = await BdAsync(fabrica);
         Assert.Empty(db.Candidaturas);

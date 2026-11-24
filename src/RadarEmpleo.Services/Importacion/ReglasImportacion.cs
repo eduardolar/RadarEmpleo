@@ -19,7 +19,7 @@ public static class ReglasImportacion
     public const string AvisoFechaAproximada = "La fecha es aproximada.";
     public const string AvisoEnlaceNoValido = "El enlace no es válido: se importará sin enlace.";
     public const string AvisoEstadoDeducido = "Estado deducido del texto: compruébalo.";
-    public const string AvisoEmpresaNoEnLaLinea = "Revisa la empresa: no aparece en la línea.";
+    public const string AvisoEmpresaNoEnLaLinea = "Revisa la empresa: Claude no la ve escrita en esa línea. Si está mal, corrígela en tu archivo antes de añadir.";
 
     /// <summary>
     /// Clave de idempotencia: <c>empresa normalizada|puesto normalizado|AAAA-MM-DD</c>. Se guarda al
@@ -93,7 +93,9 @@ public static class ReglasImportacion
     }
 
     private static FilaVistaPreviaDto Fila(FilaLote fila, string clave, ResultadoFila resultado, CandidaturaExistente? existente, string? motivo) =>
-        new(clave, resultado, fila.Empresa, fila.Puesto, fila.Fecha, fila.Estado, existente?.Estado, existente?.Id, motivo, Avisos(fila));
+        new(clave, resultado, fila.Empresa, fila.Puesto, fila.Fecha, fila.Estado, existente?.Estado, existente?.Id, motivo, Avisos(fila),
+            // Las de la tabla no llevan sección: las extraídas siempre («Texto libre del registro…»)
+            fila.Seccion is not null);
 
     private static List<string> Avisos(FilaLote fila)
     {
