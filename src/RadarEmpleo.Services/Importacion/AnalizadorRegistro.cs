@@ -369,6 +369,21 @@ public static partial class AnalizadorRegistro
             : (inicial, false);
     }
 
+    /// <summary>
+    /// Si una línea del texto libre respalda el estado que dice Claude: tiene una palabra de ese estado («enviada»,
+    /// «descartado»…) y ninguna de otro que mande más (uno final, o uno más adelantado en el camino si el de Claude no es
+    /// final). «Enviada; entrevista el 11/11» respalda Entrevista y no Enviada; una línea con «oferta» y «descartada» no
+    /// respalda Oferta. Es lo que impide que un texto pegado en el registro, o un error de Claude, ponga un estado que
+    /// el archivo no dice.
+    /// </summary>
+    public static bool RespaldaEstado(string linea, EstadoCandidatura estado)
+    {
+        var palabras = SeparadorPalabras().Split(TextoComparable.Normalizar(linea)).Where(p => p.Length > 0).ToArray();
+        var enLaLinea = PrefijosEstado.Where(p => AparecePalabraDeEstado(palabras, p.Prefijo)).Select(p => p.Estado).ToHashSet();
+        return enLaLinea.Contains(estado)
+            && !enLaLinea.Any(otro => otro != estado && (ReglasEstado.EsFinal(otro) || !ReglasEstado.EsFinal(estado) && otro > estado));
+    }
+
     private static bool AparecePalabraDeEstado(string[] palabras, string raiz)
     {
         for (var i = 0; i < palabras.Length; i++)
