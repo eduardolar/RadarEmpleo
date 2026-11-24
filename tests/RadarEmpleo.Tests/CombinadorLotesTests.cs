@@ -107,6 +107,8 @@ public class CombinadorLotesTests
     [InlineData("Inditec-Sistemas", "- Inditec Sistemas: enviada.")]
     [InlineData("Inditec", "- Grupo Inditec: enviada.")]
     [InlineData("Gamma", "- Ｇａｍｍａ: enviada.")]
+    [InlineData("Acme Labs", "- AcmeLabs: enviada.")]
+    [InlineData("BBVA", "- Hablé con B.B.V.A.: enviada.")]
     public void Combinar_EmpresaEnLaLinea_EntraSinMarca(string empresa, string linea)
     {
         var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(linea, empresa: empresa)).Filas);
@@ -119,6 +121,8 @@ public class CombinadorLotesTests
     [InlineData("Grupo Inditec", "- Inditec: enviada.")]                    // «Grupo» no se quita
     [InlineData("BBVA", "- Banco Bilbao Vizcaya Argentaria: enviada.")]     // siglas de un nombre largo
     [InlineData("EY", "- Hablé con they de RR. HH.: enviada.")]             // siglas cortas pegadas a otra palabra
+    [InlineData("Acme", "- Pacmen: enviada.")]                              // pegada dentro de otra palabra
+    [InlineData("Acme Labs", "- Pacme labs: enviada.")]                     // pegada, pero sin empezar una palabra
     public void Combinar_EmpresaQueNoEstaEnLaLinea_EntraMarcada(string empresa, string linea)
     {
         var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(linea, empresa: empresa)).Filas);

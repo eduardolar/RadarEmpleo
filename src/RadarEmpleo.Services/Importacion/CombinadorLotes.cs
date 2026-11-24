@@ -180,8 +180,8 @@ public static class CombinadorLotes
     /// <summary>
     /// Si la empresa sale en la línea citada (ya <see cref="Comparable"/>): las dos sin tildes ni mayúsculas, la empresa sin
     /// forma jurídica y todo lo que no es letra o dígito como un espacio. Vale con las palabras enteras o, si la empresa
-    /// tiene <see cref="LargoEmpresaPegada"/> caracteres o más, con las dos sin espacios («B.B.V.A.» y «BBVA»). «Grupo» no se
-    /// quita: «Grupo Inditec» en la empresa y solo «Inditec» en la línea no encaja.
+    /// tiene <see cref="LargoEmpresaPegada"/> caracteres o más, con las dos sin espacios y empezando donde empieza una palabra
+    /// («B.B.V.A.» y «BBVA»). «Grupo» no se quita: «Grupo Inditec» en la empresa y solo «Inditec» en la línea no encaja.
     /// </summary>
     private static bool EmpresaEnLinea(string empresa, string linea)
     {
@@ -190,7 +190,26 @@ public static class CombinadorLotes
         if (nombre.Length == 0) return false;
         if ($" {texto} ".Contains($" {nombre} ", StringComparison.Ordinal)) return true;
         var pegado = nombre.Replace(" ", "", StringComparison.Ordinal);
-        return pegado.Length >= LargoEmpresaPegada && texto.Replace(" ", "", StringComparison.Ordinal).Contains(pegado, StringComparison.Ordinal);
+        return pegado.Length >= LargoEmpresaPegada && PegadoDesdeUnaPalabra(pegado, texto.Split(' '));
+    }
+
+    /// <summary>Si <paramref name="pegado"/> sale en las palabras unidas sin espacios empezando donde empieza una de ellas:
+    /// «B.B.V.A.» encaja con «BBVA», pero «Acme» no con «Pacmen».</summary>
+    private static bool PegadoDesdeUnaPalabra(string pegado, string[] palabras)
+    {
+        var unido = string.Concat(palabras);
+        var inicios = new HashSet<int>();
+        var posicion = 0;
+        foreach (var palabra in palabras)
+        {
+            inicios.Add(posicion);
+            posicion += palabra.Length;
+        }
+        for (var i = unido.IndexOf(pegado, StringComparison.Ordinal); i >= 0; i = unido.IndexOf(pegado, i + 1, StringComparison.Ordinal))
+        {
+            if (inicios.Contains(i)) return true;
+        }
+        return false;
     }
 
     /// <summary>Solo letras y dígitos: lo demás pasa a un espacio, sin repetirlos ni dejarlos en los extremos.</summary>
