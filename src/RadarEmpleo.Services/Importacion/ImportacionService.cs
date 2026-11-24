@@ -28,7 +28,7 @@ public class ImportacionService
     public const string MensajeSinTabla = "No se encuentra la tabla en el registro: tiene que tener las columnas Fecha, Empresa, Puesto y Estado.";
 
     /// <summary>El registro de ahora no es el que leyó Claude en la extracción.</summary>
-    public const string MensajeExtraccionCambiada = "El registro ha cambiado desde la extracción. Vuelve a extraer con Claude.";
+    public const string MensajeExtraccionCambiada = "Tu archivo ha cambiado y lo que leyó Claude ya no vale. Vuelve a extraer el texto libre si lo necesitas.";
 
     /// <summary>La ejecución no es una ExtraerRegistro terminada bien, o lo que guardó no se puede leer.</summary>
     public const string MensajeNoEsExtraccion = "Esa extracción no ha terminado bien. Vuelve a extraer con Claude.";
@@ -98,14 +98,14 @@ public class ImportacionService
             throw new ValidacionException("Falta la extracción de Claude.", "ejecucionId");
 
         var leido = await _lector.LeerRegistroConFechaAsync();
-        if (!string.Equals(peticion.HashRegistro, leido.Hash, StringComparison.Ordinal))
-            throw new ReglaNegocioException(MensajeRegistroCambiado);
-
         await using var db = await _factory.CreateDbContextAsync();
-        // Una ejecución que no existe aquí es un 409: la vista previa la tenía, así que ya no vale.
+        // La extracción antes que el hash: con el registro cambiado, lo que hay que decir es que la lectura de Claude ya no
+        // vale. Una ejecución que no existe aquí es un 409: la vista previa la tenía, así que ya no vale.
         var extraccion = peticion.EjecucionId is { } id
             ? await LeerExtraccionAsync(db, id, leido.Hash) ?? throw new ReglaNegocioException(MensajeNoEsExtraccion)
             : null;
+        if (!string.Equals(peticion.HashRegistro, leido.Hash, StringComparison.Ordinal))
+            throw new ReglaNegocioException(MensajeRegistroCambiado);
         var filas = ValidarLote(Montar(leido.Texto, extraccion).Filas);
 
         var comparadas = ReglasImportacion.Comparar(filas, await LeerExistentesAsync(db));
@@ -141,9 +141,11 @@ public class ImportacionService
 
     // ---------------------------------------------------------------- auxiliares
 
-    /// <summary>El lote que monta el servidor: las filas, las que no se han leído, las que se quedan fuera y los envíos en texto.</summary>
+    /// <summary>El lote que monta el servidor: las filas, las que no se han leído, las que se quedan fuera, los envíos en texto y
+    /// las dudas de la extracción.</summary>
     private sealed record LoteServidor(
-        IReadOnlyList<FilaLote> Filas, IReadOnlyList<FilaSinLeerDto> SinLeer, IReadOnlyList<FilaFueraDelLote> Fuera, int EnviosEnTexto);
+        IReadOnlyList<FilaLote> Filas, IReadOnlyList<FilaSinLeerDto> SinLeer, IReadOnlyList<FilaFueraDelLote> Fuera, int EnviosEnTexto,
+        IReadOnlyList<string> Dudas);
 
     /// <summary>
     /// La tabla del registro (409 si no la tiene) o, con una extracción, la tabla más lo extraído. Con la extracción, los envíos
@@ -155,10 +157,10 @@ public class ImportacionService
         if (extraccion is not null)
         {
             var combinado = CombinadorLotes.Combinar(analisis, registro, extraccion);
-            return new LoteServidor(combinado.Filas, combinado.SinLeer, combinado.Fuera, 0);
+            return new LoteServidor(combinado.Filas, combinado.SinLeer, combinado.Fuera, 0, extraccion.Dudas);
         }
         return analisis.TablaEncontrada
-            ? new LoteServidor(analisis.Lote.Filas, analisis.SinLeer, [], analisis.EnviosEnTexto)
+            ? new LoteServidor(analisis.Lote.Filas, analisis.SinLeer, [], analisis.EnviosEnTexto, [])
             : throw new ReglaNegocioException(MensajeSinTabla);
     }
 
@@ -167,7 +169,9 @@ public class ImportacionService
     {
         var filas = ReglasImportacion.Comparar(lote.Filas, await LeerExistentesAsync(db));
         return new VistaPreviaImportacionDto(origen, hash, ejecucionId,
-            ReglasImportacion.Resumir(filas, lote.SinLeer.Count, lote.EnviosEnTexto), filas, lote.SinLeer, lote.Fuera);
+            ReglasImportacion.Resumir(filas, lote.SinLeer.Count, lote.EnviosEnTexto,
+                // Las de la tabla no llevan sección: las extraídas siempre («Texto libre del registro…»).
+                lote.Filas.Count(f => f.Seccion is not null)), filas, lote.SinLeer, lote.Fuera, lote.Dudas);
     }
 
     /// <summary>

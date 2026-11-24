@@ -39,6 +39,9 @@ export const NOMBRE_TAREA: Record<TareaAgente, string> = {
   ConfirmarEnvio: 'Confirmación del envío',
 };
 
+/** Debajo de cada botón que lanza una tarea de Claude */
+export const AVISO_GASTO = 'Gasta un poco de tu tope diario de Claude.';
+
 /** Lo que está haciendo mientras va en curso */
 const TRABAJANDO: Record<TareaAgente, string> = {
   Rastreo: 'Rastreando ofertas',

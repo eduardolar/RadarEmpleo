@@ -2,6 +2,10 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { EjecucionAgente } from '../../../agentes/interfaces/ejecucion.interface';
+import { INTERVALO_SEGUIMIENTO_MS } from '../../../agentes/services/agentes.service';
+import { crearEjecucion, crearEstadoAgentes } from '../../../agentes/utils/ejecucion-de-prueba';
+import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import { AvisosService } from '../../../shared/services/avisos.service';
 import { FilaVistaPrevia, VistaPreviaImportacion } from '../../interfaces/importacion.interface';
 import { crearFila, crearResultado, crearVista } from '../../utils/importacion-de-prueba';
@@ -11,6 +15,7 @@ import {
   EXPLICACION_SIN_LEER,
   EXPLICACION_YA_EXISTEN,
 } from '../../utils/resumen-importacion';
+import { ImportacionService } from '../../services/importacion.service';
 import ImportacionPageComponent from './importacion-page.component';
 
 const URL_PREVISUALIZAR = '/api/importacion/tabla/previsualizar';
@@ -30,7 +35,8 @@ describe('ImportacionPageComponent', () => {
   });
   const AL_DIA = crearVista([crearFila({ clave: 'existe', resultado: 'YaExiste' })]);
 
-  async function crear(): Promise<void> {
+  /** Con `conAgentes`, /api/sistema/info se queda sin responder: lo responde `conAgentes()` */
+  async function crear(conAgentes = false): Promise<void> {
     avisos = { exito: vi.fn(), error: vi.fn() };
     TestBed.configureTestingModule({
       imports: [ImportacionPageComponent],
@@ -44,9 +50,15 @@ describe('ImportacionPageComponent', () => {
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(ImportacionPageComponent);
     await fixture.whenStable();
+    if (!conAgentes) {
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo());
+    }
   }
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    vi.useRealTimers();
+    http.verify();
+  });
 
   function elemento(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
@@ -240,11 +252,11 @@ describe('ImportacionPageComponent', () => {
       expect(estado()).not.toContain('Todo al día');
     });
 
-    it('«Volver a leer» pide otra vez la vista previa, por si se ha tocado el archivo', async () => {
+    it('«Leer el archivo otra vez» pide otra vez la vista previa, por si se ha tocado el archivo', async () => {
       await abrir(AL_DIA);
       expect(estado()).not.toContain('Abajo tienes');
 
-      boton('Volver a leer', elemento().querySelector('[role="status"]')!)!.click();
+      boton('Leer el archivo otra vez', elemento().querySelector('[role="status"]')!)!.click();
       await responderVista(crearVista([NUEVA]));
 
       expect(botonAplicar()?.textContent).toContain('Añadir 1 candidatura');
@@ -321,7 +333,7 @@ describe('ImportacionPageComponent', () => {
       await abrirCon([NUEVA]);
 
       const volverALeer = [...elemento().querySelectorAll('button')].filter((b) =>
-        b.textContent?.includes('Volver a leer'),
+        b.textContent?.includes('Leer el archivo otra vez'),
       );
       expect(volverALeer).toHaveLength(1);
       expect(volverALeer[0].closest('details')).toBeNull();
@@ -335,11 +347,11 @@ describe('ImportacionPageComponent', () => {
       expect(document.activeElement).toBe(elemento().querySelector('section'));
     });
 
-    it('mientras guarda, «Volver a leer» no borra la vista previa que se está guardando', async () => {
+    it('mientras guarda, «Leer el archivo otra vez» no borra la vista previa que se está guardando', async () => {
       await abrirCon([NUEVA]);
       await pulsarAplicar();
 
-      const volverALeer = boton('Volver a leer')!;
+      const volverALeer = boton('Leer el archivo otra vez')!;
       expect(volverALeer.getAttribute('aria-disabled')).toBe('true');
       volverALeer.click();
       http.expectNone(URL_PREVISUALIZAR);
@@ -348,11 +360,11 @@ describe('ImportacionPageComponent', () => {
       await responderVista(AL_DIA);
     });
 
-    it('mientras guarda, tampoco el «Volver a leer» de las líneas sin leer', async () => {
+    it('mientras guarda, tampoco el «Leer el archivo otra vez» de las líneas sin leer', async () => {
       await abrir(crearVista([NUEVA], { sinLeer: [{ linea: 12, motivo: 'Falta la empresa.' }] }));
       await pulsarAplicar();
 
-      const volverALeer = boton('Volver a leer', grupo('No se han podido leer'))!;
+      const volverALeer = boton('Leer el archivo otra vez', grupo('No se han podido leer'))!;
       expect(volverALeer.getAttribute('aria-disabled')).toBe('true');
       volverALeer.click();
       http.expectNone(URL_PREVISUALIZAR);
@@ -361,7 +373,7 @@ describe('ImportacionPageComponent', () => {
       await responderVista(AL_DIA);
     });
 
-    it('«Volver a leer» tras aplicar quita el resultado anterior: el título es de la lectura nueva', async () => {
+    it('«Leer el archivo otra vez» tras aplicar quita el resultado anterior: el título es de la lectura nueva', async () => {
       const conflicto = crearFila({ clave: 'c', resultado: 'Conflicto' });
       await abrirCon([NUEVA, conflicto]);
       await pulsarAplicar();
@@ -369,7 +381,7 @@ describe('ImportacionPageComponent', () => {
       await responderVista(crearVista([conflicto]));
       expect(estado()).toContain('Importación hecha');
 
-      boton('Volver a leer', elemento().querySelector('[role="status"]')!)!.click();
+      boton('Leer el archivo otra vez', elemento().querySelector('[role="status"]')!)!.click();
       await responderVista(crearVista([conflicto]));
 
       expect(estado()).toContain('No queda nada por añadir');
@@ -381,7 +393,7 @@ describe('ImportacionPageComponent', () => {
     it('desde las líneas sin leer se puede volver a leer el archivo', async () => {
       await abrir(crearVista([], { sinLeer: [{ linea: 12, motivo: 'Falta la empresa.' }] }));
 
-      boton('Volver a leer', grupo('No se han podido leer'))!.click();
+      boton('Leer el archivo otra vez', grupo('No se han podido leer'))!.click();
       await responderVista(AL_DIA);
 
       expect(grupo('No se han podido leer')).toBeUndefined();
@@ -651,6 +663,434 @@ describe('ImportacionPageComponent', () => {
 
       expect(estado()).not.toContain('Se ha añadido');
       expect(estado()).toContain('Todo al día');
+    });
+  });
+
+  describe('extraer el texto libre con Claude', () => {
+    const URL_EJECUCIONES = '/api/agentes/ejecuciones';
+    const URL_EXTRAER = '/api/agentes/extraer-registro';
+    const urlCombinada = (id: number) => `/api/importacion/extraccion/${id}/previsualizar`;
+    const AHORA = new Date('2026-11-23T10:01:20Z');
+    /** Un temporizador que se programa dentro de otro corre 1 ms después: así llega el pintado */
+    const MARGEN_PINTADO_MS = 1;
+    const REVISA =
+      'Revisa la empresa: Claude no la ve escrita en esa línea. Si está mal, corrígela en tu archivo antes de añadir.';
+    const NO_VALE =
+      'Tu archivo ha cambiado y lo que leyó Claude ya no vale. Vuelve a extraer el texto libre si lo necesitas.';
+    const LINEA = 'Tabla + 1 leída del texto libre con Claude';
+
+    const extraccion = (cambios: Partial<EjecucionAgente> = {}) =>
+      crearEjecucion({
+        id: 7,
+        tarea: 'ExtraerRegistro',
+        candidaturaId: null,
+        candidatura: null,
+        ...cambios,
+      });
+
+    function conResumen(
+      vista: VistaPreviaImportacion,
+      cambios: Partial<VistaPreviaImportacion['resumen']>,
+    ): VistaPreviaImportacion {
+      return { ...vista, resumen: { ...vista.resumen, ...cambios } };
+    }
+
+    const TABLA = conResumen(crearVista([NUEVA]), { enviosEnTexto: 3 });
+    const COMBINADA = conResumen(
+      crearVista(
+        [
+          NUEVA,
+          crearFila({ clave: 'gamma', empresa: 'Gamma', avisos: [REVISA], delTextoLibre: true }),
+        ],
+        {
+          origen: 'RegistroConClaude',
+          ejecucionId: 7,
+          fuera: [
+            {
+              linea: 12,
+              empresa: 'Acme',
+              puesto: 'Backend',
+              fecha: '2026-09-12',
+              aviso: 'Ya está en la tabla del registro',
+            },
+          ],
+          dudas: ['<b>¿Gamma o Gama?</b>'],
+        },
+      ),
+      { delTextoLibre: 1 },
+    );
+
+    /** Con reloj simulado no se puede usar whenStable: el pintado espera también a un temporizador */
+    async function pasan(ms: number): Promise<void> {
+      await vi.advanceTimersByTimeAsync(ms);
+    }
+
+    /** Como al entrar en frío (F5): la tabla, /api/sistema/info, el estado y la última extracción */
+    async function conAgentes(ultima: EjecucionAgente | null = null, vista = TABLA): Promise<void> {
+      await crear(true);
+      vi.useFakeTimers();
+      vi.setSystemTime(AHORA);
+      http.expectOne(URL_PREVISUALIZAR).flush(vista);
+      http.expectOne('/api/sistema/info').flush(crearSistemaInfo({ agentesDisponibles: true }));
+      await pasan(0);
+      http.expectOne('/api/agentes/estado').flush(crearEstadoAgentes());
+      const ultimas = http.expectOne((r) => r.url === URL_EJECUCIONES);
+      expect(ultimas.request.params.toString()).toBe('tarea=ExtraerRegistro&limite=1');
+      ultimas.flush(ultima ? [ultima] : []);
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    const botonExtraer = () => boton('Extraer el texto libre con Claude');
+    const botonLeido = () => boton('Ver lo que ha leído');
+    const tarjeta = () => elemento().querySelector('app-estado-ejecucion');
+
+    async function lanzar(): Promise<void> {
+      botonExtraer()!.click();
+      const peticion = http.expectOne(URL_EXTRAER);
+      expect(peticion.request.body).toEqual({});
+      peticion.flush(extraccion());
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    async function seguimiento(id: number, respuesta: EjecucionAgente | null): Promise<void> {
+      await pasan(INTERVALO_SEGUIMIENTO_MS);
+      const peticion = http.expectOne(`${URL_EJECUCIONES}/${id}`);
+      if (respuesta) {
+        peticion.flush(respuesta);
+      } else {
+        peticion.flush({ detail: 'No existe.' }, { status: 404, statusText: 'Not Found' });
+      }
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    async function responder(url: string, vista: VistaPreviaImportacion): Promise<void> {
+      const peticion = http.expectOne(url);
+      expect(peticion.request.method).toBe('POST');
+      peticion.flush(vista);
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    async function noVale(url: string): Promise<void> {
+      http.expectOne(url).flush({ detail: NO_VALE }, { status: 409, statusText: 'Conflict' });
+      await pasan(0);
+    }
+
+    async function terminarBien(): Promise<void> {
+      await conAgentes();
+      await lanzar();
+      await seguimiento(7, extraccion({ estado: 'Ok', fin: '2026-11-23T10:01:00Z' }));
+    }
+
+    async function abrirCombinada(): Promise<void> {
+      await terminarBien();
+      await responder(urlCombinada(7), COMBINADA);
+    }
+
+    it('sin agentes disponibles no sale y el aviso sigue diciendo «más adelante»', async () => {
+      await abrir(TABLA);
+
+      expect(botonExtraer()).toBeUndefined();
+      expect(elemento().textContent).toContain('se podrán importar más adelante');
+    });
+
+    it('con agentes va con borde, dice que solo lee y lo que gasta, y el único relleno es «Aplicar»', async () => {
+      await conAgentes();
+
+      expect(botonExtraer()!.hasAttribute('mat-stroked-button')).toBe(true);
+      const gasto = elemento().querySelector(
+        `#${botonExtraer()!.getAttribute('aria-describedby')}`,
+      );
+      expect(gasto?.textContent?.trim()).toBe(
+        'Claude solo lee: verás lo que encuentre antes de añadir nada. Gasta un poco de tu tope diario de Claude.',
+      );
+      expect(elemento().textContent).toContain('fuera de la tabla: Claude puede leerlos.');
+      const rellenos = elemento().querySelectorAll('[mat-flat-button]');
+      expect(rellenos).toHaveLength(1);
+      expect(rellenos[0].textContent).toContain('Añadir 1 candidatura');
+    });
+
+    it('sin envíos en texto no sale', async () => {
+      await conAgentes(null, crearVista([NUEVA]));
+
+      expect(botonExtraer()).toBeUndefined();
+    });
+
+    it('al pulsar, la tarjeta sale con el foco, dice que se puede salir y un doble toque no la cancela', async () => {
+      await conAgentes();
+
+      await lanzar();
+
+      expect(botonExtraer()).toBeUndefined();
+      expect(document.activeElement?.getAttribute('aria-label')).toBe(
+        'Tarea de Claude: Lectura del registro',
+      );
+      expect(elemento().textContent).toContain('Puedes salir: la tarea sigue');
+      boton('Cancelar la tarea')!.click();
+      http.expectNone(`${URL_EJECUCIONES}/7/cancelar`);
+    });
+
+    it('si no se puede lanzar, lo avisa y el botón sigue', async () => {
+      await conAgentes();
+
+      botonExtraer()!.click();
+      http
+        .expectOne(URL_EXTRAER)
+        .flush({ detail: 'Se ha llegado al tope.' }, { status: 409, statusText: 'Conflict' });
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(avisos.error).toHaveBeenCalledExactlyOnceWith('Se ha llegado al tope.');
+      expect(botonExtraer()).toBeDefined();
+      expect(tarjeta()).toBeNull();
+    });
+
+    it('al terminar en Ok pide la vista combinada y la enseña con su línea, que se lleva el foco', async () => {
+      await terminarBien();
+
+      const peticion = http.expectOne(urlCombinada(7));
+      expect(peticion.request.method).toBe('POST');
+      expect(peticion.request.body).toEqual({});
+      expect(estado()).toContain('Leyendo tu registro...');
+      expect(tarjeta()).toBeNull();
+      peticion.flush(COMBINADA);
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(document.activeElement?.textContent?.trim()).toBe(LINEA);
+    });
+
+    it('si al salir la vista combinada el foco está en otro sitio, no se mueve', async () => {
+      await terminarBien();
+      const volver = enlace('Volver a Más')!;
+      volver.focus();
+
+      await responder(urlCombinada(7), COMBINADA);
+
+      expect(document.activeElement).toBe(volver);
+    });
+
+    it('si termina en Ok mientras guarda, pide la combinada una sola vez y después del aplicar', async () => {
+      await conAgentes();
+      await lanzar();
+      await pulsarAplicarConReloj();
+
+      await seguimiento(7, extraccion({ estado: 'Ok' }));
+      http.expectNone(urlCombinada(7));
+      expect(botonAplicar()?.textContent).toContain('Guardando...');
+
+      http.expectOne(URL_APLICAR).flush(crearResultado());
+      await responder(urlCombinada(7), COMBINADA);
+
+      http.expectNone(URL_PREVISUALIZAR);
+      expect(elemento().textContent).toContain(LINEA);
+    });
+
+    async function pulsarAplicarConReloj(): Promise<void> {
+      botonAplicar()!.click();
+      await pasan(MARGEN_PINTADO_MS);
+    }
+
+    it('marca las leídas con Claude, con el aviso de la empresa, y las de fuera y las dudas plegadas y como texto', async () => {
+      await abrirCombinada();
+
+      expect(boton('Ver solo la tabla')).toBeDefined();
+      const filas = seccion('Se van a añadir (2)')!.querySelectorAll('li');
+      expect(filas[0].textContent).not.toContain('Leída con Claude');
+      expect(filas[1].textContent).toContain('Leída con Claude');
+      expect(filas[1].textContent).toContain(REVISA);
+      expect(botonExtraer()).toBeUndefined();
+      expect(elemento().querySelectorAll('[mat-flat-button]')).toHaveLength(1);
+
+      const fuera = grupo('Se quedan fuera (1)')!;
+      expect(fuera.open).toBe(false);
+      expect(fuera.textContent).toContain('No tienes que hacer nada salvo que el motivo esté mal.');
+      expect(fuera.querySelector('li')?.textContent?.trim()).toBe(
+        'Línea 12 · Acme · Backend · 12 sept 2026: Ya está en la tabla del registro.',
+      );
+      const dudas = grupo('Dudas de Claude (1)')!;
+      expect(dudas.open).toBe(false);
+      expect(dudas.querySelector('li')?.textContent?.trim()).toBe('<b>¿Gamma o Gama?</b>');
+      expect(dudas.querySelector('b')).toBeNull();
+    });
+
+    it('«Aplicar» manda el origen, la ejecución, el hash y las claves, y vuelve a leer la combinada', async () => {
+      await abrirCombinada();
+
+      botonAplicar()!.click();
+      const peticion = http.expectOne(URL_APLICAR);
+      expect(peticion.request.body).toEqual({
+        origen: 'RegistroConClaude',
+        ejecucionId: 7,
+        hashRegistro: 'a'.repeat(64),
+        claves: ['nueva', 'gamma'],
+      });
+      peticion.flush(crearResultado({ creadas: 2 }));
+      await responder(urlCombinada(7), conResumen(COMBINADA, { nuevas: 0, yaExisten: 2 }));
+
+      expect(estado()).toContain('Se han añadido 2 candidaturas.');
+    });
+
+    it('«Leer el archivo otra vez» en la vista combinada vuelve a pedir la combinada', async () => {
+      await abrirCombinada();
+
+      boton('Leer el archivo otra vez')!.click();
+      await responder(urlCombinada(7), COMBINADA);
+
+      expect(elemento().textContent).toContain(LINEA);
+    });
+
+    it('un 409 al aplicar con la extracción caducada avisa una vez, vuelve a la tabla y lleva el foco al botón', async () => {
+      await abrirCombinada();
+
+      botonAplicar()!.click();
+      http
+        .expectOne(URL_APLICAR)
+        .flush({ detail: NO_VALE }, { status: 409, statusText: 'Conflict' });
+      await noVale(urlCombinada(7));
+      await responder(URL_PREVISUALIZAR, TABLA);
+
+      expect(avisos.error).toHaveBeenCalledExactlyOnceWith(NO_VALE);
+      expect(elemento().textContent).not.toContain(LINEA);
+      expect(botonLeido()).toBeUndefined();
+      expect(document.activeElement).toBe(botonExtraer());
+    });
+
+    it('si al pedir la vista combinada la extracción ya no vale, vuelve a la tabla, lo avisa y el foco va al botón', async () => {
+      await terminarBien();
+
+      await noVale(urlCombinada(7));
+      await responder(URL_PREVISUALIZAR, TABLA);
+
+      expect(avisos.error).toHaveBeenCalledExactlyOnceWith(NO_VALE);
+      expect(elemento().querySelector('[role="alert"]')).toBeNull();
+      expect(document.activeElement).toBe(botonExtraer());
+    });
+
+    it('si sale de la página antes de saber que ya no vale, no avisa', async () => {
+      await terminarBien();
+      fixture.destroy();
+
+      await noVale(urlCombinada(7));
+      http.expectOne(URL_PREVISUALIZAR).flush(TABLA);
+
+      expect(avisos.error).not.toHaveBeenCalled();
+    });
+
+    it('sin conexión con la vista combinada ofrece «Reintentar» y «Ver solo la tabla»', async () => {
+      await terminarBien();
+
+      http.expectOne(urlCombinada(7)).error(new ProgressEvent('error'));
+      await pasan(MARGEN_PINTADO_MS);
+      const alerta = elemento().querySelector<HTMLElement>('[role="alert"]')!;
+      expect(boton('Reintentar', alerta)).toBeDefined();
+
+      boton('Ver solo la tabla', alerta)!.click();
+      await responder(URL_PREVISUALIZAR, TABLA);
+      expect(botonLeido()).toBeDefined();
+    });
+
+    it('«Ver solo la tabla» lleva el foco al inicio y sigue ofreciendo lo leído', async () => {
+      await abrirCombinada();
+
+      boton('Ver solo la tabla')!.click();
+      await responder(URL_PREVISUALIZAR, TABLA);
+
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Importar del registro');
+      expect(elemento().textContent).not.toContain(LINEA);
+      expect(elemento().textContent).toContain(
+        'Claude terminó de leer el texto libre (hace un momento).',
+      );
+      expect(botonExtraer()).toBeUndefined();
+
+      botonLeido()!.click();
+      await responder(urlCombinada(7), COMBINADA);
+      expect(elemento().textContent).toContain(LINEA);
+    });
+
+    it('mientras ofrece lo leído, «Extraer otra vez» va como texto, con el gasto, y lanza otra', async () => {
+      await abrirCombinada();
+      boton('Ver solo la tabla')!.click();
+      await responder(URL_PREVISUALIZAR, TABLA);
+
+      const otraVez = boton('Extraer otra vez')!;
+      expect(otraVez.hasAttribute('mat-button')).toBe(true);
+      expect(
+        elemento().querySelector(`#${otraVez.getAttribute('aria-describedby')}`)?.textContent,
+      ).toContain('Gasta un poco de tu tope diario de Claude.');
+
+      otraVez.click();
+      http.expectOne(URL_EXTRAER).flush(extraccion({ id: 9 }));
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(botonLeido()).toBeUndefined();
+      expect(tarjeta()).not.toBeNull();
+    });
+
+    it('al cerrar la página sin estar guardando deja de apuntar la extracción', async () => {
+      await abrirCombinada();
+
+      fixture.destroy();
+
+      expect(TestBed.inject(ImportacionService).extraccionId()).toBeNull();
+    });
+
+    it('al entrar retoma la extracción en marcha', async () => {
+      await conAgentes(extraccion({ estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z' }));
+
+      expect(tarjeta()).not.toBeNull();
+      expect(botonExtraer()).toBeUndefined();
+    });
+
+    it('al entrar, una de hoy ya terminada que sigue valiendo se ofrece sin cambiar la vista', async () => {
+      await conAgentes(extraccion({ estado: 'Ok', fin: '2026-11-23T09:49:00Z' }));
+
+      await responder(urlCombinada(7), COMBINADA);
+
+      expect(tarjeta()).toBeNull();
+      expect(elemento().textContent).toContain(
+        'Claude terminó de leer el texto libre (hace 12 min).',
+      );
+      expect(elemento().textContent).not.toContain(LINEA);
+      expect(botonExtraer()).toBeUndefined();
+      expect(botonLeido()).toBeDefined();
+    });
+
+    it('al entrar, una terminada que ya no vale deja el botón de extraer, sin aviso', async () => {
+      await conAgentes(extraccion({ estado: 'Ok', fin: '2026-11-23T09:49:00Z' }));
+
+      await noVale(urlCombinada(7));
+
+      expect(botonLeido()).toBeUndefined();
+      expect(botonExtraer()).toBeDefined();
+      expect(avisos.error).not.toHaveBeenCalled();
+    });
+
+    it('al entrar, una de otro día no se ofrece ni se comprueba', async () => {
+      await conAgentes(extraccion({ estado: 'Ok', fin: '2026-11-22T18:00:00Z' }));
+
+      http.expectNone(urlCombinada(7));
+      expect(botonExtraer()).toBeDefined();
+    });
+
+    it('en Error la tarjeta ofrece «Reintentar» y, con la nueva en Ok, pide su vista combinada', async () => {
+      await conAgentes();
+      await lanzar();
+      await seguimiento(7, extraccion({ estado: 'Error', error: 'Se interrumpió.' }));
+      expect(botonExtraer()).toBeUndefined();
+
+      boton('Reintentar', tarjeta()!)!.click();
+      http.expectOne(`${URL_EJECUCIONES}/7/reintentar`).flush(extraccion({ id: 8 }));
+      await seguimiento(8, extraccion({ id: 8, estado: 'Ok' }));
+
+      await responder(urlCombinada(8), { ...COMBINADA, ejecucionId: 8 });
+      expect(elemento().textContent).toContain(LINEA);
+    });
+
+    it('si la API ya no encuentra la tarea, vuelve el botón', async () => {
+      await conAgentes();
+      await lanzar();
+
+      await seguimiento(7, null);
+
+      expect(botonExtraer()).toBeDefined();
     });
   });
 });

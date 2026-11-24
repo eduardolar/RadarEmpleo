@@ -15,6 +15,8 @@ export interface ResumenImportacion {
   sinLeer: number;
   /** Líneas con «ENVIADA» fuera de la tabla: solo se cuentan, no se importan */
   enviosEnTexto: number;
+  /** Filas leídas por Claude en el texto libre; 0 con la tabla */
+  delTextoLibre: number;
 }
 
 /** Qué pasaría con una fila al aplicar. `clave` se repite si el registro trae la misma fila dos veces */
@@ -30,6 +32,8 @@ export interface FilaVistaPrevia {
   /** Por qué es un conflicto, para enseñarlo tal cual */
   motivo: string | null;
   avisos: string[];
+  /** La ha leído Claude en el texto libre (no viene de la tabla) */
+  delTextoLibre: boolean;
 }
 
 /** `linea` puede repetirse (o ser 0): no sirve para identificar la fila */
@@ -47,7 +51,7 @@ export interface FilaFuera {
   aviso: string;
 }
 
-/** Respuesta de POST /api/importacion/tabla/previsualizar. No se ha escrito nada */
+/** Respuesta de POST /api/importacion/tabla/previsualizar (o extraccion/{id}/previsualizar). No se ha escrito nada */
 export interface VistaPreviaImportacion {
   origen: OrigenLote;
   /** SHA-256 del registro leído: aplicar lo exige igual, y si ha cambiado da un 409 */
@@ -57,6 +61,8 @@ export interface VistaPreviaImportacion {
   filas: FilaVistaPrevia[];
   sinLeer: FilaSinLeer[];
   fuera: FilaFuera[];
+  /** Lo que Claude no ha tenido claro al extraer, como texto (nunca HTML); vacío con la tabla */
+  dudas: string[];
 }
 
 /** Cuerpo de POST /api/importacion/lote/aplicar: el servidor rehace el lote, el cliente no manda filas */

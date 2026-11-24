@@ -107,6 +107,8 @@ public class CombinadorLotesTests
     [InlineData("Inditec-Sistemas", "- Inditec Sistemas: enviada.")]
     [InlineData("Inditec", "- Grupo Inditec: enviada.")]
     [InlineData("Gamma", "- Ｇａｍｍａ: enviada.")]
+    [InlineData("Acme Labs", "- AcmeLabs: enviada.")]
+    [InlineData("BBVA", "- Hablé con B.B.V.A.: enviada.")]
     public void Combinar_EmpresaEnLaLinea_EntraSinMarca(string empresa, string linea)
     {
         var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(linea, empresa: empresa)).Filas);
@@ -119,12 +121,74 @@ public class CombinadorLotesTests
     [InlineData("Grupo Inditec", "- Inditec: enviada.")]                    // «Grupo» no se quita
     [InlineData("BBVA", "- Banco Bilbao Vizcaya Argentaria: enviada.")]     // siglas de un nombre largo
     [InlineData("EY", "- Hablé con they de RR. HH.: enviada.")]             // siglas cortas pegadas a otra palabra
+    [InlineData("Acme", "- Pacmen: enviada.")]                              // pegada dentro de otra palabra
+    [InlineData("Acme Labs", "- Pacme labs: enviada.")]                     // pegada, pero sin empezar una palabra
     public void Combinar_EmpresaQueNoEstaEnLaLinea_EntraMarcada(string empresa, string linea)
     {
         var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(linea, empresa: empresa)).Filas);
 
         Assert.True(fila.EmpresaFueraDeLaCita);
         Assert.Equal(2, fila.Linea);
+    }
+
+    [Theory]
+    [InlineData("- **Gamma**: enviada el 2026-09-12.", "Gamma: enviada el 2026-09-12.")]                         // negrita y viñeta
+    [InlineData("- [Gamma](https://gamma.example/empleo): enviada.", "- Gamma: enviada.")]                       // enlace
+    [InlineData("* Gamma: enviada.", "Gamma: enviada.")]                                                         // otra viñeta
+    [InlineData("1. Gamma: enviada.", "Gamma: enviada.")]                                                        // lista numerada
+    [InlineData("> Gamma: “enviada” por `correo`.", "Gamma: \"enviada\" por correo.")]                          // cita, comillas y código
+    [InlineData("- Gamma: _enviada_ por ~~correo~~ web, en mi_carpeta.", "- Gamma: enviada por correo web, en mi_carpeta.")]
+    [InlineData("- Gamma: «enviada» por correo.", "- Gamma: \"enviada\" por correo.")]                    // comillas españolas
+    [InlineData("- [Gamma](www.gamma.example): enviada.", "- Gamma: enviada.")]                                 // enlace con www.
+    public void Combinar_CitaSinElMarcadoDeLaLinea_EntraConEsaLinea(string linea, string cita)
+    {
+        var lote = Combinar($"# Notas\n\n{linea}\n", Extraida(cita));
+
+        var fila = Assert.Single(lote.Filas);
+        Assert.Equal(3, fila.Linea);
+        Assert.False(fila.EmpresaFueraDeLaCita);
+        Assert.Empty(lote.SinLeer);
+    }
+
+    [Fact]
+    public void Combinar_CitaSinMarcadoQueEncajaConDosLineas_VaLaPrimera()
+    {
+        var fila = Assert.Single(Combinar("# Notas\n- **Gamma**: enviada.\n- Gamma: enviada.\n", Extraida("Gamma: enviada.")).Filas);
+
+        Assert.Equal(2, fila.Linea);
+    }
+
+    [Theory]
+    [InlineData("- **Gamma**: enviada el 2026-09-12 por correo.", "Gamma: enviada el 2026-09-12.")] // le faltan palabras
+    [InlineData("- **Gamma**: enviada.", "Gamma enviada.")]                                           // y un signo
+    [InlineData("- [Gamma](rechazada) el 2026-09-12.", "- Gamma el 2026-09-12.")]                     // el paréntesis no es un enlace
+    public void Combinar_CitaQueSoloEncajaQuitandoAlgoMasQueElFormato_VaASinLeer(string linea, string cita)
+    {
+        var lote = Combinar($"# Notas\n{linea}\n", Extraida(cita));
+
+        Assert.Empty(lote.Filas);
+        Assert.StartsWith(CombinadorLotes.MotivoCitaInexistente, Assert.Single(lote.SinLeer).Motivo);
+    }
+
+    [Fact]
+    public void Combinar_LineaMasLargaQueDosCitas_SoloEncajaExacta()
+    {
+        var largo = new string('x', 2 * ManejadorExtraerRegistro.LargoCita);
+        var linea = $"- **Gamma**: {largo}";
+
+        var sinFormato = Combinar($"# Notas\n{linea}\n", Extraida($"Gamma: {largo}"));
+        var exacta = Combinar($"# Notas\n{linea}\n", Extraida(linea));
+
+        Assert.Empty(sinFormato.Filas);
+        Assert.Equal(2, Assert.Single(exacta.Filas).Linea);
+    }
+
+    [Fact]
+    public void Combinar_SinLeerConLaCitaSinMarcado_LlevaLaLineaDelRegistro()
+    {
+        var lote = Combinar("# Notas\n- **Gamma**: algo raro.\n", [], [new FilaExtraidaSinLeer("Gamma: algo raro.", "No se entiende.")]);
+
+        Assert.Equal(2, Assert.Single(lote.SinLeer).Linea);
     }
 
     [Fact]

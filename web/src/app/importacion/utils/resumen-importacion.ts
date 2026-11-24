@@ -1,5 +1,9 @@
+import { conPunto } from '../../agentes/utils/textos-ejecucion';
 import { ETIQUETAS_ESTADO } from '../../candidaturas/utils/etiquetas';
+import { formatearFecha } from '../../shared/utils/fechas-madrid';
 import {
+  FilaFuera,
+  FilaSinLeer,
   FilaVistaPrevia,
   ResultadoAplicacion,
   ResultadoFila,
@@ -48,7 +52,7 @@ export const EXPLICACION_YA_EXISTEN = 'Ya están en la app. No se tocan.';
 export const EXPLICACION_PARA_REVISAR =
   'Estas no se guardan. Cada una dice por qué; si hace falta, corrígela a mano en la app o en tu archivo.';
 export const EXPLICACION_SIN_LEER =
-  'Corrige estas líneas en tu archivo, guárdalo y pulsa «Volver a leer».';
+  'Corrige estas líneas en tu archivo, guárdalo y pulsa «Leer el archivo otra vez».';
 
 /** «Añadir 3 candidaturas», «Actualizar 1 candidatura» o «Añadir 3 candidaturas y actualizar 2» */
 export function textoBotonAplicar({ nuevas, avanzan }: ResumenImportacion): string {
@@ -110,14 +114,61 @@ export function textoNadaQueAnadir(resumen: ResumenImportacion): string {
     : 'No hay candidaturas nuevas que añadir.';
 }
 
-/** null si no hay ninguno. Son una estimación: por eso «unos» */
-export function textoEnviosEnTexto(enviosEnTexto: number): string | null {
+/**
+ * null si no hay ninguno. Son una estimación: por eso «unos». Con `conClaude`, el aviso lleva al lado el botón
+ * de extraerlos: ya no es «más adelante»
+ */
+export function textoEnviosEnTexto(enviosEnTexto: number, conClaude = false): string | null {
   if (enviosEnTexto === 0) {
     return null;
+  }
+  if (conClaude) {
+    return enviosEnTexto === 1
+      ? 'Hay 1 envío escrito como texto, fuera de la tabla: Claude puede leerlo.'
+      : `Hay unos ${enviosEnTexto} envíos escritos como texto, fuera de la tabla: Claude puede leerlos.`;
   }
   return enviosEnTexto === 1
     ? 'Hay 1 envío escrito como texto; ese se podrá importar más adelante.'
     : `Hay unos ${enviosEnTexto} envíos escritos como texto; esos se podrán importar más adelante.`;
+}
+
+/** La línea que dice que la vista es la combinada: «Tabla + texto libre leído con Claude (34 de texto libre)» */
+export function textoVistaCombinada(delTextoLibre: number): string {
+  return `Tabla + ${delTextoLibre} ${delTextoLibre === 1 ? 'leída' : 'leídas'} del texto libre con Claude`;
+}
+
+export const EXPLICACION_FUERA =
+  'Claude las ha leído en el texto libre, pero no se añaden. Cada una dice por qué. No tienes que hacer nada salvo que el motivo esté mal.';
+export const EXPLICACION_DUDAS =
+  'Lo que Claude no ha tenido claro. Si algo está mal, corrígelo en tu archivo y vuelve a extraer.';
+
+/** Debajo del botón de extraer, antes de lo que gasta */
+export const AVISO_SOLO_LEE = 'Claude solo lee: verás lo que encuentre antes de añadir nada.';
+/** Junto a la tarjeta mientras la extracción no ha terminado */
+export const AVISO_PUEDE_TARDAR =
+  'Puede tardar un rato si el texto es largo. Puedes salir: la tarea sigue y la verás aquí al volver.';
+
+/** «Claude terminó de leer el texto libre (hace 12 min).»: una extracción ya hecha que se puede ver */
+export function textoExtraccionLeida(fin: string, ahora: Date): string {
+  const minutos = Math.max(0, Math.floor((ahora.getTime() - new Date(fin).getTime()) / 60_000));
+  const hace =
+    minutos < 1
+      ? 'hace un momento'
+      : minutos < 60
+        ? `hace ${minutos} min`
+        : `hace ${Math.floor(minutos / 60)} h`;
+  return `Claude terminó de leer el texto libre (${hace}).`;
+}
+
+/** «Línea 12: motivo»; sin línea (0, una cita que no se ha encontrado), solo el motivo */
+export function textoFilaSinLeer({ linea, motivo }: FilaSinLeer): string {
+  return linea > 0 ? `Línea ${linea}: ${motivo}` : motivo;
+}
+
+/** «Línea 12 · Acme · Backend · 12 sept 2026: Ya está en la tabla del registro.» Sin línea (0), sin ese trozo */
+export function textoFilaFuera({ linea, empresa, puesto, fecha, aviso }: FilaFuera): string {
+  const datos = [linea > 0 ? `Línea ${linea}` : null, empresa, puesto, formatearFecha(fecha)];
+  return `${datos.filter(Boolean).join(' · ')}: ${conPunto(aviso)}`;
 }
 
 /** «De Enviada a Entrevista» si cambia; si ya existe, cómo está en la app; si no, cómo llega */

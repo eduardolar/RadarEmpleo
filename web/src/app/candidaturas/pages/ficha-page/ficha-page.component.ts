@@ -35,6 +35,7 @@ import { filter, finalize, switchMap } from 'rxjs';
 import { EstadoEjecucion } from '../../../agentes/components/estado-ejecucion/estado-ejecucion';
 import { EjecucionAgente } from '../../../agentes/interfaces/ejecucion.interface';
 import { AgentesService, esTerminal } from '../../../agentes/services/agentes.service';
+import { AVISO_GASTO } from '../../../agentes/utils/textos-ejecucion';
 import { ErrorApi } from '../../../core/interfaces/error-api.interface';
 import { SistemaService } from '../../../core/services/sistema.service';
 import { PanelDocumentos } from '../../../documentos/components/panel-documentos/panel-documentos';
@@ -219,7 +220,7 @@ export default class FichaPageComponent {
       ? 'Volver a analizar el encaje'
       : 'Analizar encaje con Claude',
   );
-  protected readonly avisoGasto = 'Gasta un poco de tu tope diario de Claude.';
+  protected readonly avisoGasto = AVISO_GASTO;
   // Aparte del effect: volver a guardar la misma info no repite la consulta de la última
   private readonly segunInfo = computed(() => this.sistema.info()?.agentesDisponibles === true);
 

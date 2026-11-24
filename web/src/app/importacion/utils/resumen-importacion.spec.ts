@@ -7,8 +7,12 @@ import {
   textoBotonAplicar,
   textoEnviosEnTexto,
   textoEstadoFila,
+  textoExtraccionLeida,
+  textoFilaFuera,
+  textoFilaSinLeer,
   textoNadaQueAnadir,
   textoResultado,
+  textoVistaCombinada,
   tituloNadaQueAplicar,
 } from './resumen-importacion';
 
@@ -20,6 +24,7 @@ function resumen(cambios: Partial<ResumenImportacion> = {}): ResumenImportacion 
     paraRevisar: 0,
     sinLeer: 0,
     enviosEnTexto: 0,
+    delTextoLibre: 0,
     ...cambios,
   };
 }
@@ -193,6 +198,62 @@ describe('textoEnviosEnTexto', () => {
       'Hay unos 41 envíos escritos como texto; esos se podrán importar más adelante.',
     );
   });
+
+  it('con Claude a mano no dice «más adelante»', () => {
+    expect(textoEnviosEnTexto(1, true)).toBe(
+      'Hay 1 envío escrito como texto, fuera de la tabla: Claude puede leerlo.',
+    );
+    expect(textoEnviosEnTexto(41, true)).toBe(
+      'Hay unos 41 envíos escritos como texto, fuera de la tabla: Claude puede leerlos.',
+    );
+    expect(textoEnviosEnTexto(0, true)).toBeNull();
+  });
+});
+
+describe('textoVistaCombinada', () => {
+  it('dice cuántas salen del texto libre', () => {
+    expect(textoVistaCombinada(34)).toBe('Tabla + 34 leídas del texto libre con Claude');
+    expect(textoVistaCombinada(1)).toBe('Tabla + 1 leída del texto libre con Claude');
+  });
+});
+
+describe('textoExtraccionLeida', () => {
+  const fin = '2026-11-23T10:00:00Z';
+  const tras = (ms: number) => new Date(new Date(fin).getTime() + ms);
+
+  it('dice hace cuánto terminó, en minutos y luego en horas', () => {
+    expect(textoExtraccionLeida(fin, tras(20_000))).toBe(
+      'Claude terminó de leer el texto libre (hace un momento).',
+    );
+    expect(textoExtraccionLeida(fin, tras(12 * 60_000))).toBe(
+      'Claude terminó de leer el texto libre (hace 12 min).',
+    );
+    expect(textoExtraccionLeida(fin, tras(150 * 60_000))).toBe(
+      'Claude terminó de leer el texto libre (hace 2 h).',
+    );
+  });
+});
+
+describe('textoFilaFuera', () => {
+  const fuera = {
+    linea: 12,
+    empresa: 'Acme',
+    puesto: 'Backend',
+    fecha: '2026-09-12',
+    aviso: 'Ya está en la tabla del registro',
+  };
+
+  it('junta la línea, la empresa, el puesto, la fecha y el aviso', () => {
+    expect(textoFilaFuera(fuera)).toBe(
+      'Línea 12 · Acme · Backend · 12 sept 2026: Ya está en la tabla del registro.',
+    );
+  });
+
+  it('sin línea (0) no la nombra', () => {
+    expect(textoFilaFuera({ ...fuera, linea: 0 })).toBe(
+      'Acme · Backend · 12 sept 2026: Ya está en la tabla del registro.',
+    );
+  });
 });
 
 describe('textoEstadoFila', () => {
@@ -228,5 +289,16 @@ describe('textoEstadoFila', () => {
     });
 
     expect(textoEstadoFila(fila)).toBe('Enviada');
+  });
+});
+
+describe('textoFilaSinLeer', () => {
+  it('nombra la línea solo si la hay', () => {
+    expect(textoFilaSinLeer({ linea: 4, motivo: 'Falta la fecha.' })).toBe(
+      'Línea 4: Falta la fecha.',
+    );
+    expect(textoFilaSinLeer({ linea: 0, motivo: 'No encuentro esta línea.' })).toBe(
+      'No encuentro esta línea.',
+    );
   });
 });

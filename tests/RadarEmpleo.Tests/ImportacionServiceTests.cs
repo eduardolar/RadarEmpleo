@@ -703,12 +703,28 @@ public class ImportacionServiceTests : ArnesSqliteTests
 
         Assert.Equal((OrigenLote.RegistroConClaude, id, _lector.Hash), (vista.Origen, vista.EjecucionId, vista.HashRegistro));
         Assert.Equal(["Acme", "Gamma"], vista.Filas.Select(f => f.Empresa));
+        Assert.Equal(1, vista.Resumen.DelTextoLibre);
+        Assert.Equal([false, true], vista.Filas.Select(f => f.DelTextoLibre));
         Assert.All(vista.Filas, f => Assert.Equal(ResultadoFila.Nueva, f.Resultado));
         Assert.Empty(vista.Filas[1].Avisos);
         Assert.Empty(vista.SinLeer);
         Assert.Empty(vista.Fuera);
         await using var db = CreateContext();
         Assert.Equal(0, await db.Candidaturas.CountAsync());
+    }
+
+    [Fact]
+    public async Task PrevisualizarExtraccion_TraeLasDudasDeClaudeTalCualYLaTablaNinguna()
+    {
+        UsarTablaYTextoLibre();
+        var dudas = new[] { "La línea 6 no dice el puesto.", "<b>¿Gamma o Gama?</b>" };
+        var id = await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x",
+            JsonSerializer.Serialize(new ResultadoExtraccionRegistro([Extraida()], dudas, []), FabricaApi.Json), null, null));
+
+        Assert.Equal(dudas, (await _importacion.PrevisualizarExtraccionAsync(id))!.Dudas);
+        var tabla = await _importacion.PrevisualizarTablaAsync();
+        Assert.Empty(tabla.Dudas);
+        Assert.All(tabla.Filas, f => Assert.False(f.DelTextoLibre));
     }
 
     [Fact]
@@ -773,6 +789,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
         var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
 
         Assert.Equal("Acme", Assert.Single(vista.Filas).Empresa);
+        Assert.Equal(0, vista.Resumen.DelTextoLibre);
         var fuera = Assert.Single(vista.Fuera);
         Assert.Equal((6, CombinadorLotes.AvisoYaEnLaTabla), (fuera.Linea, fuera.Aviso));
     }
@@ -823,11 +840,13 @@ public class ImportacionServiceTests : ArnesSqliteTests
         var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
         UsarTablaYTextoLibre("| 2026-09-02 | Acme | Backend | Remoto | Enviada | — |");
 
-        // Con el hash nuevo (como si viniera de otra vista previa) salta el de la extracción.
+        // Con el hash nuevo (como si viniera de otra vista previa) y con el viejo, lo que se dice es que la extracción ya no vale.
         var error = await Assert.ThrowsAsync<ReglaNegocioException>(() =>
             _importacion.AplicarAsync(PeticionConClaude(vista) with { HashRegistro = _lector.Hash }));
+        var conElViejo = await Assert.ThrowsAsync<ReglaNegocioException>(() => _importacion.AplicarAsync(PeticionConClaude(vista)));
 
         Assert.Equal(ImportacionService.MensajeExtraccionCambiada, error.Message);
+        Assert.Equal(ImportacionService.MensajeExtraccionCambiada, conElViejo.Message);
         await using var db = CreateContext();
         Assert.Equal(0, await db.Candidaturas.CountAsync());
     }

@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
-import { inject, Injectable, signal } from '@angular/core';
-import { defer, EMPTY, finalize, Observable, Subscription, tap } from 'rxjs';
+import { computed, inject, Injectable, signal } from '@angular/core';
+import { catchError, defer, EMPTY, finalize, map, Observable, of, Subscription, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ErrorApi } from '../../core/interfaces/error-api.interface';
 import { conErrorApi, convertirErrorApi } from '../../core/utils/error-api';
@@ -13,10 +13,30 @@ import { filasAplicables } from '../utils/resumen-importacion';
 
 const URL_IMPORTACION = `${environment.apiUrl}/api/importacion`;
 
+/** Una extracción que ya no vale (la API no la encuentra, el registro ha cambiado, no terminó bien...) */
+const EXTRACCION_NO_VALE: ReadonlySet<number> = new Set([403, 404, 409]);
+
 /**
- * Importación del registro: la vista previa en signals y aplicarla. Al aplicar solo van el origen, la
- * ejecución, el hash del registro leído y las claves: el servidor vuelve a leer el registro y rehace el lote.
- * Al aplicar bien o con un 409 (por ejemplo, el registro ha cambiado), se vuelve a pedir la vista previa.
+ * La extracción ya no vale y se ha vuelto a la tabla. `yaAvisado`: venía de un 409 al aplicar, cuyo
+ * mensaje ya enseña quien aplica
+ */
+export type AlNoValerExtraccion = (mensaje: string, yaAvisado: boolean) => void;
+
+interface ExtraccionPedida {
+  id: number;
+  alNoValer: AlNoValerExtraccion;
+}
+
+function urlCombinada(ejecucionId: number): string {
+  return `${URL_IMPORTACION}/extraccion/${ejecucionId}/previsualizar`;
+}
+
+/**
+ * Importación del registro: la vista previa (de la tabla o, tras extraer con Claude, de la tabla más el texto
+ * libre) en signals y aplicarla. Al aplicar solo van el origen, la ejecución, el hash del registro leído y las
+ * claves: el servidor vuelve a leer el registro y rehace el lote. Al aplicar bien o con un 409 (por ejemplo,
+ * el registro ha cambiado), se vuelve a pedir la misma vista previa; si era la combinada y la extracción ya no
+ * vale, la de la tabla.
  */
 @Injectable({ providedIn: 'root' })
 export class ImportacionService {
@@ -34,27 +54,48 @@ export class ImportacionService {
   private readonly _aplicando = signal(false);
   readonly aplicando = this._aplicando.asReadonly();
 
+  /** La extracción de la vista pedida (o de la que se pedirá al volver a leer); null con la tabla */
+  private readonly _extraccion = signal<ExtraccionPedida | null>(null);
+  readonly extraccionId = computed(() => this._extraccion()?.id ?? null);
+
   private peticionVista?: Subscription;
 
-  /** Borra antes la vista previa anterior: aplicar un lote desfasado no debe estar al alcance */
+  /** La de la tabla. Borra antes la vista previa anterior: aplicar un lote desfasado no debe estar al alcance */
   previsualizar(): void {
-    this.peticionVista?.unsubscribe();
-    this._vistaPrevia.set(null);
-    this._cargando.set(true);
-    this._error.set(null);
+    this._extraccion.set(null);
+    this.pedirVista(`${URL_IMPORTACION}/tabla/previsualizar`, null);
+  }
 
-    this.peticionVista = this.http
-      .post<VistaPreviaImportacion>(`${URL_IMPORTACION}/tabla/previsualizar`, null)
-      .subscribe({
-        next: (vista) => {
-          this._vistaPrevia.set(vista);
-          this._cargando.set(false);
-        },
-        error: (error: unknown) => {
-          this._error.set(convertirErrorApi(error).mensaje);
-          this._cargando.set(false);
-        },
-      });
+  /**
+   * La tabla más lo que ha leído Claude en el texto libre. Si la extracción ya no vale (403, 404 o 409), pide
+   * la de la tabla y pasa el mensaje de la API a `alNoValer`
+   */
+  previsualizarExtraccion(ejecucionId: number, alNoValer: AlNoValerExtraccion): void {
+    this.apuntarExtraccion(ejecucionId, alNoValer);
+    this.leerOtraVez(false);
+  }
+
+  /** Sin pedir nada ahora: la próxima vez que se vuelva a leer (también al acabar de aplicar) será la combinada */
+  apuntarExtraccion(ejecucionId: number, alNoValer: AlNoValerExtraccion): void {
+    this._extraccion.set({ id: ejecucionId, alNoValer });
+  }
+
+  /** Deja de apuntar la extracción (y su aviso), sin pedir nada: la página que la apuntó se ha cerrado */
+  olvidarExtraccion(): void {
+    this._extraccion.set(null);
+  }
+
+  /** Vuelve a pedir la misma vista previa: la de la tabla o la combinada */
+  volverALeer(): void {
+    this.leerOtraVez(false);
+  }
+
+  /** Si la vista combinada de esa extracción se puede pedir, sin tocar la que se enseña */
+  extraccionVale(ejecucionId: number): Observable<boolean> {
+    return this.http.post<unknown>(urlCombinada(ejecucionId), {}).pipe(
+      map(() => true),
+      catchError(() => of(false)),
+    );
   }
 
   /** Añade las nuevas y las que cambian de estado. No hace nada si no hay qué o ya está guardando */
@@ -74,18 +115,63 @@ export class ImportacionService {
         claves,
       };
       return this.http.post<ResultadoAplicacion>(`${URL_IMPORTACION}/lote/aplicar`, peticion).pipe(
-        tap(() => this.previsualizar()),
+        tap(() => this.leerOtraVez(false)),
         conErrorApi(),
         // Un 409 es que el registro ha cambiado u otra pestaña se ha adelantado: la vista previa ya no vale
         tap({
           error: (error: ErrorApi) => {
             if (error.estado === 409) {
-              this.previsualizar();
+              this.leerOtraVez(true);
+            } else if (this.extraccionId() !== vista.ejecucionId) {
+              // Se apuntó una extracción mientras guardaba: la vista que queda ya no es la que se volvería a leer
+              this.leerOtraVez(false);
             }
           },
         }),
         finalize(() => this._aplicando.set(false)),
       );
+    });
+  }
+
+  private leerOtraVez(yaAvisado: boolean): void {
+    const extraccion = this._extraccion();
+    if (extraccion === null) {
+      this.previsualizar();
+      return;
+    }
+    this.pedirVista(urlCombinada(extraccion.id), {}, (error) => {
+      if (!EXTRACCION_NO_VALE.has(error.estado)) {
+        return false;
+      }
+      this.previsualizar();
+      extraccion.alNoValer(error.mensaje, yaAvisado);
+      return true;
+    });
+  }
+
+  /** `siFalla` devuelve true si ya se ha ocupado del error; si no, se deja para enseñarlo */
+  private pedirVista(
+    url: string,
+    cuerpo: object | null,
+    siFalla?: (error: ErrorApi) => boolean,
+  ): void {
+    this.peticionVista?.unsubscribe();
+    this._vistaPrevia.set(null);
+    this._cargando.set(true);
+    this._error.set(null);
+
+    this.peticionVista = this.http.post<VistaPreviaImportacion>(url, cuerpo).subscribe({
+      next: (vista) => {
+        this._vistaPrevia.set(vista);
+        this._cargando.set(false);
+      },
+      error: (error: unknown) => {
+        const errorApi = convertirErrorApi(error);
+        this._cargando.set(false);
+        if (!siFalla?.(errorApi)) {
+          this._error.set(errorApi.mensaje);
+        }
+      },
     });
   }
 }

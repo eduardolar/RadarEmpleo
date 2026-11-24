@@ -83,7 +83,7 @@
               class="[--mat-button-text-container-height:48px]"
               (click)="reintentar()"
             >
-              Volver a leer
+              Leer el archivo otra vez
             </button>
           }
         </div>
@@ -109,14 +109,27 @@
       </svg>
       <div class="min-w-0">
         <p>{{ mensaje }}</p>
-        <button
-          mat-button
-          type="button"
-          class="mt-2 [--mat-button-text-container-height:48px]"
-          (click)="reintentar()"
-        >
-          Reintentar
-        </button>
+        <div class="mt-2 flex flex-wrap gap-x-2">
+          <button
+            mat-button
+            type="button"
+            class="[--mat-button-text-container-height:48px]"
+            (click)="reintentar()"
+          >
+            Reintentar
+          </button>
+          <!-- Sin conexión con la vista combinada, la de la tabla puede seguir sirviendo -->
+          @if (fallaLaCombinada()) {
+            <button
+              mat-button
+              type="button"
+              class="[--mat-button-text-container-height:48px]"
+              (click)="verSoloLaTabla()"
+            >
+              Ver solo la tabla
+            </button>
+          }
+        </div>
       </div>
     </div>
   }
@@ -137,6 +150,45 @@
   </ng-template>
 
   @if (vista(); as previa) {
+    <!-- Lo primero de la vista combinada: qué se está viendo y cómo volver a la de la tabla. Marco fino
+         como las tarjetas de /agentes y Ajustes: el trazo grueso es de las filas de la lista, y con él
+         esta línea parecía una fila más. Las capas dicen «dos fuentes juntas» -->
+    @if (lineaVistaCombinada(); as linea) {
+      <div
+        class="flex flex-col gap-3 rounded-2xl border border-borde-fino bg-surface-container-lowest p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      >
+        <p
+          #lineaCombinada
+          tabindex="-1"
+          class="flex min-w-0 items-start gap-2.5 font-medium text-on-surface outline-none"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linejoin="round"
+            class="mt-0.5 h-5 w-5 shrink-0 text-on-surface-variant"
+          >
+            <path d="M10 3 17.5 7 10 11 2.5 7 10 3Z" />
+            <path stroke-linecap="round" d="m2.5 10.5 7.5 4 7.5-4M2.5 14l7.5 4 7.5-4" />
+          </svg>
+          <span class="min-w-0">{{ linea }}</span>
+        </p>
+        <button
+          mat-stroked-button
+          type="button"
+          class="w-full shrink-0 [--mat-button-outlined-container-height:48px] sm:w-auto"
+          disabledInteractive
+          [disabled]="aplicando()"
+          (click)="verSoloLaTabla()"
+        >
+          Ver solo la tabla
+        </button>
+      </div>
+    }
+
     @if (lineasResumen().length > 0 || porAplicar().length > 0) {
       <div
         class="flex flex-col gap-4 rounded-2xl bg-surface-container-lowest p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
@@ -152,7 +204,7 @@
         }
 
         @if (porAplicar().length > 0) {
-          <!-- Volver a leer también aquí: tras corregir el archivo no hay que buscarlo en los grupos plegados -->
+          <!-- «Leer el archivo otra vez» también aquí: tras corregir el archivo no hay que buscarlo en los grupos plegados -->
           <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
             <button
               mat-stroked-button
@@ -162,7 +214,7 @@
               [disabled]="aplicando()"
               (click)="reintentar()"
             >
-              Volver a leer
+              Leer el archivo otra vez
             </button>
             <ng-container [ngTemplateOutlet]="botonAplicar" />
           </div>
@@ -170,23 +222,86 @@
       </div>
     }
 
-    @if (avisoEnvios(); as aviso) {
-      <p
-        class="flex items-start gap-2 rounded-md bg-surface-container px-3 py-2.5 text-sm text-on-surface-variant"
-      >
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 20 20"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          class="mt-0.5 h-4 w-4 shrink-0"
-        >
-          <circle cx="10" cy="10" r="7" />
-          <path stroke-linecap="round" d="M10 9.5v4M10 6.5h.01" />
-        </svg>
-        <span class="min-w-0">{{ aviso }}</span>
-      </p>
+    <!-- Con borde: el relleno de la página es «Aplicar». La tarjeta sale donde estaba el botón y su
+         «Cancelar» no hace caso a un doble toque -->
+    @if (avisoEnvios() || extraccion() || verLeida()) {
+      <div class="flex flex-col items-start gap-3 rounded-md bg-surface-container px-3 py-2.5">
+        @if (avisoEnvios(); as aviso) {
+          <p class="flex items-start gap-2 text-sm text-on-surface-variant">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              class="mt-0.5 h-4 w-4 shrink-0"
+            >
+              <circle cx="10" cy="10" r="7" />
+              <path stroke-linecap="round" d="M10 9.5v4M10 6.5h.01" />
+            </svg>
+            <span class="min-w-0">{{ aviso }}</span>
+          </p>
+        }
+        @if (extraccion(); as e) {
+          <app-estado-ejecucion
+            class="w-full"
+            [ejecucion]="e"
+            [protegerDobleToque]="true"
+            (terminada)="alTerminarExtraccion($event)"
+            (reintentada)="guardarExtraccion($event)"
+            (perdida)="alPerderExtraccion($event)"
+          />
+          @if (enMarcha()) {
+            <p class="-mt-1 text-sm text-on-surface-variant">{{ avisoPuedeTardar }}</p>
+          }
+        }
+        @if (verLeida()) {
+          <p class="text-sm text-on-surface">{{ textoLeida() }}</p>
+          <button
+            mat-stroked-button
+            type="button"
+            class="min-h-12 w-full text-balance sm:w-auto"
+            (click)="verLoLeido()"
+          >
+            Ver lo que ha leído
+          </button>
+          <!-- Secundario, como texto: volver a extraer sin tener que tocar el archivo -->
+          @if (verExtraerOtraVez()) {
+            <button
+              mat-button
+              type="button"
+              class="-mt-2 [--mat-button-text-container-height:48px]"
+              disabledInteractive
+              [disabled]="lanzandoExtraccion()"
+              aria-describedby="gasto-extraer-otra-vez"
+              (click)="extraer()"
+            >
+              {{ lanzandoExtraccion() ? 'Lanzando…' : 'Extraer otra vez' }}
+            </button>
+            <p id="gasto-extraer-otra-vez" class="-mt-2 text-xs text-on-surface-variant">
+              {{ avisoExtraer }}
+            </p>
+          }
+        }
+        @if (verBotonExtraer()) {
+          <button
+            #botonExtraer
+            id="boton-extraer"
+            mat-stroked-button
+            type="button"
+            class="min-h-12 w-full text-balance sm:w-auto"
+            disabledInteractive
+            [disabled]="lanzandoExtraccion()"
+            aria-describedby="gasto-extraccion"
+            (click)="extraer()"
+          >
+            {{ lanzandoExtraccion() ? 'Lanzando…' : 'Extraer el texto libre con Claude' }}
+          </button>
+          <p id="gasto-extraccion" class="-mt-1 text-xs text-on-surface-variant">
+            {{ avisoExtraer }}
+          </p>
+        }
+      </div>
     }
 
     <!-- Separadas: el chip «Enviada» de una nueva no se confunde con el de una que ya existe -->
@@ -242,7 +357,7 @@
           <ul class="flex flex-col gap-2 px-2 pt-2 text-sm text-on-surface">
             @for (fila of previa.sinLeer; track $index) {
               <li class="rounded-md bg-surface-container-lowest p-3">
-                Línea {{ fila.linea }}: {{ fila.motivo }}
+                {{ textoFilaSinLeer(fila) }}
               </li>
             }
           </ul>
@@ -255,9 +370,32 @@
               [disabled]="aplicando()"
               (click)="reintentar()"
             >
-              Volver a leer
+              Leer el archivo otra vez
             </button>
           </div>
+        </app-seccion-plegable>
+      }
+
+      <!-- Como texto: lo que viene de Claude nunca se pinta como HTML -->
+      @if (previa.fuera.length > 0) {
+        <app-seccion-plegable aspecto="suave" titulo="Se quedan fuera ({{ previa.fuera.length }})">
+          <p class="px-4 pt-1 text-sm text-on-surface-variant">{{ explicacionFuera }}</p>
+          <ul class="flex flex-col gap-2 px-2 pt-2 pb-2 text-sm text-on-surface">
+            @for (fila of previa.fuera; track $index) {
+              <li class="rounded-md bg-surface-container-lowest p-3">{{ textoFilaFuera(fila) }}</li>
+            }
+          </ul>
+        </app-seccion-plegable>
+      }
+
+      @if (previa.dudas.length > 0) {
+        <app-seccion-plegable aspecto="suave" titulo="Dudas de Claude ({{ previa.dudas.length }})">
+          <p class="px-4 pt-1 text-sm text-on-surface-variant">{{ explicacionDudas }}</p>
+          <ul class="flex flex-col gap-2 px-2 pt-2 pb-2 text-sm text-on-surface">
+            @for (duda of previa.dudas; track $index) {
+              <li class="rounded-md bg-surface-container-lowest p-3">{{ duda }}</li>
+            }
+          </ul>
         </app-seccion-plegable>
       }
     </div>

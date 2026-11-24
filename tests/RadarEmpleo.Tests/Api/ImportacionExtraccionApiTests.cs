@@ -228,7 +228,7 @@ public sealed class ImportacionExtraccionApiTests
         var otraVista = await LeerAsync(await PostAsync(http, UrlPrevisualizar(id)), HttpStatusCode.Conflict);
 
         Assert.Equal(ImportacionService.MensajeExtraccionCambiada, conElNuevo.GetProperty("detail").GetString());
-        Assert.Equal(ImportacionService.MensajeRegistroCambiado, conElViejo.GetProperty("detail").GetString());
+        Assert.Equal(ImportacionService.MensajeExtraccionCambiada, conElViejo.GetProperty("detail").GetString());
         Assert.Equal(ImportacionService.MensajeExtraccionCambiada, otraVista.GetProperty("detail").GetString());
         await using var db = await BdAsync(fabrica);
         Assert.Empty(db.Candidaturas);
@@ -247,6 +247,9 @@ public sealed class ImportacionExtraccionApiTests
         Assert.Equal(id, vista.GetProperty("ejecucionId").GetInt32());
         Assert.Equal(HashRegistro(fabrica), vista.GetProperty("hashRegistro").GetString());
         Assert.Equal(0, vista.GetProperty("resumen").GetProperty("enviosEnTexto").GetInt32());
+        Assert.Equal(1, vista.GetProperty("resumen").GetProperty("delTextoLibre").GetInt32());
+        Assert.Equal(["La línea de Empresa Texto Dos no dice la fecha (ejemplo inventado)."],
+            vista.GetProperty("dudas").EnumerateArray().Select(d => d.GetString()));
         var filas = vista.GetProperty("filas").EnumerateArray().ToList();
         Assert.Equal(9, filas.Count);
         Assert.Empty(Assert.Single(filas, f => f.GetProperty("empresa").GetString() == "Empresa Texto Uno S.L.").GetProperty("avisos").EnumerateArray());

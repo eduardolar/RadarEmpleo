@@ -18,6 +18,7 @@ export function crearFila(cambios: Partial<FilaVistaPrevia> = {}): FilaVistaPrev
     candidaturaId: null,
     motivo: null,
     avisos: [],
+    delTextoLibre: false,
     ...cambios,
   };
 }
@@ -41,10 +42,12 @@ export function crearVista(
       paraRevisar: contar('Conflicto'),
       sinLeer: sinLeer.length,
       enviosEnTexto: 0,
+      delTextoLibre: 0,
     },
     filas,
     sinLeer,
     fuera: [],
+    dudas: [],
     ...cambios,
   };
 }

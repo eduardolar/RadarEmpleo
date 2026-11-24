@@ -74,12 +74,15 @@ public sealed record LoteImportacion(
 
 /// <summary>Cuántas filas hay de cada tipo en la vista previa.</summary>
 /// <param name="EnviosEnTexto">Líneas con «ENVIADA» fuera de la tabla: solo se cuentan, no se importan.</param>
-public sealed record ResumenImportacionDto(int Nuevas, int Avanzan, int YaExisten, int ParaRevisar, int SinLeer, int EnviosEnTexto);
+/// <param name="DelTextoLibre">Filas del lote que ha leído Claude en el texto libre; 0 con la tabla.</param>
+public sealed record ResumenImportacionDto(int Nuevas, int Avanzan, int YaExisten, int ParaRevisar, int SinLeer, int EnviosEnTexto,
+    int DelTextoLibre = 0);
 
 /// <summary>Una fila de la vista previa, comparada con lo que ya hay en la app.</summary>
 /// <param name="EstadoActual">Estado en la app, si ya hay una candidatura igual o parecida.</param>
 /// <param name="CandidaturaId">Esa candidatura, si la hay.</param>
 /// <param name="Motivo">Por qué es un conflicto, para enseñarlo tal cual.</param>
+/// <param name="DelTextoLibre">La ha leído Claude en el texto libre (no viene de la tabla).</param>
 public sealed record FilaVistaPreviaDto(
     string Clave,
     ResultadoFila Resultado,
@@ -90,7 +93,8 @@ public sealed record FilaVistaPreviaDto(
     EstadoCandidatura? EstadoActual,
     int? CandidaturaId,
     string? Motivo,
-    IReadOnlyList<string> Avisos);
+    IReadOnlyList<string> Avisos,
+    bool DelTextoLibre = false);
 
 /// <summary>Una fila de la tabla que no se ha podido leer.</summary>
 public sealed record FilaSinLeerDto(int Linea, string Motivo);
@@ -103,6 +107,7 @@ public sealed record FilaFueraDelLote(int Linea, string Empresa, string Puesto, 
 /// <param name="HashRegistro">SHA-256 (hexadecimal en minúsculas) de los bytes del registro leído: aplicar lo exige igual.</param>
 /// <param name="EjecucionId">La extracción de Claude de la que sale el lote, o null con la tabla.</param>
 /// <param name="Fuera">Las extraídas que se quedan fuera porque ya estaban; vacía con la tabla.</param>
+/// <param name="Dudas">Las dudas de Claude al extraer, como texto para enseñarlo tal cual; vacía con la tabla.</param>
 public sealed record VistaPreviaImportacionDto(
     OrigenLote Origen,
     string HashRegistro,
@@ -110,7 +115,8 @@ public sealed record VistaPreviaImportacionDto(
     ResumenImportacionDto Resumen,
     IReadOnlyList<FilaVistaPreviaDto> Filas,
     IReadOnlyList<FilaSinLeerDto> SinLeer,
-    IReadOnlyList<FilaFueraDelLote> Fuera);
+    IReadOnlyList<FilaFueraDelLote> Fuera,
+    IReadOnlyList<string> Dudas);
 
 /// <summary>
 /// Petición de aplicar: de dónde sale el lote, el hash del registro de la vista previa y las claves sobre las que actuar.
