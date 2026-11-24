@@ -232,6 +232,11 @@ public sealed class ProcesadorEjecuciones : BackgroundService
                 await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.PartesNoCaben, 0m, hashRegistro, hashPerfil));
                 return;
             }
+            // El máximo que se enseña es el de lo que de verdad se lanza (la suma de las partes), no el de la definición,
+            // que sigue siendo el tope y la caducidad del bloqueo.
+            var tiempoTotal = (int)peticiones.Aggregate(TimeSpan.Zero, (suma, p) => suma + p.TiempoMaximo).TotalSeconds;
+            if (tiempoTotal > 0 && tiempoTotal != ejecucion.TiempoMaximoSegundos)
+                await CambiarAsync(id, e => e.TiempoMaximoSegundos = tiempoTotal);
             var partes = new List<(PeticionClaude Peticion, RespuestaClaude Respuesta)>(peticiones.Count);
             var cortadaEntrePartes = false;
             // «Cancelar» desde otra copia de la API solo marca la BD: se vigila mientras corren todas las partes.

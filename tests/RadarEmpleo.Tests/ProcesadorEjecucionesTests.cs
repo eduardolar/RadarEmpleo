@@ -417,7 +417,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var final = await LeerAsync(ejecucion.Id);
         Assert.Equal(EstadoEjecucion.Error, final.Estado);
-        Assert.Equal("Ha tardado más de 5 min y la he parado.", final.Error);
+        Assert.Equal("Ha tardado más de 5 min y la he parado. Reinténtala; si se repite, prueba más tarde.", final.Error);
         Assert.Null(final.CosteUsd);
     }
 
@@ -1269,6 +1269,25 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         Assert.False(File.Exists(RutaBloqueo));
     }
 
+    [Theory]
+    [InlineData(1, 2 * 60)]
+    [InlineData(2, 4 * 60)]
+    [InlineData(3, 5 * 60)]
+    public async Task PorPartes_ElTiempoMaximoGuardadoEsLaSumaDeLasPartes(int partes, int segundos)
+    {
+        ManejadorDePrueba.Partes = partes;
+        var ejecucion = await EncolarAsync();
+        Assert.Equal(5 * 60, ejecucion.TiempoMaximoSegundos);
+        _falso.ProgramarSecuencia(TareaAgente.ExtraerRegistro, Enumerable.Range(1, partes)
+            .Select(k => new RespuestaFalsa(Salida: Salida(k), CosteUsd: 0.01m, Turnos: 1)).ToArray());
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Ok, final.Estado);
+        Assert.Equal(segundos, final.TiempoMaximoSegundos);
+    }
+
     [Fact]
     public async Task PorPartes_SiTodasSeQuedanSinTiempo_ElMensajeDiceElTiempoDeUnaParteYElCosteNoSeSabe()
     {
@@ -1280,7 +1299,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
 
         var final = await LeerAsync(ejecucion.Id);
         Assert.Equal(EstadoEjecucion.Error, final.Estado);
-        Assert.Equal("Ha tardado más de 1 min 40 s y la he parado.", final.Error);
+        Assert.Equal("Ha tardado más de 1 min 40 s y la he parado. Reinténtala; si se repite, prueba más tarde.", final.Error);
         Assert.Null(final.CosteUsd);
         Assert.Equal(3, _falso.Peticiones.Count);
     }

@@ -43,7 +43,7 @@ public static class MensajesEjecucion
     public static string De(FalloClaude fallo, TimeSpan tiempoMaximo) => fallo switch
     {
         FalloClaude.NoInstalado => NoInstalado,
-        FalloClaude.TiempoAgotado => $"Ha tardado más de {Duracion(tiempoMaximo)} y la he parado.",
+        FalloClaude.TiempoAgotado => $"Ha tardado más de {Duracion(tiempoMaximo)} y la he parado. Reinténtala; si se repite, prueba más tarde.",
         FalloClaude.PresupuestoAgotado => TopeTarea,
         FalloClaude.SalidaNoValida => SalidaNoValida,
         FalloClaude.Cancelado => Cancelada,

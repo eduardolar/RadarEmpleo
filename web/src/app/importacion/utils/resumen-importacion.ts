@@ -146,7 +146,7 @@ export const EXPLICACION_DUDAS =
 export const AVISO_SOLO_LEE = 'Claude solo lee: verás lo que encuentre antes de añadir nada.';
 /** Junto a la tarjeta mientras la extracción no ha terminado */
 export const AVISO_PUEDE_TARDAR =
-  'Puede tardar un rato si el texto es largo. Puedes salir: la tarea sigue y la verás aquí al volver.';
+  'Suele tardar unos 2 o 3 min, más si el texto es largo. Puedes salir: la tarea sigue y la verás aquí al volver.';
 
 /** «Claude terminó de leer el texto libre (hace 12 min).»: una extracción ya hecha que se puede ver */
 export function textoExtraccionLeida(fin: string, ahora: Date): string {
