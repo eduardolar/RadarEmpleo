@@ -49,14 +49,15 @@ public class ConstructorArgumentosTests
     [Fact]
     public void ExtraerRegistro_ListaExacta()
     {
-        Assert.Equal(Con("2.00", "--tools", "", "--model", "sonnet"), Construir(DefinicionesTareas.ExtraerRegistro));
+        // Haiku desde el 24/11: con Sonnet, la salida se comía el presupuesto de la parte.
+        Assert.Equal(Con("2.00", "--tools", "", "--model", "haiku"), Construir(DefinicionesTareas.ExtraerRegistro));
     }
 
     [Fact]
     public void ConOtroPresupuesto_SoloCambiaElDeMaxBudget()
     {
         // El de cada parte de una tarea por partes.
-        Assert.Equal(Con("0.33", "--tools", "", "--model", "sonnet"),
+        Assert.Equal(Con("0.33", "--tools", "", "--model", "haiku"),
             ConstructorArgumentos.Construir(DefinicionesTareas.ExtraerRegistro, Esquema, Valores(), presupuesto: 0.33m));
     }
 

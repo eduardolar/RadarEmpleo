@@ -12,8 +12,9 @@ public enum CarpetaTrabajo
 }
 
 /// <summary>
-/// Lo fijo de una tarea: presupuesto, tiempo, carpeta y herramientas. Vive en código: ni la configuración ni el
-/// cliente pueden ampliarlo. En las listas, las marcas <see cref="DefinicionesTareas.MarcaNombreInforme"/> y
+/// Lo fijo de una tarea: presupuesto, tiempo, carpeta y herramientas. Vive en código: el cliente nunca lo cambia, y de la
+/// configuración solo sale el modelo de ExtraerRegistro (<see cref="OpcionesEjecutor.ModeloExtraerRegistro"/>), que no da
+/// más presupuesto, tiempo ni herramientas. En las listas, las marcas <see cref="DefinicionesTareas.MarcaNombreInforme"/> y
 /// <see cref="DefinicionesTareas.MarcaCarpetaDatos"/> las sustituye <see cref="ConstructorArgumentos"/>.
 /// </summary>
 /// <param name="Herramientas">El valor de <c>--tools</c> ("" para ninguna).</param>
@@ -119,13 +120,15 @@ public static class DefinicionesTareas
 
     // Por partes (decisión de Eduardo del 24/11, tras cortarse a los 10 min la prueba B con unos 64 KB de texto libre): hasta
     // 6 partes de unos 16.000 caracteres, 2,00 y 50 min en total y como mucho 1,00 y 10 min cada una. Con una parte, como
-    // antes: 1,00 y 10 min. El bloqueo caduca a los 55 min, por debajo de la duración máxima de 60.
+    // antes: 1,00 y 10 min. El bloqueo caduca a los 55 min, por debajo de la duración máxima de 60. Con «haiku» (decisión del
+    // 24/11, tras cortarse la prueba B2 por presupuesto en la primera parte con «sonnet»); se cambia con
+    // Agentes:ModeloExtraerRegistro.
     public static readonly DefinicionTarea ExtraerRegistro = new(
         TareaAgente.ExtraerRegistro, 2.00m, TimeSpan.FromMinutes(50), CarpetaTrabajo.Ejecucion,
         Herramientas: "",
         Permitidas: null,
         Denegadas: null,
-        Modelo: "sonnet",
+        Modelo: "haiku",
         NombrePrompt: "extraer-registro",
         SalidaConDatosPersonales: true,
         Partes: new PartesTarea(LargoParte: 16_000, MaximoPartes: 6, PresupuestoMaximoParte: 1.00m, TiempoMaximoParte: TimeSpan.FromMinutes(10)));

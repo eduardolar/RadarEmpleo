@@ -54,6 +54,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         _servicios = new ServiceCollection()
             .AddSingleton<ILectorCurriculum>(_lector)
             .AddSingleton(_rutas)
+            .AddSingleton(_opciones)
             .AddScoped<IManejadorTarea, ManejadorExtraerRegistro>()
             .BuildServiceProvider();
         _ambitos = _servicios.GetRequiredService<IServiceScopeFactory>();
@@ -144,7 +145,8 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         Assert.DoesNotContain("Talleres Ficticios", peticion.EntradaEstandar);
         Assert.DoesNotContain("Empresa Rastreo", peticion.EntradaEstandar);
         Assert.Equal(new[] { "--tools", "" }, peticion.Argumentos.SkipWhile(a => a != "--tools").Take(2));
-        Assert.Equal(new[] { "--model", "sonnet" }, peticion.Argumentos.SkipWhile(a => a != "--model").Take(2));
+        Assert.Equal(new[] { "--model", "haiku" }, peticion.Argumentos.SkipWhile(a => a != "--model").Take(2));
+        Assert.Equal("haiku", ejecucion.Modelo);
         Assert.True(peticion.SalidaPrivada);
 
         await using var db = _factory.CreateDbContext();
@@ -382,6 +384,50 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         Assert.Empty(db.EjecucionesAgente);
     }
 
+    // ---------------------------------------------------------------- modelo
+
+    [Theory]
+    [InlineData(null, "haiku")]
+    [InlineData("", "haiku")]
+    [InlineData("  ", "haiku")]
+    [InlineData(" sonnet ", "sonnet")]
+    public void ElModelo_EsElDeLaConfiguracionOHaiku(string? configurado, string modelo)
+    {
+        var manejador = new ManejadorExtraerRegistro(_lector, _rutas, _opciones with { ModeloExtraerRegistro = configurado });
+
+        Assert.Equal(modelo, manejador.Definicion.Modelo);
+        // Lo demás de la definición no cambia.
+        Assert.Equal(DefinicionesTareas.ExtraerRegistro with { Modelo = modelo }, manejador.Definicion);
+    }
+
+    [Fact]
+    public async Task ConOtroModeloEnLaConfiguracion_LoLlevaEnLosArgumentosYLoGuardaLaEjecucion()
+    {
+        var opciones = _opciones with { ModeloExtraerRegistro = "sonnet" };
+        using var servicios = new ServiceCollection()
+            .AddSingleton<ILectorCurriculum>(_lector)
+            .AddSingleton(_rutas)
+            .AddSingleton(opciones)
+            .AddScoped<IManejadorTarea, ManejadorExtraerRegistro>()
+            .BuildServiceProvider();
+        var ambitos = servicios.GetRequiredService<IServiceScopeFactory>();
+        using var guardia = new GuardiaCola(opciones);
+        var cola = new ColaEjecuciones(_factory, _reloj, _rutas, opciones, ambitos, guardia);
+        using var procesador = new ProcesadorEjecuciones(_factory, _reloj, _rutas, opciones, cola,
+            new BloqueoCompartido(_rutas, NullLogger<BloqueoCompartido>.Instance), _claude, _lector, ambitos, guardia,
+            NullLogger<ProcesadorEjecuciones>.Instance);
+        _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([])));
+
+        var (encolada, _) = (await cola.EncolarAsync(TareaAgente.ExtraerRegistro))!.Value;
+        Assert.True(await procesador.ProcesarSiguienteAsync(CancellationToken.None));
+
+        Assert.Equal("sonnet", encolada.Modelo);
+        var peticion = Assert.Single(_claude.Peticiones);
+        Assert.Equal(new[] { "--model", "sonnet" }, peticion.Argumentos.SkipWhile(a => a != "--model").Take(2));
+        await using var db = _factory.CreateDbContext();
+        Assert.Equal("sonnet", (await db.EjecucionesAgente.SingleAsync()).Modelo);
+    }
+
     // ---------------------------------------------------------------- por partes
 
     /// <summary>Una entrada inventada de unos 100 caracteres del mes <paramref name="mes"/>.</summary>
@@ -596,7 +642,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     [Fact]
     public async Task AplicarPartes_SinHaberlasPreparado_DiceLaParteYElMotivoSinDesdeDonde()
     {
-        var manejador = new ManejadorExtraerRegistro(_lector, _rutas);
+        var manejador = new ManejadorExtraerRegistro(_lector, _rutas, _opciones);
         PeticionClaude Peticion(string parte) =>
             new(TareaAgente.ExtraerRegistro, ["-p"], _raiz, "prompt", TimeSpan.FromMinutes(10), "log", true, parte);
         var buena = new RespuestaClaude(true, "success", 0.1m, 1, "s", null, Salida([Fila()]), null, null);

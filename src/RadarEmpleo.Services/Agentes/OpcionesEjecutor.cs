@@ -32,6 +32,12 @@ public sealed record OpcionesEjecutor(
     /// </summary>
     public string? RutaExclusion { get; init; }
 
+    /// <summary>
+    /// El <c>--model</c> de ExtraerRegistro si no es el de su definición («haiku»); null o vacío, el de la definición. Lo
+    /// comprueba la API al arrancar (<c>ConfiguracionAgentes.ExigirModeloValido</c>).
+    /// </summary>
+    public string? ModeloExtraerRegistro { get; init; }
+
     /// <summary>Logs de las ejecuciones (<c>ejecucion-&lt;id&gt;.log</c>).</summary>
     public string CarpetaLogs => Path.Combine(CarpetaDatos, "logs");
 

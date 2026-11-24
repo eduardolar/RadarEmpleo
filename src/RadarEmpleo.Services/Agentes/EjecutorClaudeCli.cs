@@ -108,13 +108,58 @@ public sealed partial class EjecutorClaudeCli : IEjecutorClaude
         return respuesta;
     }
 
-    /// <summary>Lo que el log guarda de una salida con datos personales: nada de su contenido.</summary>
+    /// <summary>
+    /// Lo que el log guarda de una salida con datos personales: nada de su contenido. Sí el consumo (<see cref="Consumo"/>),
+    /// que no lo es y dice dónde se va el coste.
+    /// </summary>
     private static string ResumenSalida(string salida, RespuestaClaude respuesta)
     {
         var bytes = Utf8SinBom.GetBytes(salida);
         return $"(no se guarda: son datos personales) {bytes.Length} bytes, sha256 {Convert.ToHexStringLower(SHA256.HashData(bytes))}, " +
             $"subtype {respuesta.Subtipo ?? "?"}, coste {respuesta.CosteUsd?.ToString(CultureInfo.InvariantCulture) ?? "?"}, " +
-            $"turnos {respuesta.Turnos?.ToString(CultureInfo.InvariantCulture) ?? "?"}.";
+            $"turnos {respuesta.Turnos?.ToString(CultureInfo.InvariantCulture) ?? "?"}, {Consumo(salida)}.";
+    }
+
+    /// <summary>Como mucho, los nombres de modelo que se apuntan de <c>modelUsage</c>, y su largo.</summary>
+    public const int MaximoModelosLog = 5, LargoModeloLog = 60;
+
+    /// <summary>
+    /// Los tokens de <c>usage</c> («tokens: entrada 1200, caché escrita 30000, caché leída 0, salida 8000») y los modelos que
+    /// se han usado de verdad (las claves de <c>modelUsage</c>), sin nada más del JSON. Los nombres solo con letras, números,
+    /// «.», «-», «_», «[» y «]», para que no metan nada raro en el log. Con «?» lo que no venga.
+    /// </summary>
+    public static string Consumo(string salida)
+    {
+        JsonElement raiz;
+        try
+        {
+            using var documento = JsonDocument.Parse(salida);
+            raiz = documento.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return "tokens ?, modelo ?";
+        }
+        if (raiz.ValueKind != JsonValueKind.Object) return "tokens ?, modelo ?";
+
+        var uso = raiz.TryGetProperty("usage", out var u) && u.ValueKind == JsonValueKind.Object ? u : default;
+        string Tokens(string nombre) =>
+            uso.ValueKind == JsonValueKind.Object && uso.TryGetProperty(nombre, out var valor) && valor.ValueKind == JsonValueKind.Number
+                && valor.TryGetInt64(out var numero)
+                ? numero.ToString(CultureInfo.InvariantCulture)
+                : "?";
+        var modelos = raiz.TryGetProperty("modelUsage", out var m) && m.ValueKind == JsonValueKind.Object
+            ? m.EnumerateObject().Select(p => NombreSeguro(p.Name)).Where(n => n.Length > 0).Take(MaximoModelosLog).ToList()
+            : [];
+        return $"tokens: entrada {Tokens("input_tokens")}, caché escrita {Tokens("cache_creation_input_tokens")}, " +
+            $"caché leída {Tokens("cache_read_input_tokens")}, salida {Tokens("output_tokens")}, " +
+            $"modelo {(modelos.Count == 0 ? "?" : string.Join(" y ", modelos))}";
+    }
+
+    private static string NombreSeguro(string nombre)
+    {
+        var limpio = new string(nombre.Where(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or '[' or ']').ToArray());
+        return limpio.Length <= LargoModeloLog ? limpio : limpio[..LargoModeloLog];
     }
 
     public async Task<string?> VersionAsync(CancellationToken cancelacion)
