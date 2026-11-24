@@ -189,6 +189,102 @@ public class ReglasImportacionTests
         Assert.Equal(ResultadoFila.Nueva, fila.Resultado);
     }
 
+    private const string SeccionLibre = "Texto libre del registro: Notas";
+
+    [Fact]
+    public void Comparar_NuevaDelTextoLibreConElEstadoSinRespaldo_LlevaElAvisoYSigueSiendoNueva()
+    {
+        var fila = Comparar(Fila(estado: EstadoCandidatura.Oferta) with { Seccion = SeccionLibre, EstadoSinRespaldo = true });
+
+        Assert.Equal(ResultadoFila.Nueva, fila.Resultado);
+        Assert.Equal([ReglasImportacion.AvisoEstadoDeClaude], fila.Avisos);
+    }
+
+    [Theory]
+    [InlineData(EstadoCandidatura.Entrevista)]
+    [InlineData(EstadoCandidatura.Oferta)]
+    [InlineData(EstadoCandidatura.Descartada)]
+    [InlineData(EstadoCandidatura.Cerrada)]
+    public void Comparar_DelTextoLibreQueAvanzariaSinRespaldo_EsConflictoConSuMotivo(EstadoCandidatura estado)
+    {
+        var fila = Comparar(Fila(estado: estado) with { Seccion = SeccionLibre, EstadoSinRespaldo = true },
+            Existente(EstadoCandidatura.Enviada));
+
+        Assert.Equal(ResultadoFila.Conflicto, fila.Resultado);
+        Assert.Equal($"Claude dice que pasó a «{estado}», pero tu archivo no lo dice: revísalo en la ficha.", fila.Motivo);
+        Assert.Equal(7, fila.CandidaturaId);
+        Assert.Contains(ReglasImportacion.AvisoEstadoDeClaude, fila.Avisos);
+    }
+
+    [Theory]
+    [InlineData(EstadoCandidatura.Oferta)]
+    [InlineData(EstadoCandidatura.Descartada)]
+    [InlineData(EstadoCandidatura.Cerrada)]
+    public void Comparar_NuevaDelTextoLibreEnOfertaOFinalConRespaldo_LlevaSiempreElAviso(EstadoCandidatura estado)
+    {
+        var fila = Comparar(Fila(estado: estado) with { Seccion = SeccionLibre });
+
+        Assert.Equal(ResultadoFila.Nueva, fila.Resultado);
+        Assert.Equal([ReglasImportacion.AvisoEstadoDeClaude], fila.Avisos);
+    }
+
+    [Theory]
+    [InlineData(EstadoCandidatura.Enviada)]
+    [InlineData(EstadoCandidatura.Entrevista)]
+    public void Comparar_NuevaDelTextoLibreEnOtroEstadoConRespaldo_NoLlevaAviso(EstadoCandidatura estado)
+    {
+        Assert.Empty(Comparar(Fila(estado: estado) with { Seccion = SeccionLibre }).Avisos);
+    }
+
+    [Fact]
+    public void Comparar_NuevaDeLaTablaEnOferta_NoLlevaElAvisoDeClaude()
+    {
+        Assert.Empty(Comparar(Fila(estado: EstadoCandidatura.Oferta)).Avisos);
+    }
+
+    [Theory]
+    [InlineData(EstadoCandidatura.Oferta)]
+    [InlineData(EstadoCandidatura.Descartada)]
+    [InlineData(EstadoCandidatura.Cerrada)]
+    public void Comparar_DelTextoLibreQueCerrariaConRespaldo_TambienEsConflicto(EstadoCandidatura estado)
+    {
+        var fila = Comparar(Fila(estado: estado) with { Seccion = SeccionLibre }, Existente(EstadoCandidatura.Enviada));
+
+        Assert.Equal(ResultadoFila.Conflicto, fila.Resultado);
+        Assert.Equal(ReglasImportacion.MotivoEstadoFinalDelTextoLibre(estado), fila.Motivo);
+        Assert.Empty(fila.Avisos);
+    }
+
+    [Fact]
+    public void Comparar_DelTextoLibreQueAvanzaConRespaldoAUnEstadoQueNoEsFinal_AvanzaSinAviso()
+    {
+        var fila = Comparar(Fila(estado: EstadoCandidatura.Entrevista) with { Seccion = SeccionLibre }, Existente(EstadoCandidatura.Enviada));
+
+        Assert.Equal(ResultadoFila.AvanzaEstado, fila.Resultado);
+        Assert.Null(fila.Motivo);
+        Assert.Empty(fila.Avisos);
+    }
+
+    [Fact]
+    public void Comparar_DelTextoLibreConElMismoEstadoSinRespaldo_YaExiste()
+    {
+        var fila = Comparar(Fila() with { Seccion = SeccionLibre, EstadoSinRespaldo = true }, Existente(EstadoCandidatura.Enviada));
+
+        Assert.Equal(ResultadoFila.YaExiste, fila.Resultado);
+    }
+
+    [Theory]
+    [InlineData(EstadoCandidatura.Entrevista)]
+    [InlineData(EstadoCandidatura.Descartada)]
+    public void Comparar_FilaDeLaTabla_AvanzaComoSiempreYSinElAvisoDeClaude(EstadoCandidatura estado)
+    {
+        // Las de la tabla no llevan sección: ni el aviso ni el conflicto son para ellas, aunque llegara la marca.
+        var fila = Comparar(Fila(estado: estado) with { EstadoSinRespaldo = true }, Existente(EstadoCandidatura.Enviada));
+
+        Assert.Equal(ResultadoFila.AvanzaEstado, fila.Resultado);
+        Assert.Empty(fila.Avisos);
+    }
+
     [Fact]
     public void Comparar_EmpresaFueraDeLaCita_LlevaElAvisoYSigueSiendoNueva()
     {

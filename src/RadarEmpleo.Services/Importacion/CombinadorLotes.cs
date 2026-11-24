@@ -33,6 +33,10 @@ public sealed record LoteCombinado(IReadOnlyList<FilaLote> Filas, IReadOnlyList<
 /// fila entra igual con <see cref="FilaLote.EmpresaFueraDeLaCita"/>, que la vista previa enseña como
 /// <see cref="ReglasImportacion.AvisoEmpresaNoEnLaLinea"/>. Se comparan las palabras enteras, sin forma jurídica, tildes
 /// ni signos; si no, la empresa sin espacios (4 caracteres o más) dentro de la línea sin espacios, para «B.B.V.A.».</item>
+/// <item><b>El estado también tiene que salir en su línea</b>: si la línea no lo respalda
+/// (<see cref="AnalizadorRegistro.RespaldaEstado"/>), la fila entra con <see cref="FilaLote.EstadoSinRespaldo"/>, que la vista
+/// previa enseña como <see cref="ReglasImportacion.AvisoEstadoDeClaude"/> y que impide que cambie sola el estado de una
+/// candidatura que ya está en la app.</item>
 /// <item>Las extraídas llevan su sección con el prefijo <see cref="AnalizadorRegistro.SeccionTextoLibre"/>.</item>
 /// <item>Dos extraídas con la misma clave: vale la de la línea más arriba y la otra se queda fuera con
 /// <see cref="AvisoRepetidaEnElTexto"/>.</item>
@@ -171,7 +175,8 @@ public static partial class CombinadorLotes
             Seccion: linea.Seccion is null
                 ? AnalizadorRegistro.SeccionTextoLibre
                 : $"{AnalizadorRegistro.SeccionTextoLibre}: {linea.Seccion}",
-            EmpresaFueraDeLaCita: !EmpresaEnLinea(f.Empresa, linea.Texto));
+            EmpresaFueraDeLaCita: !EmpresaEnLinea(f.Empresa, linea.Texto),
+            EstadoSinRespaldo: !AnalizadorRegistro.RespaldaEstado(linea.Texto, f.Estado));
     }
 
     /// <summary>

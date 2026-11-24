@@ -47,6 +47,8 @@ public static class LimitesLote
 /// <param name="Seccion">Lo que se guarda en <c>SeccionOrigen</c>; null en las de la tabla («Tabla del registro»).</param>
 /// <param name="EmpresaFueraDeLaCita">Solo en las extraídas: la empresa no aparece en su línea. La fila entra
 /// igual, con un aviso para que se compruebe.</param>
+/// <param name="EstadoSinRespaldo">Solo en las extraídas: el estado lo dice Claude y su línea no lo respalda
+/// (<c>AnalizadorRegistro.RespaldaEstado</c>). La fila lleva un aviso y nunca cambia sola el estado de una candidatura.</param>
 public sealed record FilaLote(
     int Linea,
     DateOnly Fecha,
@@ -64,7 +66,8 @@ public sealed record FilaLote(
     [MaxLength(LimitesLote.Nota, ErrorMessage = "La nota no puede tener más de 5000 caracteres.")] string? Nota = null,
     bool EstadoDeducido = false,
     string? Seccion = null,
-    bool EmpresaFueraDeLaCita = false);
+    bool EmpresaFueraDeLaCita = false,
+    bool EstadoSinRespaldo = false);
 
 /// <summary>Lote de candidaturas leído del registro. Solo es interno: el servidor lo rehace al aplicar y nunca viaja.</summary>
 public sealed record LoteImportacion(

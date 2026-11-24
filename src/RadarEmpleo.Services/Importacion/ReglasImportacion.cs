@@ -20,6 +20,16 @@ public static class ReglasImportacion
     public const string AvisoEnlaceNoValido = "El enlace no es válido: se importará sin enlace.";
     public const string AvisoEstadoDeducido = "Estado deducido del texto: compruébalo.";
     public const string AvisoEmpresaNoEnLaLinea = "Revisa la empresa: Claude no la ve escrita en esa línea. Si está mal, corrígela en tu archivo antes de añadir.";
+    public const string AvisoEstadoDeClaude = "Estado leído por Claude: compruébalo en tu archivo.";
+
+    /// <summary>Conflicto de una fila del texto libre que cambiaría el estado sin que su línea lo respalde.</summary>
+    public static string MotivoEstadoSinRespaldo(EstadoCandidatura estado) =>
+        $"Claude dice que pasó a «{ReglasEstado.Texto(estado)}», pero tu archivo no lo dice: revísalo en la ficha.";
+
+    /// <summary>Conflicto de una fila del texto libre que llevaría la candidatura a Oferta, Descartada o Cerrada
+    /// (<see cref="NoSeAplicaSolo"/>), aunque su línea lo diga.</summary>
+    public static string MotivoEstadoFinalDelTextoLibre(EstadoCandidatura estado) =>
+        $"Claude ha leído en el texto libre que pasó a «{ReglasEstado.Texto(estado)}»: eso no se aplica solo, cámbialo tú en la ficha.";
 
     /// <summary>
     /// Clave de idempotencia: <c>empresa normalizada|puesto normalizado|AAAA-MM-DD</c>. Se guarda al
@@ -74,6 +84,13 @@ public static class ReglasImportacion
     public static string? EnlaceParaGuardar(string? enlace) =>
         Enlaces.Normalizar(enlace) is { Length: > 0 and <= LimitesLote.Enlace } normalizado ? normalizado : null;
 
+    /// <summary>
+    /// Los estados que, leídos por Claude en el texto libre, nunca se dan por buenos solos: los que cierran la candidatura
+    /// y Oferta, porque «oferta» sale en cualquier línea («Vi la oferta de Acme en LinkedIn») y no prueba nada.
+    /// </summary>
+    private static bool NoSeAplicaSolo(EstadoCandidatura estado) =>
+        ReglasEstado.EsFinal(estado) || estado == EstadoCandidatura.Oferta;
+
     private static string Parecido(string empresaNormalizada, string puesto) =>
         $"{empresaNormalizada}|{TextoComparable.Normalizar(puesto)}";
 
@@ -88,21 +105,32 @@ public static class ReglasImportacion
             return Fila(fila, clave, ResultadoFila.Conflicto, misma, motivo);
         }
 
-        var resultado = ReglasEstado.PuedePasar(misma.Estado, fila.Estado) ? ResultadoFila.AvanzaEstado : ResultadoFila.YaExiste;
-        return Fila(fila, clave, resultado, misma, null);
+        if (!ReglasEstado.PuedePasar(misma.Estado, fila.Estado))
+            return Fila(fila, clave, ResultadoFila.YaExiste, misma, null);
+
+        // Lo del texto libre lo ha leído Claude: un cambio que su línea no respalda, o a Oferta, Descartada o Cerrada, no
+        // se aplica con el botón general. Las filas de la tabla (sin sección) no pasan por aquí.
+        if (fila.Seccion is not null && fila.EstadoSinRespaldo)
+            return Fila(fila, clave, ResultadoFila.Conflicto, misma, MotivoEstadoSinRespaldo(fila.Estado));
+        if (fila.Seccion is not null && NoSeAplicaSolo(fila.Estado))
+            return Fila(fila, clave, ResultadoFila.Conflicto, misma, MotivoEstadoFinalDelTextoLibre(fila.Estado));
+        return Fila(fila, clave, ResultadoFila.AvanzaEstado, misma, null);
     }
 
     private static FilaVistaPreviaDto Fila(FilaLote fila, string clave, ResultadoFila resultado, CandidaturaExistente? existente, string? motivo) =>
-        new(clave, resultado, fila.Empresa, fila.Puesto, fila.Fecha, fila.Estado, existente?.Estado, existente?.Id, motivo, Avisos(fila),
+        new(clave, resultado, fila.Empresa, fila.Puesto, fila.Fecha, fila.Estado, existente?.Estado, existente?.Id, motivo, Avisos(fila, resultado),
             // Las de la tabla no llevan sección: las extraídas siempre («Texto libre del registro…»)
             fila.Seccion is not null);
 
-    private static List<string> Avisos(FilaLote fila)
+    private static List<string> Avisos(FilaLote fila, ResultadoFila resultado)
     {
         var avisos = new List<string>();
         if (fila.FechaAproximada) avisos.Add(AvisoFechaAproximada);
         if (fila.EstadoDeducido) avisos.Add(AvisoEstadoDeducido);
         if (fila.EmpresaFueraDeLaCita) avisos.Add(AvisoEmpresaNoEnLaLinea);
+        // Una nueva del texto libre en Oferta, Descartada o Cerrada avisa siempre, aunque su línea lo diga.
+        if (fila.Seccion is not null && (fila.EstadoSinRespaldo || resultado == ResultadoFila.Nueva && NoSeAplicaSolo(fila.Estado)))
+            avisos.Add(AvisoEstadoDeClaude);
         if (!string.IsNullOrWhiteSpace(fila.Enlace) && EnlaceParaGuardar(fila.Enlace) is null) avisos.Add(AvisoEnlaceNoValido);
         return avisos;
     }
