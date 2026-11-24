@@ -236,7 +236,7 @@ título**, salvo dos excepciones que van centradas.
 | ---------------------- | -------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Tablero                | Tablero                    | Izquierda, a todo el ancho                                                 | — (las columnas se reparten el ancho)                  |
 | Lista o rejilla        | Rastreos, Más              | Izquierda                                                                  | `max-w-6xl` (Rastreos), `max-w-4xl` (Más)              |
-| Lectura                | Ficha, Perfil, Importación, Estadísticas, Ajustes | Izquierda                                                           | `max-w-5xl` (Ficha), `max-w-3xl` (las demás)           |
+| Lectura                | Ficha, Perfil, Importación, Estadísticas, Ajustes, Agentes | Izquierda                                                           | `max-w-5xl` (Ficha), `max-w-3xl` (las demás)           |
 | Formulario suelto      | Apuntar                    | **Centrado**                                                               | `max-w-2xl`                                            |
 | Estado vacío de página | Inicio (sin datos)         | Título a la izquierda; el estado vacío, **centrado** en el área de trabajo | `max-w-xl`                                             |
 | Lista de tareas        | Inicio (con datos)         | Izquierda; desde `lg`, con un panel pegajoso a su derecha                  | `max-w-3xl` la lista; 320 px el panel (380 desde `xl`) |
@@ -247,7 +247,9 @@ se lee como una sola pieza: un formulario corto o un mensaje.
 ### Más
 
 Rejilla de tarjetas-enlace (2 columnas desde `sm`, 1 en el móvil), una por pantalla que existe hoy:
-«Perfil y filtros», «Estadísticas», «Importar del registro» y «Ajustes». Cada tarjeta es el
+«Perfil y filtros», «Estadísticas», «Importar del registro» y «Ajustes». La quinta, «Agentes de
+Claude» («Cuánto llevas usado hoy y qué ha hecho Claude.», con una terminal de icono), solo sale si
+los agentes se pueden usar desde ahí: en el móvil y en la demo siguen siendo cuatro. Cada tarjeta es el
 componente `tarjeta-enlace` (el icono, un svg de 24×24, va por `ng-content`) y es entera el enlace,
 con icono en bloque gris, título con flecha y una línea de descripción; borde de 2 px, sombra dura
 de 4 px que crece al pasar por encima y desaparece al pulsarla (se hunde), foco de 3 px y al menos
@@ -268,9 +270,11 @@ principal. Cada bloque es una tarjeta de borde fino (`border-borde-fino`, sin so
   Una sección sin datos dice «Todavía no hay datos para esto.»; sin ninguna candidatura, la página
   enseña un estado vacío con «Ir al tablero» (con borde). Al final, la letra pequeña en
   monoespaciada dice que solo cuenta lo que está en la app y qué no entra en cada cifra.
-- **Ajustes:** un bloque «Esta app» con el modo, la versión y los agentes (`dl` a dos columnas) y
-  una línea en monoespaciada con lo que llegará (envío manual o automático y tope de gasto). Sin
-  botones.
+- **Ajustes:** un bloque «Esta app» con el modo y la versión, otro «Agentes de Claude» (ver «Agentes
+  y ejecuciones») y una línea en monoespaciada con lo que llegará («Aquí llegarán el envío manual o
+  automático y el cambio del tope diario.»). Los dos bloques son un `dl` a dos columnas, con las
+  etiquetas del mismo ancho para que los valores empiecen en la misma columna. Sin botones, salvo
+  los de texto para reintentar.
 
 ### Botones
 
@@ -292,7 +296,8 @@ color. Afecta a todas las pantallas: en la ficha, «Marcar enviada» con borde, 
 pantalla solo uno va relleno: en la ficha, el cambio de estado («Buscar el CV» y «Añadir nota» van
 con borde); en el tablero vacío, el «Nueva candidatura» del estado vacío (el de la cabecera se
 oculta); en la bandeja de rastreos, el «Pasar al tablero» de la primera oferta pendiente; en Inicio,
-«Nuevo recordatorio» (ver «Inicio y recordatorios»).
+«Nuevo recordatorio» (ver «Inicio y recordatorios»); en Importación, «Aplicar». Lo que lanza o
+enseña una tarea de Claude nunca es ese relleno (ver «Agentes y ejecuciones»).
 
 ### Avisos
 
@@ -557,6 +562,189 @@ es una caja interna gris. Día y hora, en dos columnas desde `sm`.
 **Carga y error.** Barra de progreso en un hueco fijo bajo la cabecera, y el error en el rol
 `error` con `role="alert"` y «Reintentar», como en la ficha.
 
+### Agentes y ejecuciones
+
+Desde la F7b (noviembre de 2026) la app lanza tareas de Claude desde el PC: **analizar el encaje**
+(en la ficha) y **leer el texto libre del registro** (en Importación). Cada lanzamiento es una
+«tarea de Claude» y se enseña siempre con la misma tarjeta. En pantalla se dice «tarea», en
+femenino («Hecha», «Cancelada»); «ejecución» queda para el código.
+
+**Reglas de todo lo de Claude:**
+
+1. **Sin relleno lima y sin `mat-flat-button`.** Lanzar, cancelar y reintentar van con borde
+   (`mat-stroked-button`) o como botón de texto. Un spec lo comprueba en la tarjeta.
+2. **Un solo relleno por pantalla, y no es el de Claude.** En la ficha sigue siendo el cambio de
+   estado; en Importación, «Aplicar». `/agentes` y Ajustes no tienen ninguno.
+3. **«Uso estimado» en porcentaje del tope, nunca en USD.** Claude Code va con la suscripción, así
+   que no se cobra aparte: no sale ninguna cifra en dólares en ninguna pantalla (decisión de
+   Eduardo del 14/11/2026; textos aprobados el 23/11/2026). Por dentro la API sigue dando los
+   importes en su equivalente en USD; el front los pasa a porcentaje en `textos-ejecucion.ts`, y un
+   spec comprueba que ningún texto lleva «USD».
+4. **Claude propone y Eduardo decide.** Nada se descarta ni se añade solo: una oferta cerrada
+   ofrece descartarla, y lo leído del registro pasa por la vista previa.
+5. **Lo que viene de Claude se pinta como texto**, nunca como HTML.
+6. **Solo desde el PC.** En el móvil y en la demo no sale ningún botón de Claude ni se llama a
+   `/api/agentes`.
+
+**Tarjeta `estado-ejecucion`** (`app-estado-ejecucion`, en `web/src/app/agentes/components/`). Va
+dentro de otra tarjeta, así que sigue la excepción de los recordatorios: una sola superficie con
+borde fino (`borde-fino`), fondo de tarjeta y sin sombra dura. De arriba abajo:
+
+- **Insignia del estado**, con icono de trazo editorial de 20×20 y texto; nunca depende solo del
+  color:
+
+  | Estado de la API | Insignia          | Icono                 | Fondo / texto            |
+  | ---------------- | ----------------- | --------------------- | ------------------------ |
+  | En cola          | «En cola»         | Reloj                 | Gris de insignia / tinta |
+  | En curso         | «En curso»        | Flecha que da vueltas | Gris de insignia / tinta |
+  | Ok               | «Hecha»           | Visto                 | `ok-suave` / `on-ok`     |
+  | Error            | «No ha salido»    | Aspa                  | `error` al 8 % / `error` |
+  | Cancelada        | «Cancelada»       | Círculo tachado       | Gris de insignia / tinta |
+  | (ya no existe)   | «No se encuentra» | Interrogación         | Gris de insignia / tinta |
+
+  El rojo de «No ha salido» sobre su 8 % da 5,6:1 de día y 9:1 de noche.
+- **La frase del estado**, en un `role="status"` con `aria-live="polite"`:
+
+  | Cuándo                    | Texto                                                                               |
+  | ------------------------- | ----------------------------------------------------------------------------------- |
+  | En cola, sin nada delante | «En cola: empieza en unos segundos.»                                                |
+  | En cola, con otra delante | «En cola: hay otra tarea de Claude en marcha.»                                      |
+  | Otro programa usa Claude  | «Esperando: la tarea de los lunes está usando Claude. Empieza sola cuando termine.» |
+  | En curso                  | «Analizando el encaje… · 1 min 20 s (máximo 5 min)» o «Leyendo el registro… · …»    |
+  | Se ha pedido cancelar     | «Cancelando… se parará en unos segundos.»                                           |
+  | Hecha                     | «Hecha en 2 min 10 s · uso estimado: 1 % del tope de hoy»                           |
+  | No ha salido              | «No ha salido. {el motivo que da la API, que dice qué hacer}»                       |
+  | Cancelada sin empezar     | «Cancelada antes de empezar. No ha gastado nada.»                                   |
+  | Cancelada a medias        | «Cancelada antes de terminar · uso estimado: …»                                     |
+  | La API ya no la encuentra | «Ya no se encuentra esta tarea de Claude. Si hace falta, vuelve a lanzarla.»        |
+
+  Quien tiene ocupado a Claude se dice con un nombre humano: «la tarea de los lunes», «tu sesión de
+  /empleo en Claude Code», «otra ventana de RadarEmpleo» u «otro programa».
+- **El reloj** («· 1 min 20 s (máximo 5 min)») va al lado de la frase y fuera de la región que se
+  anuncia, para que el lector de pantalla no lo repita cada segundo. Solo corre en curso y con la
+  pestaña a la vista.
+- **Barra de progreso** indeterminada de 2 px, solo en curso. Con `prefers-reduced-motion` no sale:
+  la insignia y la frase ya lo dicen.
+- **Avisos rojos**, si el registro o el perfil cambian mientras trabaja Claude: «Ojo: tu registro
+  de candidaturas ha cambiado mientras trabajaba Claude. Si no lo has tocado tú, revísalo.» (y lo
+  mismo con «tu perfil de búsqueda»). Sin nombres de archivo. Es un bloque suave, no una alarma:
+  raya de 4 px a la izquierda en `error`, fondo de `error` al 8 %, triángulo de aviso en rojo y el
+  texto en tinta, con `role="alert"`.
+- **«Cancelar la tarea»** (en cola y en curso) con borde rojo (`boton-peligro-borde`) y
+  **«Reintentar»** (en «No ha salido» y «Cancelada») con borde normal. Los dos miden 48 px, llevan
+  la tarea y la empresa en su nombre accesible («Cancelar la tarea: Análisis del encaje · Acme») y,
+  mientras se manda la petición, se desactivan y dicen «Cancelando…» o «Reintentando…»: un doble
+  clic no manda dos. Reintentar crea una tarea nueva y la tarjeta pasa a enseñarla.
+- **Pausa de 600 ms contra el doble toque.** En la ficha y en Importación la tarjeta sale justo
+  donde estaba el botón que la lanzó: el segundo toque de un doble toque caería en «Cancelar la
+  tarea». Por eso, con `protegerDobleToque`, «Cancelar la tarea» no hace caso a los toques durante
+  los primeros 600 ms (algo más de lo que dura un doble toque).
+- **Foco.** La tarjeta es un grupo con nombre («Tarea de Claude: …») y se puede enfocar: si el
+  botón que tenía el foco desaparece al cambiar el estado, el foco vuelve a la tarjeta y no a
+  `<body>`.
+
+**Uso estimado.** Siempre respecto al tope del día, con espacio de no separación entre la cifra y
+su unidad («3 %», «5 min») para que no se partan de línea:
+
+| Caso                                      | Texto                                                                |
+| ----------------------------------------- | -------------------------------------------------------------------- |
+| Con el coste                              | «uso estimado: 1 % del tope de hoy»                                  |
+| Ha gastado algo, pero no llega al 1 %     | «uso estimado: menos del 1 % del tope de hoy»                        |
+| No ha gastado (una oferta cerrada)        | «no ha gastado nada de tu tope de hoy»                               |
+| En curso                                  | «uso estimado: como mucho el 3 % del tope de hoy»                    |
+| Terminada sin saber el coste              | «uso estimado: no se sabe, como mucho el 3 % del tope de hoy»        |
+| De otro día                               | lo mismo, con «del tope diario»                                      |
+| El día entero                             | «Uso estimado de tu suscripción hoy: 3 % del tope»                   |
+| El día, sin usar                          | «Hoy aún no has usado Claude»                                        |
+| El día, sin gasto pero con algo en marcha | «Hoy aún no has gastado nada; Claude tiene trabajo en marcha»        |
+| Lo reservado                              | «Reservado para lo que está en marcha: hasta el 4 % del tope de hoy» |
+
+Debajo de cada botón que lanza una tarea, en letra pequeña y gris: «Gasta un poco de tu tope
+diario de Claude.».
+
+**Variante compacta** (`compacta`), para la lista de `/agentes`: sin marco y sin barra, la insignia
+y la frase en una línea con los botones a la derecha («Cancelar», corto). No anuncia nada (serían
+cincuenta a la vez), el aviso rojo es una línea corta en `error` («Ojo: cambió tu registro de
+candidaturas mientras trabajaba Claude.») y un error solo da el motivo, porque la insignia ya dice
+«No ha salido».
+
+**Página `/agentes`** («Agentes de Claude», página de lectura de `max-w-3xl` con «Volver a Más»).
+Descripción: «Cuánto llevas usado hoy de tu tope y qué ha hecho Claude: lo que salió bien y lo que
+no.». Sin relleno lima.
+
+- **«Uso de hoy»**: tarjeta de borde fino con la frase del uso en grande (18 px, seminegrita) y en
+  tinta, sin rojo ni ámbar: se lee de un vistazo sin parecer un aviso. Debajo, lo reservado si hay
+  algo en marcha.
+- **«Últimas tareas»**: las 50 últimas en una sola tarjeta de borde fino, separadas por una línea
+  fina. Cada fila: el nombre de la tarea («Análisis del encaje», «Lectura del registro») con la
+  fecha en monoespaciada a la derecha, como un registro; el enlace a la candidatura («puesto en
+  empresa», subrayado y con 48 px de toque); y la tarjeta compacta. «Reintentar» solo sale en la
+  última de cada tarea y candidatura. Al terminar, reintentar o perderse una tarea, la lista y el
+  uso se refrescan sin vaciarse.
+- **Estado vacío**: una terminal en un bloque de tinta con el cursor en lima, «Todavía no has
+  lanzado ninguna tarea de Claude.», «Se lanzan desde la ficha de una candidatura o desde
+  Importación.» en monoespaciada, e «Ir al Tablero» e «Ir a Importación», con borde. Sin marco: va
+  debajo de «Uso de hoy» y no es el estado vacío principal de la página.
+- **Sin agentes**: solo la explicación, en un panel sereno con una «i» (no es un error): en la
+  demo, «En la demo no se usa Claude: los agentes están apagados.»; desde el móvil, «Los agentes de
+  Claude solo se pueden usar desde el PC donde está instalada la app.»; apagados, dónde se
+  encienden. Si la API los rechaza estando en el PC, «Ahora mismo no se puede usar Claude desde
+  aquí. Vuelve a comprobarlo en un momento.» con «Volver a comprobar» (de texto).
+
+**Bloque «Agentes de Claude» de Ajustes.** Un `dl` como el de «Esta app»:
+
+| Fila        | Qué dice                                                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Estado      | «Encendidos»; sin agentes, «Apagados», «Solo desde el PC» o «No disponibles ahora», cada uno con una línea de explicación |
+| Uso de hoy  | La frase del uso, lo reservado y «No se cobra aparte: sale del mismo cupo que usas con Claude Code.»                      |
+| Tope diario | «Lo fija la app; por ahora no se cambia desde aquí.»                                                                      |
+| Claude Code | La versión en monoespaciada; si no es la probada, lo dice y recomienda la probada si alguna tarea falla                   |
+
+Debajo, el enlace «Ver las tareas de Claude», que lleva a `/agentes`. Sin agentes solo sale la fila
+del estado. Si la consulta falla: «No se ha podido consultar el uso de hoy. Vuelve a probar en un
+momento.» con «Reintentar».
+
+**En la ficha.** En el bloque del inconveniente y el análisis, todo con borde:
+
+- **«Analizar encaje con Claude»** («Volver a analizar el encaje» si ya se ha hecho), solo si se
+  puede lanzar y la candidatura no está descartada ni cerrada. Mientras arranca dice «Lanzando…».
+- Al lanzarla sale la tarjeta, que recibe el foco. **El botón va debajo de la tarjeta y del
+  resumen**: así, al terminar, la tarjeta no salta de sitio y lo siguiente (volver a analizar o
+  descartar) queda en el orden en que se lee.
+- Al terminar bien, la ficha se recarga sola y el aviso dice «Encaje actualizado: Sin valorar →
+  Medio.» (o «Encaje sin cambios: …»).
+- **Oferta cerrada.** Si la oferta ya no está publicada, la tarea termina sin gastar y el aviso
+  pregunta «La oferta de {empresa} ya no está publicada. ¿La descartas?», con la acción
+  «Descartar». En la ficha queda el botón **«Descartar: oferta cerrada»**, con borde rojo. Los dos
+  abren el diálogo de siempre con Descartada y el motivo «Oferta cerrada» ya elegidos y el foco en
+  ese motivo. Nunca se descarta sola.
+- Si se edita la ficha mientras Claude la analiza, el aviso sale **dentro del diálogo** de edición:
+  «Esta candidatura ha cambiado mientras la editabas (en otra pestaña o con un análisis de Claude).
+  Si recargas la ficha, lo que has escrito aquí no se guarda.», con «Recargar la ficha» y «Guardar
+  cambios» desactivado.
+
+**En Importación.** Todo lo de Claude va en una caja interna gris, bajo el resumen:
+
+- El aviso «Hay unos N envíos escritos como texto, fuera de la tabla: Claude puede leerlos.» y el
+  botón con borde **«Extraer el texto libre con Claude»**. Debajo: «Claude solo lee: verás lo que
+  encuentre antes de añadir nada. Gasta un poco de tu tope diario de Claude.».
+- Mientras trabaja, la tarjeta (con la pausa contra el doble toque) y «Puede tardar un rato si el
+  texto es largo. Puedes salir: la tarea sigue y la verás aquí al volver.».
+- **Vista combinada.** Al terminar, la misma lista enseña la tabla y lo leído juntos. Lo primero es
+  una línea que dice qué se está viendo, **«Tabla + N leídas del texto libre con Claude»**, con un
+  icono de capas (dos fuentes juntas) y «Ver solo la tabla» con borde. Lleva marco fino, como las
+  tarjetas de `/agentes` y Ajustes: con el trazo grueso parecía una fila más de la lista.
+- **«Leída con Claude».** Cada fila que sale del texto libre lo dice junto a la fecha, en gris de
+  lápiz y con las mismas capas. Sin color de aviso: solo dice de dónde viene.
+- **«Se quedan fuera (N)»** y **«Dudas de Claude (N)»** van plegadas en `seccion-plegable`, con
+  una línea que explica qué son y cada elemento como texto.
+- **«Ver lo que ha leído».** Si la tarea terminó mientras estabas fuera: «Claude terminó de leer el
+  texto libre (hace 12 min).», con «Ver lo que ha leído» (con borde) y «Extraer otra vez» (de
+  texto). Así no hay que volver a extraer, y a gastar, por haber salido.
+- Si el registro cambia después de extraer: «Tu archivo ha cambiado y lo que leyó Claude ya no
+  vale. Vuelve a extraer el texto libre si lo necesitas.», vuelve a la tabla y el foco va al botón
+  de extraer.
+
 ### El momento cumbre: pasar a «Enviada»
 
 1. El botón «Marcar enviada» (ver Botones). Se hunde al pulsarlo.
@@ -690,6 +878,9 @@ sistema.
 | Día del mini calendario                      | `rounded-md border-2 border-transparent bg-surface-container`; hoy, `data-hoy:border-trazo data-hoy:bg-surface-container-lowest`; marca `rounded-full bg-enlace` |
 | Título-enlace                                | `font-semibold text-on-surface hover:text-enlace focus-visible:text-enlace` y anillo de foco de 3 px (sin subrayado)                                            |
 | Aviso «Todo despejado»                       | `rounded-r-sm border-l-[3px] border-enlace bg-despejado px-4 py-3 text-sm`                                                                                      |
+| Tarjeta de una tarea de Claude               | `rounded-md border border-borde-fino bg-surface-container-lowest p-3 sm:p-4` (sin sombra); la compacta, sin marco                                                |
+| Aviso rojo de una tarea de Claude            | `rounded-sm border-l-4 border-error bg-error/8 px-3 py-2 text-sm font-medium text-on-surface` y `role="alert"`                                                  |
+| «Cancelar la tarea» / «Reintentar»           | `mat-stroked-button` + `boton-peligro-borde` / `mat-stroked-button`; nunca `mat-flat-button`                                                                     |
 | Rótulo                                       | `etiqueta text-on-surface-variant`                                                                                                                              |
 | Pega                                         | `text-humo` + banderita + «Pega:» en negrita                                                                                                                    |
 | Botón principal / secundario                 | `mat-flat-button` / `mat-stroked-button`                                                                                                                        |

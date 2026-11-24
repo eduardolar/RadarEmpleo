@@ -2,6 +2,8 @@
 
 Plan del arquitecto del 14/11/2026 para la fila F7 de `docs/PLAN-AMPLIACION.md`. Respeta `docs/PLAN.md` (apartados 4, 5, 6, 7 y 11), `docs/DISENO.md` y los «Cambios aprobados» de `docs/F6-PLAN.md`: la pantalla se llama **Inicio** y hay **un solo relleno lima por pantalla**. Eduardo tiene que responder a las decisiones del apartado 10. Donde no lo haga, se sigue la recomendada.
 
+> **Estado a 24/11/2026:** la F7a y la F7b están hechas y en `main`; falta la F7c (lanzar rastreo). Qué se hizo, qué decidió Eduardo por el camino, cómo salieron las pruebas con `claude` real y qué sigue pendiente está al final, en «Cierre de la F7b (24/11/2026)». Donde ese cierre y el resto del plan no digan lo mismo, manda el cierre.
+
 ## 1. Resumen
 
 RadarEmpleo empieza a lanzar Claude desde el PC, con tres tareas fijas: **Analizar encaje** (desde la ficha), **Extraer del registro** (desde Importación) y **Lanzar rastreo** (desde Rastreos). Cada lanzamiento queda guardado en `EjecucionAgente`. Las ejecuciones pasan por una cola de una en una, con tiempo máximo, tope de gasto por ejecución y por día, y cierre del árbol de procesos.
@@ -474,7 +476,7 @@ En la F7a, con el ejecutor falso, se puede probar con una tarea de prueba que so
   - *(auditoría final de la F7a)* `UseProxy = false` (con un proxy del sistema o `HTTPS_PROXY`, el `ConnectCallback` conectaría al proxy y el DNS lo resolvería él); solo HTTP/1.1 y HTTP/2 (`HttpVersionPolicy.RequestVersionOrLower` con 2.0: HTTP/3 no pasa por `ConnectCallback`); solo el puerto 443; en la lista de rechazo también 0.0.0.0/8, 100.64.0.0/10, 198.18.0.0/15, 240.0.0.0/4, NAT64 `64:ff9b::/96`, 6to4 `2002::/16` y Teredo `2001::/32`; el tope de 2 MB cuenta los bytes **ya descomprimidos**;
   - solo `text/html` y `text/plain`; el HTML pasa a texto plano (sin scripts, estilos ni comentarios; espacios normalizados) y se recorta a un largo máximo antes de ir al prompt como DATOS;
   - si no se puede descargar (LinkedIn con sesión, 403, tiempo, tamaño, tipo, dirección no permitida), el análisis se hace con los datos de la ficha y el resultado lo dice («No he podido leer la oferta: analizo con los datos de la ficha.»).
-- **AnalizarEncaje** (`ManejadorAnalizarEncaje`): valida `ResultadoAnalisisEncaje` y llama a `CandidaturasService.AplicarAnalisisAgenteAsync(candidaturaId, resultado, ejecucionId)` (nuevo, interno):
+- **AnalizarEncaje** (`ManejadorAnalizarEncaje`): valida `ResultadoAnalisisEncaje` y llama a `CandidaturasService.AplicarAnalisisAgenteAsync(candidaturaId, resultado)` (nuevo, interno; sin `ejecucionId`, que no hacía falta):
   - pone `Encaje`, `Pega` y `Analisis`;
   - si la pega o el análisis anteriores no estaban vacíos y son distintos, los guarda antes en una `Nota` con `Origen.Agente`: «Análisis anterior, sustituido por Claude el 16/11: …» (decisión 6);
   - actualiza `FechaUltimoCambio` (token de concurrencia: si choca, se vuelve a leer y se reintenta una vez) y regenera `radar\candidaturas.md`.
@@ -495,6 +497,8 @@ En la F7a, con el ejecutor falso, se puede probar con una tarea de prueba que so
   El resumen es «12 ofertas nuevas en el rastreo de hoy.». Si el registro ha cambiado, sale el aviso rojo: el prompt dice que no lo toque y las reglas lo deniegan.
 
 ## 7. Angular
+
+*(Cierre de la F7b)* Los textos de este apartado son los del plan original. Los que llevan cifras en USD («0,18 USD», «Gastado hoy», «15,00 USD») y algunos nombres («Ver ejecuciones», «Hecho en…») se sustituyeron por los que aprobó Eduardo el 23/11/2026: en pantalla solo hay «uso estimado» como porcentaje del tope. Los textos y el aspecto que valen están en `docs/DISENO.md`, «Agentes y ejecuciones».
 
 Se siguen las convenciones de siempre:
 - carpeta por funcionalidad;
@@ -1007,9 +1011,9 @@ Siempre con `--Agentes:Ejecutor=Cli`, oculto, BD temporal y el uso mirado en Aju
 |---|---|---|
 | A. Evaluación del acierto (20 ofertas, modelo por defecto) | Tras el PR 6 | 0,50 por oferta y **5,00 en total**, con corte automático del evaluador. Repetir tras cambiar el prompt es otro OK |
 | B. ExtraerRegistro real sobre una **copia temporal nueva** del registro y del perfil | Tras el PR 15 | 1,00 la tarea y **1,50 en total**; si se corta, no se relanza sin preguntar. *(24/11: se cortó a los 10 min con unos 64 KB de texto libre; de ahí las partes)* |
-| B2. ExtraerRegistro real por partes, igual que B | Tras el PR 16b | **2,00 la tarea y 2,50 en total**; si se corta, no se relanza sin preguntar. Mirar en el log cuánto tarda cada parte y que el hash del registro original no cambia. *(24/11: se cortó por presupuesto en la primera parte, 0,567 con `sonnet`; de ahí Haiku y la salida corta)* |
+| B2. ExtraerRegistro real por partes, igual que B | Tras el PR 16b | **2,00 la tarea y 2,50 en total**; si se corta, no se relanza sin preguntar. Mirar en el log cuánto tarda cada parte y que el hash del registro original no cambia. *(24/11: se cortó por presupuesto en la primera parte, 0,567 con `sonnet`, y se canceló sin lanzar el resto; de ahí Haiku y la salida corta)* |
 | B3. ExtraerRegistro real con `haiku` y la salida corta, igual que B | Tras el PR 17b | **1,50 la tarea y 1,50 en total**; si se corta, no se relanza sin preguntar. Mirar por parte en el log el tiempo, el coste, los tokens de salida y el modelo real; el hash del registro; cuántas candidaturas, cuántas «Sin leer» por línea equivocada y cuántas con el aviso de empresa, y revisar a mano unas 10 (línea, fecha y estado). Vale si cada parte tarda menos de 3 min y cuesta menos de 0,15, no se pierde ninguna y como mucho un 5 % lleva el aviso. Si Haiku se deja candidaturas, B3b con `Agentes:ModeloExtraerRegistro=sonnet`, con otro OK y otro tope de 1,50 |
-| **B3, resultado (24/11/2026)** | Hecha | **Ok, 4 de 4 partes**, con `haiku` (la CLI 2.1.185 lo resolvió a `claude-haiku-4-5-20251001`): de 1,5 a 2,5 min por parte (8 min en total), de 0,12 a 0,19 USD por parte (**0,64** en total), de 14.000 a 23.000 tokens de salida por parte. 77 candidaturas en el texto libre: 68 nuevas en la vista previa y 9 fuera (ya en la tabla o repetidas); 3 con el aviso de empresa (4,4 %); 4 dudas. Hash del registro y del perfil originales sin cambios. Coste por parte algo por encima de 0,15; el resto de criterios, cumplidos. Tras la prueba, el modelo pasa al id `claude-haiku-5-5` (comprobado que la CLI lo acepta). Pendiente: que Eduardo revise a mano unas 10 filas |
+| **B3, resultado (24/11/2026)** | Hecha | **Ok, 4 de 4 partes**, con `haiku` (la CLI 2.1.185 lo resolvió a `claude-haiku-4-5-20251001`): de 1,5 a 2,5 min por parte (8 min en total), de 0,12 a 0,19 USD por parte (**0,64** en total), de 14.000 a 23.000 tokens de salida por parte. 77 candidaturas en el texto libre: 68 nuevas en la vista previa y 9 fuera (ya en la tabla o repetidas); 3 con el aviso de empresa (4,4 %); 4 dudas. Hash del registro y del perfil originales sin cambios. Coste por parte algo por encima de 0,15; el resto de criterios, cumplidos. Tras la prueba, el modelo pasa al id `claude-haiku-5-5` (comprobado que la CLI lo acepta). **Eduardo revisó la vista previa y la dio por buena el 24/11/2026** |
 | C. AnalizarEncaje real con una oferta abierta y otra cerrada que elija Eduardo | Con B | 0,50 por análisis y **1,00 en total**; la cerrada tiene que costar 0 |
 
 A en otra franja de 5 horas del plan que B y C. Sin gasto, pero avisando antes: una prueba en vivo de la descarga contra 3 o 4 enlaces públicos que elija Eduardo.
@@ -1041,7 +1045,7 @@ Tras el PR 9, apartado 12 puntos 1-10; tras el PR 15, puntos 11-14 con el falso 
 
 ## Pendientes menores de la F7b (PR 4)
 
-Encontrados por el revisor .NET, el auditor de seguridad y el tester en el PR 4. No bloquean; se arreglan en un PR posterior de la F7b.
+Encontrados por el revisor .NET, el auditor de seguridad y el tester en el PR 4. No bloquean. *(Cierre de la F7b)* Siguen abiertos salvo el que se marca; su destino está en «Cierre de la F7b», «Pendientes que siguen abiertos».
 
 - Validar el encaje con el texto exacto («Alto», «Medio», «TiroLargo» o «No»): hoy `JsonStringEnumConverter` acepta «Alto, Medio» (que da TiroLargo), « Alto» y «alto»; con claves duplicadas, gana la última.
 - Segundo choque de concurrencia en `AplicarAnalisisAgenteAsync`: lanzar `ReglaNegocioException` para conservar el coste real.
@@ -1053,10 +1057,12 @@ Encontrados por el revisor .NET, el auditor de seguridad y el tester en el PR 4.
 - Nota con lo anterior: el encaje con texto legible; tope de `Analisis` en la API (la nota puede pasar de 5.000 caracteres).
 - Pasar a Claude el enlace http ya convertido a https.
 - El `resumen` de Claude no se usa (gasta tokens) y, con el aviso, deja poco sitio a la pega.
-- La firma de `AplicarAnalisisAgenteAsync` va sin `ejecucionId`: ajustar el apartado 6 de este plan.
+- La firma de `AplicarAnalisisAgenteAsync` va sin `ejecucionId`: ajustar el apartado 6 de este plan. **Resuelto en el cierre de la F7b:** el apartado 6 ya dice la firma real.
 - Tests que faltan: el borde exacto de los largos, que el manejador regenera el radar, inyección en el perfil y el aviso de NoSeSabe pasando por el manejador.
 
 ## Pendientes menores de la F7b (PR 5)
+
+*(Cierre de la F7b)* Siguen todos abiertos; su destino está en «Cierre de la F7b».
 
 - Un cuerpo de más de 30 MB da 500 con la traza en el log en vez de 413 (ya pasaba antes, también en `POST /api/candidaturas`): traducir `BadHttpRequestException` a su código en `ManejadorExcepciones` y poner un `[RequestSizeLimit]` pequeño en los POST con `PeticionVacia`.
 - El comentario de `Analizar_Da202ConLocation_…` dice que comprueba el origen y no lo hace: ajustarlo o comprobar `Origen.Agente` en el test del manejador con la oferta abierta.
@@ -1067,9 +1073,11 @@ Encontrados por el revisor .NET, el auditor de seguridad y el tester en el PR 4.
 
 ## Pendientes menores de la F7b (PR 6)
 
+*(Cierre de la F7b)* Siguen abiertos (el evaluador no se ha tocado desde el PR 6): hay que resolverlos antes de la prueba A.
+
 - El tope del evaluador se puede pasar unos céntimos en la última oferta (Claude se pasa de `--max-budget-usd` en un turno): reservar margen (×1,3) o avisarlo en el resumen.
 - Si algo lanza una excepción a mitad, no se escribe `resumen.md` con lo ya gastado: validar `esperado.json` antes del bucle y escribir el resumen en un `finally`.
-- El hash del prompt cambia con CRLF/LF: calcularlo con `ReplaceLineEndings("\n")` (y valorar un `.gitattributes`).
+- El hash del prompt cambia con CRLF/LF: calcularlo con `ReplaceLineEndings("\n")` (y valorar un `.gitattributes`). **Resuelto a medias en «Tests 3» (PR #18):** hay `.gitattributes` con LF, así que el prompt ya sale igual en el PC y en el CI; falta normalizarlo en el cálculo del hash.
 - `--salida` puede sobrescribir y mezclar logs: crear siempre una subcarpeta con la fecha.
 - La ruta por defecto de `claude.exe` está copiada de `OpcionesRadar.RutaClaudeEfectiva`: moverla a Services y compartirla.
 - El id de oferta con `[0-9]{2}` en vez de `\d{2}` (que acepta dígitos Unicode).
@@ -1078,28 +1086,209 @@ Encontrados por el revisor .NET, el auditor de seguridad y el tester en el PR 4.
 
 ## Pendientes menores de la F7b (PR 7)
 
-Encontrados por el revisor .NET y el auditor de seguridad en el PR 7. No bloquean; se arreglan en un PR posterior de la F7b.
+Encontrados por el revisor .NET y el auditor de seguridad en el PR 7. No bloquean. *(Cierre de la F7b)* Los que no llevan marca siguen abiertos; su destino está en «Cierre de la F7b».
 
 - `PlantillaPrompt.QuitarInvisibles` (compartida) no quita los selectores de variación suplementarios U+E0100–E01EF.
 - ExtraerRegistro admite un `enlace` `javascript:` o `file:` y fechas absurdas (0001, 9999). En la vista previa del PR 9, el enlace solo va como `href` si es https (`EnlaceSeguro`) y las dudas se pintan siempre como texto. **Resuelto en el PR 9a/9b:** las fechas fuera de 2000-2100 van a «Sin leer» en el combinador y el enlace ya no llega al front (la vista previa no trae el lote). Si el PR 15 lo enseña, solo como `href` si es https, y las dudas como texto.
 - Se guarda `motivoDescarte` aunque el estado no sea Descartada. **Resuelto en el PR 9b:** `CombinadorLotes.AFilaLote` lo quita si no es Descartada, así que al aplicar con RegistroConClaude no llega.
 - TOCTOU entre el hash «antes» y el texto leído para el prompt: usar `LeerRegistroConFechaAsync` y su `Hash`. **Resuelto en el PR 9a:** `ContextoTarea.HashRegistroAntes` y la comparación en `ManejadorExtraerRegistro.ConstruirAsync`.
-- La `cita` sale del texto limpiado (NFKC, `‹‹‹`): el PR 8 tiene que compararla con la misma limpieza.
+- La `cita` sale del texto limpiado (NFKC, `‹‹‹`): el PR 8 tiene que compararla con la misma limpieza. **Resuelto en el PR 8 y sin efecto desde el PR 17b:** ya no hay `cita`; Claude da el número de línea.
 - Una tabla con columnas parecidas dentro de un rastreo tapa la buena, en los dos analizadores.
 - Casos raros de las secciones de rastreo: «#» dentro de un bloque de código, «##Otra» sin espacio y U+2028.
-- El enlace queda sin normalizar hasta que pasa por `ReglasImportacion`.
-- La salida teórica (1000 filas con todos los campos al máximo) ronda los 10 MB, frente a `MaximoSalida` de 4 MB.
+- El enlace queda sin normalizar hasta que pasa por `ReglasImportacion`. **Sin efecto desde el PR 17b:** el enlace ya no lo escribe Claude; lo saca la app de la línea del registro (el primer `https`).
+- La salida teórica (1000 filas con todos los campos al máximo) ronda los 10 MB, frente a `MaximoSalida` de 4 MB. **Mitigado en los PR 16b y 17b:** va por partes y con la salida corta (sin cita, nota ni enlace); no se ha vuelto a calcular el máximo teórico.
 - `LeerBytesAsync` carga el registro entero en memoria, sin tope.
 - Añadir `extraer-registro` a `CanalKestrelTests`.
 
 ## Pendientes menores de la F7b (PR 8)
 
-Encontrados por el revisor .NET y el tester en el PR 8. Los cuatro primeros hay que resolverlos en el PR 9; el resto no bloquea.
+Encontrados por el revisor .NET y el tester en el PR 8. Los cuatro primeros hay que resolverlos en el PR 9; el resto no bloquea. *(Cierre de la F7b)* No queda ninguno abierto.
 
 - **PR 9:** la plantilla de Importación hace `track fila.linea` en la lista de «Sin leer», y ahora puede haber líneas repetidas (varias con 0, o dos filas con la misma cita): pasar a `$index`. La vista previa nunca debe usar `Linea` como identificador de fila. **Resuelto en el PR 9a.**
 - **PR 9:** `FilaLote` no tiene sección: la `Seccion` de la fila extraída se pierde, y `ImportacionService.CrearAsync` pone siempre `SeccionOrigen = "Tabla del registro"`. Decidirlo con `OrigenLote.RegistroConClaude`. **Resuelto en el PR 9b:** `FilaLote.Seccion`; las extraídas se guardan con «Texto libre del registro: …».
 - **PR 9:** `ValidarLote` tiene escritos a mano los años 2000 y 2100: usar `CombinadorLotes.AnioMinimo` y `AnioMaximo` para que no se separen. **Resuelto en el PR 9a.**
 - **PR 9:** `LoteCombinado.Fuera` (las filas que se quedan fuera porque ya están en la tabla o salen dos veces en el texto) no tiene sitio en `VistaPreviaImportacionDto`: decidir cómo se enseña. **Resuelto en el PR 9a/9b:** el DTO trae `fuera` (vacío con la tabla); se enseña en el PR 15.
-- El recorte a 200 de la cita de una fila sin leer lo hace el manejador sobre el texto sin NFKC: un corte entre una letra y su tilde (NFD) o en medio de un «<<<» deja un principio que ya no encaja, y la fila sale con línea 0 (del lado seguro).
+- El recorte a 200 de la cita de una fila sin leer lo hace el manejador sobre el texto sin NFKC: un corte entre una letra y su tilde (NFD) o en medio de un «<<<» deja un principio que ya no encaja, y la fila sale con línea 0 (del lado seguro). **Sin efecto desde el PR 17b:** se borró la comparación de citas.
 - Una fila que cita una línea real con datos inventados (la línea «## Septiembre» con la empresa «Omega») entra igual. Comprobación barata posible: que la empresa normalizada aparezca en la línea citada, o al menos un aviso. **Decisión de Eduardo.** **Resuelto en el PR 9b:** la fila entra con el aviso «Revisa la empresa: no aparece en la línea.» (`FilaLote.EmpresaFueraDeLaCita`).
-- Una nota vacía (`""`) llega como `""` y no como null.
+- Una nota vacía (`""`) llega como `""` y no como null. **Sin efecto desde el PR 17b:** la nota ya no la escribe Claude; es la línea del registro.
+
+## Cierre de la F7b (24/11/2026)
+
+La F7b está hecha y en `main` desde el 24/11/2026. RadarEmpleo ya lanza Claude desde el PC para dos cosas: **analizar el encaje** de una candidatura desde su ficha y **leer el texto libre del registro** desde Importación. Las dos se ven en la página `/agentes` y en Ajustes, con el uso como porcentaje del tope del día.
+
+Al cerrar: 2191 tests de .NET y 1282 del front en verde, `ng build` sin avisos y Prettier correcto. Sin migraciones nuevas en toda la F7b.
+
+De las pruebas de aceptación del apartado 12, la de ExtraerRegistro (punto 15) está hecha y aprobada (prueba B3). La de AnalizarEncaje con una oferta real (punto 16, prueba C) sigue pendiente: se hará con dos ofertas que elija Eduardo.
+
+### Qué se ha hecho, PR a PR
+
+El plan tenía 17 PR (del 0 al 16). Han salido más: los que pasaban de 1.000 líneas se partieron (2, 9 y 10), las revisiones dejaron tres PR pequeños de arreglos (11b, 14b y 17c) y las pruebas reales B y B2 obligaron a rehacer ExtraerRegistro (16a, 16b, 17a y 17b). Entre medias fue la auditoría de tests. El número de la izquierda es el de GitHub.
+
+**Backend del encaje y del registro**
+
+| PR | Del plan | Fecha | Qué hizo |
+|---|---|---|---|
+| #5 | 0 | 16/11 | El plan por PR y las decisiones aprobadas |
+| #6 | 1 | 16/11 | Prompts y esquemas embebidos; una tarea puede terminar sin lanzar Claude (coste 0); mensajes de tope sin dólares |
+| #7 | 2a | 16/11 | Descarga de la oferta: direcciones bloqueadas (anti-SSRF), HTML a texto y conexión a la dirección ya comprobada |
+| #8 | 2b | 16/11 | El descargador con sus límites (https, 443, 3 redirecciones, 15 s, 2 MB) y la versión falsa para tests y demo |
+| #9 | 3 | 16/11 | ¿Sigue abierta la oferta?: detector de Greenhouse, Lever, Ashby y Workable y `ReglasOfertaAbierta` |
+| #11 | 4 | 18/11 | `ManejadorAnalizarEncaje` y `AplicarAnalisisAgenteAsync` (lo anterior se guarda en una nota) |
+| #12 | 5 | 19/11 | `POST /api/agentes/analizar/{candidaturaId}` y `estadoOferta` en las ejecuciones |
+| #13 | 6 | 19/11 | 20 ofertas inventadas, la puntuación del encaje y el evaluador (una consola que no se ejecuta sola) |
+| #14 | 7 | 22/11 | `ManejadorExtraerRegistro`, el texto libre del registro y `POST /api/agentes/extraer-registro` |
+| #15 | 8 | 23/11 | `CombinadorLotes`: une la tabla con lo extraído; manda la tabla |
+| #21 | 9a | 23/11 | Aplicar con el hash del registro y el lote rehecho en el servidor: el cliente ya no manda filas |
+| #22 | 9b | 23/11 | `RegistroConClaude`, `extraccion/{id}/previsualizar` (solo desde el PC) y el aviso de la empresa que no sale en la línea |
+
+**Pantallas**
+
+| PR | Del plan | Fecha | Qué hizo |
+|---|---|---|---|
+| #23 | 10a | 23/11 | Interfaces de los agentes y los textos del uso estimado, sin ninguna cifra en USD |
+| #24 | 10b | 23/11 | `AgentesService`: lanzar, cancelar, reintentar y un solo seguimiento cada 5 s que se pausa con la pestaña oculta |
+| #25 | 11 | 23/11 | La tarjeta `estado-ejecucion` (normal y compacta) |
+| #26 | 11b | 23/11 | Backend: «En cola» solo si de verdad hay otra delante, quién usa Claude con un nombre humano y mensajes de error que dicen qué hacer |
+| #27 | 12 | 23/11 | La página `/agentes`, su ruta y la quinta tarjeta de Más; `desdeElPc` en `/api/sistema/info` |
+| #28 | 13 | 23/11 | El bloque «Agentes de Claude» en Ajustes |
+| #31 | 14 | 23/11 | «Analizar encaje con Claude» y «Descartar: oferta cerrada» en la ficha; la pausa contra el doble toque |
+| #32 | 14b | 24/11 | Editar la ficha manda la versión leída: ya no pisa un análisis de Claude ni lo de otra pestaña (409 dentro del diálogo) |
+| #33 | 15 | 24/11 | «Extraer el texto libre con Claude» en Importación: la vista combinada, «Leída con Claude», lo que queda fuera, las dudas y «Ver lo que ha leído» |
+
+**ExtraerRegistro tras las pruebas reales**
+
+| PR | Del plan | Fecha | Qué hizo |
+|---|---|---|---|
+| #34 | 16a | 24/11 | El procesador lanza una tarea en varias partes, en serie y dentro de la misma ejecución; `PartidorTextoLibre` parte el texto por apartados sin partir nunca una línea |
+| #35 | 16b | 24/11 | ExtraerRegistro lee por partes (hasta 6 de unos 16.000 caracteres) y junta lo de todas; Ok parcial |
+| #36 | 17a | 24/11 | Haiku por defecto y el modelo configurable (`Agentes:ModeloExtraerRegistro`, comprobado al arrancar); el log apunta los tokens y el modelo real |
+| #37 | 17b | 24/11 | La salida corta: el texto va numerado, Claude devuelve el número de línea y lo que hay que interpretar, y la app saca de esa línea la sección, el enlace y la nota. Topes más bajos |
+| #38 | 17c | 24/11 | El modelo pasa al id `claude-haiku-5-5` y el resultado de la prueba B3 queda en el plan |
+
+**Auditoría de tests** (del 23/11, entre el PR 8 y el 9a)
+
+| PR | Qué hizo |
+|---|---|
+| #16 | Tests 1: ningún test sale en verde sin probar nada (los que dependen de Windows o de enlaces simbólicos salen «Omitido» con su motivo) |
+| #17 | Tests 2: sin hora real ni pausas fijas |
+| #18 | Tests 3: `.gitattributes` con LF (y el PDF de ejemplo como binario) |
+| #19 | Tests 4: registros con codificaciones raras y el spec de `AvisosService`. Destapó un fallo real: un archivo que no era UTF-8 se leía cambiando las tildes sin avisar; ahora da un error claro |
+| #20 | Tests 5: fuera los tests de API que repetían lo que ya prueba el servicio, sin perder cobertura |
+
+Del mismo día, pero de otras fases: #29 (F14, perfil desde la app) y #30 (F15, preparar entrevista, y F16, LinkedIn), que solo añaden esas propuestas a `PLAN-AMPLIACION.md`.
+
+El PR 16 del plan (`f7b-16-cierre`) es este cierre, que sale en la rama `f7b-18-cierre`: la sección «Agentes y ejecuciones» de `DISENO.md`, `PLAN.md`, el README y este apartado.
+
+### Decisiones de Eduardo durante la F7b
+
+Además de las diez del 15/11/2026 («Decisiones de la F7b»):
+
+- **Textos de las tareas, aprobados el 23/11/2026** (revisados por experto-ux; sustituyen a la redacción de la decisión 2 y a los del apartado 7). El uso se dice como «uso estimado: 1 % del tope de hoy», nunca en USD. La tarea va en femenino («Hecha», «No ha salido», «Cancelada»). Los avisos rojos hablan de «tu registro de candidaturas» y «tu perfil de búsqueda», sin nombres de archivo. Están todos en `DISENO.md`.
+- **La vista previa no trae el lote (23/11).** Así no invita a reenviarlo y un enlace extraído nunca llega al front.
+- **Una fila cuya empresa no sale en su línea entra igual, con aviso (23/11):** «Revisa la empresa: no aparece en la línea.».
+- **Oferta cerrada:** la ficha propone descartarla con el motivo ya elegido; nunca la descarta sola.
+- **Por partes (24/11, tras la prueba B).** El texto libre se lee en hasta 6 partes de unos 16.000 caracteres, cada una en su consulta y todas en la misma ejecución. Con más de 6 no se lanza.
+- **Ok parcial (24/11).** Si se pierde una parte (tiempo, tope, salida no válida o un error), la tarea termina en Ok con lo leído y una duda por cada parte perdida. Solo es Error si no sale ninguna.
+- **Haiku y salida corta (24/11, tras la prueba B2).** Lo caro era la salida, no la entrada: un modelo más ligero, y Claude devuelve de cada candidatura solo su número de línea y lo que hay que interpretar (fecha, empresa, puesto, estado y motivo). Lo extraído antes con el formato viejo ya no se lee: hay que volver a extraer.
+- **`claude-haiku-5-5` (24/11, tras la prueba B3).** El alias `haiku` de la CLI 2.1.185 llevaba a Haiku 4.5, así que se escribe el id. Se cambia sin compilar con `Agentes:ModeloExtraerRegistro`.
+- **La prueba B3, dada por buena (24/11)**, después de revisar Eduardo la vista previa.
+- **Nuevas fases pedidas el 23/11:** F14 (perfil desde la app), F15 (preparar entrevista) y F16 (LinkedIn). Están en `PLAN-AMPLIACION.md`.
+
+**Topes actuales** (en código, en `DefinicionesTareas.cs`; importes en el equivalente en USD que da `claude`, que no se cobran aparte):
+
+| Tarea | Modelo | En total | Por parte |
+|---|---|---|---|
+| AnalizarEncaje | El de por defecto | 0,50 y 5 min | — |
+| ExtraerRegistro | `claude-haiku-5-5` | 1,50 y 30 min | El total entre el número de partes; como mucho 0,50 y 5 min (con 4 partes, 0,37; con 6, 0,25) |
+
+El tope del día sigue en 15 (`Agentes:TopeGastoDiarioUsd`) y Ajustes solo lo enseña. Al encolar una ExtraerRegistro se reserva su 1,50 entero, y el bloqueo compartido caduca a los 35 min.
+
+### Pruebas con `claude` real
+
+Todas el 24/11/2026, con el OK de Eduardo, sobre una copia temporal del registro y del perfil y con una base de datos temporal; nunca sobre los archivos originales, cuyo hash se comprobó sin cambios al terminar B3.
+
+| Prueba | Cómo iba ExtraerRegistro | Resultado | Qué salió de ahí |
+|---|---|---|---|
+| **B** | Una sola consulta con `sonnet`, 1,00 y 10 min | **Cortada a los 10 min**, sin salida, con unos 64 KB de texto libre | Leer por partes (PR 16a y 16b) |
+| **B2** | Por partes, `sonnet`, 2,00 y 50 min | **Cortada por presupuesto en la parte 1** (18 KB, 8 min 40 s, un turno, 0,567) y cancelada sin lanzar el resto | Haiku y salida corta (PR 17a y 17b) |
+| **B3** | Por partes, `haiku` y salida corta, 1,50 y 30 min | **Ok, 4 de 4 partes en 8 min y 0,64.** 77 candidaturas en el texto libre: **68 nuevas** en la vista previa y 9 fuera (ya en la tabla o repetidas); 3 con el aviso de empresa (4,4 %) y 4 dudas | El id `claude-haiku-5-5` (PR 17c). **Revisada por Eduardo y dada por buena** |
+
+Detalle de B3: de 1,5 a 2,5 min, de 0,12 a 0,19 y de 14.000 a 23.000 tokens de salida por parte. El coste por parte quedó algo por encima de los 0,15 que se pedían; el resto de criterios se cumplió. La CLI resolvió `haiku` a Haiku 4.5, así que **B3 se hizo con Haiku 4.5 y no con el modelo que ha quedado por defecto**.
+
+**Pruebas pendientes** (cada una con su OK expreso, como siempre):
+
+- **C. AnalizarEncaje real** con dos ofertas que elija Eduardo, una abierta y otra cerrada: 0,50 por análisis y 1,00 en total; la cerrada tiene que costar 0. Es lo que falta de la aceptación de la F7b. Con ella se comprueba también lo que quedó sin probar con el ejecutor real: que no quedan procesos vivos al cancelar o al cerrar la app.
+- **A. Evaluación del acierto** con las 20 ofertas inventadas: 0,50 por oferta y 5,00 en total, en otra franja de 5 horas del plan que la C. Antes hay que arreglar los menores del evaluador (ver abajo).
+- **B3 otra vez con Haiku 5.5** (opcional): el id está comprobado con una consulta mínima, pero no se ha repetido la extracción entera con él. Mismo tope de 1,50.
+- **La descarga contra 3 o 4 enlaces públicos** que elija Eduardo (sin gasto, avisando antes): no consta que se haya hecho; puede ir con la C.
+
+### Lo que este plan dice y ya no es así
+
+Para no reescribir el plan original, se apunta aquí:
+
+- **`cita` → `linea`.** Donde los apartados 5.1, 6, 10 y 11 hablan de la `cita` de una fila extraída, ahora es el número de `linea`. `FilaExtraida` ya no trae sección, enlace, modalidad, ubicación ni nota de Claude: los saca la app de la línea. Vale la tabla 4.4.
+- **Textos en USD del apartado 7** («0,18 USD», «Gastado hoy», «15,00 USD»): sustituidos por el uso estimado en porcentaje. Vale `DISENO.md`.
+- **La vista previa de Importación** no trae `lote`; trae `origen`, `hashRegistro`, `ejecucionId`, `fuera` y `dudas`.
+- **Ajustes** enlaza con «Ver las tareas de Claude», y la quinta tarjeta de Más solo sale con los agentes disponibles.
+- **ExtraerRegistro** ya no va con `sonnet` ni en una sola consulta (decisión 7 del apartado 10): vale la tabla 4.4.
+- **AnalizarEncaje** va sin el CV (decisión 1 de la F7b); el CV llega en la F8.
+
+### Pendientes que siguen abiertos
+
+Lista única, sacada de los «Pendientes menores» de los PR 4 a 8, de lo que las revisiones de los PR 12 a 16b dejaron para después y de las notas de este plan. Ninguno bloquea. Lo resuelto por el camino está marcado en cada sección de «Pendientes menores».
+
+**PR 12b: pulir las pantallas de Claude** (front y sus textos)
+
+- `/agentes`: el recuento de fallos arriba con un filtro, los errores ya resueltos atenuados y la lista agrupada por día (propuesta de experto-ux en el PR 12).
+- El mensaje técnico que da la API cuando falta un archivo: decirlo en claro (PR 12).
+- Ajustes: adónde va el foco si un reintento da 403, y la limpieza de un spec (PR 13).
+- Importación: elegir fila a fila qué se añade; el 404 de `extraccion/{id}/previsualizar` sin `detail` en español; el texto del 403 de aplicar (PR 15). La línea en cada duda ya está (PR 17b).
+- Un registro pequeño, que cabe en una parte, también reserva el total y enseña el máximo de toda la tarea, 30 min (aceptado en el PR 16b).
+
+**PR 6 de tests: lo que queda de la auditoría**
+
+- AnalizarEncaje (PR 4): el borde exacto de los largos, que el manejador regenera el radar, la inyección en el perfil y el aviso de «no se sabe» pasando por el manejador.
+- API de analizar (PR 5): los otros 409 (sin carpeta Curriculum y tope del día), que hoy solo cubren los tests de servicio y de la cola; y el comentario de `Analizar_Da202ConLocation_…`, que dice que comprueba el origen y no lo hace.
+- `extraer-registro` en `CanalKestrelTests` (PR 7).
+- El evaluador del encaje (PR 6), **antes de la prueba A**:
+  - reservar margen en el tope (Claude se pasa de `--max-budget-usd` en un turno) o avisarlo en el resumen;
+  - validar `esperado.json` antes del bucle y escribir `resumen.md` en un `finally`, para no perder lo ya gastado si algo falla a mitad;
+  - calcular el hash del prompt con los finales de línea normalizados;
+  - `--salida` siempre en una subcarpeta con la fecha;
+  - compartir con la API la ruta por defecto de `claude.exe`, hoy copiada;
+  - el id de oferta con `[0-9]{2}` en vez de `\d{2}`;
+  - sacar las opciones de la consola a una función pura y probarlas;
+  - revisar los encajes esperados que dependen de cosas que el perfil de ejemplo no dice, si la prueba A falla justo ahí.
+
+**F7c: lanzar rastreo**
+
+- Toda la F7c del apartado 1: `prompts/rastreo.*`, `ManejadorRastreo`, «Lanzar rastreo» en Rastreos, y el bloqueo en `_rastreo_semanal.ps1` y en `SKILL.md`, con el OK de Eduardo (decisión 5).
+- Antes de tocar el script, las dos notas del auditor del apartado 4.6: el bucle que gira sin pausa si no se puede borrar el bloqueo, y la comparación de `caducaUtc`, que sale desplazada una o dos horas.
+- Decidir el alcance web del rastreo (hoy, WebFetch y WebSearch sin límite de dominio) y cómo hace «/empleo modo rastreo» sin Skill ni la configuración de usuario (tabla 4.4).
+- La comprobación S5 con `claude` real: que las denegaciones de lectura aguantan los nombres 8.3, Grep y Glob, y las mayúsculas en las rutas (apartado 10).
+- Del analizador (PR 7): una tabla con columnas parecidas dentro de un rastreo tapa la buena, en los dos analizadores; y los casos raros de las secciones de rastreo («#» dentro de un bloque de código, «##Otra» sin espacio y U+2028).
+- Idea aprobada para la F7c o después: el rastreo en las webs de empleo de las empresas, sin IA (`PLAN-AMPLIACION.md`, 7b).
+
+**F8 en adelante**
+
+- *Endurecer AnalizarEncaje, antes de que la F8 reutilice el patrón* (PR 4):
+  - validar el encaje con el texto exacto (hoy se aceptan «alto», « Alto» o «Alto, Medio»);
+  - en un segundo choque de concurrencia al aplicar, terminar con un error de negocio que conserve el coste real;
+  - volver a comprobar, al construir y al aplicar, que la candidatura no se ha descartado o cerrado mientras esperaba en la cola;
+  - quitar invisibles, controles y marcas bidi de lo que devuelve Claude antes de guardarlo;
+  - delimitadores con un valor distinto por ejecución y por sección, sin sustituir el cierre por algo que se le parece;
+  - avisar a Claude cuando el perfil se recorta a 20.000 caracteres;
+  - no partir un emoji al recortar el resumen;
+  - en la nota con el análisis anterior, el encaje con su texto legible, y un tope para `Analisis` en la API;
+  - pasar a Claude el enlace `http` ya convertido a `https`;
+  - el `resumen` que devuelve Claude no se usa y gasta tokens;
+  - `QuitarInvisibles` no quita los selectores de variación U+E0100–E01EF (PR 7).
+- *F8:* el texto del CV en AnalizarEncaje (decisión 1 de la F7b) y la comprobación previa de la oferta, que ya tiene la base hecha.
+- *API en general, cuando toque:*
+  - un cuerpo de más de 30 MB da 500 en vez de 413: traducir `BadHttpRequestException` y poner un `[RequestSizeLimit]` pequeño en los POST sin datos (PR 5);
+  - `EstadoOfertaDe` lee cada `ResultadoJson` en el listado: si crece, proyectar solo el campo (PR 5);
+  - `LeerBytesAsync` carga el registro entero en memoria, sin tope (PR 7);
+  - volver a calcular la salida máxima de ExtraerRegistro frente a `MaximoSalida` (PR 7).
+- *Cuando el registro crezca:* la sincronización incremental por secciones (`SeccionImportada`, decisión 7 del apartado 10). Con la lectura por partes, hoy caben unos 96.000 caracteres de texto libre.
+- *F11:* cambiar el tope diario desde Ajustes.
+- *F12:* exigir `X-Radar-Token` por el endpoint remoto; revisar el filtro de `Sec-Fetch-Site` en Development si algún día se añade CORS para el front (PR 5); y lo que ya está en `PLAN.md` §11 para esa fase.

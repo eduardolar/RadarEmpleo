@@ -50,11 +50,30 @@ _Vídeos de la app real con datos inventados. También en MP4: [inicio](docs/dem
 - **Tablero por estados**: Detectada, Preparada, Enviada, Entrevista, Oferta, Descartada y Cerrada. Las transiciones válidas las decide el dominio, no el front. Se mueve arrastrando o con el menú ⋮, y las columnas sin uso se pliegan para que quepan más a la vista; si no caben todas, unas flechas desplazan el tablero.
 - **Deshacer**: cualquier cambio de estado se puede deshacer durante 10 minutos desde el aviso o con Ctrl+Z. Vuelve exactamente a como estaba: fechas, motivo de descarte y seguimientos.
 - **Ficha de candidatura**: historial de estados, notas, motivo de descarte y los documentos enviados (CV y carta), que se abren dentro de la propia ficha.
-- **Importar del registro**: importa la tabla de candidaturas que llevaba a mano en Markdown, con vista previa y sin duplicar lo que ya está.
+- **Importar del registro**: importa la tabla de candidaturas que llevaba a mano en Markdown, con vista previa y sin duplicar lo que ya está. Lo que apunté como texto, fuera de la tabla, lo lee Claude (ver [Con Claude](#con-claude)).
 - **Rastreos**: lee los informes semanales de ofertas y deja pasar al tablero las que interesan. Si la empresa ya tiene una candidatura, avisa antes de duplicarla.
 - **Perfil de búsqueda**: muestra los filtros y el stack con los que se valoran las ofertas.
 - **Pensada para el móvil**: navegación inferior, zonas de toque de 48 px y textos sin jerga.
 - **Diseño propio**: neobrutalismo con grises y lima, en modo claro y oscuro, con contraste AA. La guía está en [docs/DISENO.md](docs/DISENO.md).
+
+## Con Claude
+
+La app lanza [Claude Code](https://claude.com/claude-code) en el propio PC para dos tareas fijas. No hay ningún cuadro donde escribirle: cada tarea tiene su plantilla, y Claude propone y decido yo.
+
+- **Analizar el encaje, desde la ficha**: «Analizar encaje con Claude» descarga la oferta, la compara con mi perfil de búsqueda y rellena el encaje, la pega y el análisis. Lo que hubiera antes se guarda en una nota. Si la oferta ya no está publicada, no gasta nada y me propone descartarla; nunca la descarta sola.
+- **Extraer el texto libre del registro, en Importación**: buena parte de mi registro son frases sueltas, no filas de una tabla. «Extraer el texto libre con Claude» las lee por partes y las enseña junto a la tabla, cada una marcada como «Leída con Claude», con sus dudas aparte. No se añade nada hasta que pulso «Aplicar».
+- **Agentes**: una página con las últimas tareas (hecha, en curso, no ha salido), con «Cancelar» y «Reintentar».
+- **El uso, en Ajustes**: cuánto llevo usado hoy, como porcentaje de un tope diario, y la versión de Claude Code.
+
+Cómo está acotado:
+
+- **Solo desde el PC**: por la entrada del móvil, la API responde 403 a todo lo de agentes, y en el móvil y en la demo ni siquiera salen los botones.
+- **El uso sale de la suscripción de Claude Code**, no de una clave de API: no se cobra aparte. Por eso la app habla de «uso estimado» y no de dinero.
+- **Con límites**: una tarea a la vez, con tiempo máximo y tope de uso por tarea y por día.
+- **Claude no toca nada**: en estas dos tareas va sin herramientas (no abre webs ni lee o escribe archivos). La oferta la descarga la app, con protección contra direcciones internas, y todo le llega como datos, no como órdenes. Su respuesta tiene que cumplir un esquema y se valida otra vez antes de guardarla.
+- **Mis archivos, intactos**: la app calcula el hash del registro y del perfil antes y después de cada tarea, y avisa en rojo si alguno ha cambiado.
+
+Los agentes vienen apagados. Se encienden con `"Agentes": { "Habilitado": true }` en `appsettings.Local.json` y necesitan Claude Code instalado (probado con la versión 2.1.185). Para probar las pantallas sin gastar hay un ejecutor falso con respuestas de ejemplo (`"Ejecutor": "Falso"`, que solo arranca con una base de datos que no sea la de por defecto).
 
 ## Stack
 
@@ -72,12 +91,13 @@ _Vídeos de la app real con datos inventados. También en MP4: [inicio](docs/dem
 src/
   RadarEmpleo.Domain     entidades, estados y reglas de negocio puras (sin dependencias)
   RadarEmpleo.Data       DbContext, configuración de EF Core y migraciones
-  RadarEmpleo.Services   casos de uso: candidaturas, importación, documentos, rastreos, perfil
+  RadarEmpleo.Services   casos de uso: candidaturas, importación, documentos, rastreos, perfil, agentes
   RadarEmpleo.Api        controladores, validación y errores como ProblemDetails
 tests/
   RadarEmpleo.Tests      unitarios, de servicios contra SQLite y de la API con WebApplicationFactory
 web/                     front en Angular, una carpeta por funcionalidad
-docs/                    plan del proyecto por fases
+prompts/                 plantillas y esquemas JSON de las tareas de Claude
+docs/                    plan del proyecto por fases y guía de diseño
 ```
 
 Algunas decisiones que me parecen interesantes:
@@ -86,6 +106,8 @@ Algunas decisiones que me parecen interesantes:
 - **Importación idempotente**: repetir la importación o el escaneo de rastreos no duplica nada.
 - **Acceso a archivos acotado**: la app solo puede abrir CV y cartas de unas carpetas concretas. Comprueba rutas, enlaces duros y la ruta final del archivo ya abierto, para que nunca pueda servir otra cosa (por ejemplo, la carpeta con el DNI).
 - **Solo en local**: la API solo acepta peticiones de `localhost` y la base de datos vive fuera del repositorio.
+- **El servidor no se fía del cliente**: al importar, el navegador solo manda el hash del registro que leyó y las filas elegidas; el servidor vuelve a leer el archivo y, si ha cambiado, responde 409 en vez de importar algo viejo.
+- **Una cola para Claude**: las tareas pasan de una en una por una cola guardada en la base de datos, con un bloqueo compartido para no pisarse con otras sesiones de Claude Code. Los tests nunca lanzan un Claude de verdad: usan un ejecutor falso y un programa que lo simula.
 
 ## Cómo arrancarla
 
@@ -139,7 +161,7 @@ El diseño completo y sus salvaguardas están en [docs/PLAN-AMPLIACION.md](docs/
 
 ## Estado
 
-En desarrollo, por fases. Hechas: tablero y fichas, importación del registro, documentos, rastreos, perfil, la pantalla Inicio con recordatorios, estadísticas y ajustes. Lo siguiente es que la app prepare el CV adaptado a cada oferta y ayude a enviarla (ver [Preparar y enviar](#preparar-y-enviar-en-desarrollo)). El plan completo está en [docs/PLAN.md](docs/PLAN.md) y [docs/PLAN-AMPLIACION.md](docs/PLAN-AMPLIACION.md).
+En desarrollo, por fases. Hechas: tablero y fichas, importación del registro, documentos, rastreos, perfil, la pantalla Inicio con recordatorios, estadísticas, ajustes y las dos primeras tareas con Claude (analizar el encaje y leer el texto libre del registro). Lo siguiente es lanzar el rastreo de ofertas desde la app y, después, que prepare el CV adaptado a cada oferta y ayude a enviarla (ver [Preparar y enviar](#preparar-y-enviar-en-desarrollo)). El plan completo está en [docs/PLAN.md](docs/PLAN.md) y [docs/PLAN-AMPLIACION.md](docs/PLAN-AMPLIACION.md).
 
 ## Autor
 

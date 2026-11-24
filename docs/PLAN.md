@@ -160,9 +160,11 @@ Flujo más corto: Rastreos → «Detectada» → abrir ficha → vincular CV sug
 | F3 | Importación determinista, `ExportadorRadarMd`, página de Importación | 1,5 | Todas las filas de la tabla del registro en la vista previa (27 el 01/11; los ~41 envíos que solo constan en texto libre quedan para la F6, «Extraer registro»); aplicar dos veces sin duplicados; `Get-FileHash` del registro igual antes y después; aparece `radar\candidaturas.md` |
 | F4 | Documentos, perfil y bandeja de rastreos | 1,5 | Abrir el PDF del CV de Marco Talento; pasar una oferta de ejemplo a Detectada |
 | F5 | Recordatorios, Hoy y estadísticas (con `IClock`) | 1,5 | Aparecen el 3/11 y el 17/11 de LinkedIn; un seguimiento real en Hoy |
-| F6 | Agentes: ejecutor, cola, prompts y esquemas, filtro de puerto, sincronización por hash | 2 | Extraer registro propone ~45-50 candidaturas; Analizar encaje rellena la pega; 403 por el puerto 5181 |
+| F6 | Agentes: ejecutor, cola, prompts y esquemas, filtro de puerto, sincronización por hash. **Ahora es la F7 de `PLAN-AMPLIACION.md`, en tres partes: F7a (ejecutor y cola), hecha el 16/11/2026; F7b (analizar encaje, extraer el registro y sus pantallas), hecha el 24/11/2026; F7c (lanzar rastreo), pendiente** | 2 | Extraer registro propone ~45-50 candidaturas; Analizar encaje rellena la pega; 403 por el puerto 5181 |
 | F7 | Móvil: Capacitor, interceptor, Ajustes, CORS, Tailscale, APK | 1,5 | Con datos móviles, ver el tablero y apuntar una nota que aparece en el PC |
 | F8 | Demo y portfolio: Modo Demo, Dockerfile, Render, APK de demo, script de datos personales en CI, README y GIF | 1,5 | URL pública con datos inventados; CI en verde; el script no encuentra datos personales |
+
+Las fases F4-F8 de esta tabla las sustituyen las F4-F16 de `PLAN-AMPLIACION.md` (apartado 12). **Estado a 24/11/2026:** la **F7b está hecha** (PR #5 a #38, con la auditoría de tests entre medias): la ficha analiza el encaje con Claude, Importación lee con Claude el texto libre del registro, y hay página de agentes y uso del día en Ajustes. La prueba real de la extracción propuso 68 candidaturas nuevas del texto libre (el plan esperaba unas 45-50 entre la tabla y el texto) y Eduardo la dio por buena. El detalle está en `F7-PLAN.md`, «Cierre de la F7b (24/11/2026)».
 
 ## 9. Decisiones de Eduardo antes de empezar
 
@@ -188,12 +190,12 @@ Flujo más corto: Rastreos → «Detectada» → abrir ficha → vincular CV sug
 
 Anotados al corregir la revisión de las fases 0 y 1; se harán en la fase indicada.
 
-- **Concurrencia y móvil (F7):** columna `Version` (token de concurrencia) en Candidatura para no pisar cambios entre el PC y el móvil, y un `PATCH` para ediciones parciales desde el móvil. (Desde la F3, `FechaUltimoCambio` ya es token de concurrencia y un choque da 409; falta que el front mande la versión que leyó para detectar ediciones hechas sobre una ficha vieja.)
-- **Origen fijado en el servidor (F6/F7):** que el `Origen` (Manual, Movil, Agente…) lo decida la API según el puerto o la ruta por la que llega la petición, no lo que mande el cliente.
+- **Concurrencia y móvil (F12):** columna `Version` (token de concurrencia) en Candidatura para no pisar cambios entre el PC y el móvil, y un `PATCH` para ediciones parciales desde el móvil. (Desde la F3, `FechaUltimoCambio` ya es token de concurrencia y un choque da 409. **Hecho en la F7b (PR #32):** al editar, el front manda la versión que leyó y una ficha vieja da 409 dentro del diálogo, sin pisar nada. Falta el `PATCH`.)
+- ~~**Origen fijado en el servidor (F6/F7)**~~ **Hecho en la F7a:** el `Origen` (Manual, Movil, Agente…) lo decide la API según el endpoint por el que llega la petición; lo que mande el cliente se ignora.
 - **Empresas:** endpoint para renombrar una empresa o fusionar/limpiar duplicadas y huérfanas.
 - **Modo Demo (F8):** ocultar Scalar y `/openapi` en modo Demo.
 - **Datos personales antes de publicar (F8):** quitar de este `PLAN.md` y de los comentarios del código el nombre «Eduardo», las empresas reales y las rutas locales antes de hacer público el repositorio. Quitarlos también del historial de git o publicar con un historial nuevo: el `PLAN.md` ya está en el primer commit.
-- **Endpoint de agentes (F6):** comprobar que una petición llega por el endpoint permitido por su nombre o por la configuración de Kestrel, no comparando con el puerto 5180 escrito en el código.
+- ~~**Endpoint de agentes (F6)**~~ **Hecho en la F7a:** la petición se reconoce por el nombre del endpoint de Kestrel («Local» o «Remoto»), no por el puerto 5180 escrito en el código (`[SoloPcConAgentes]`).
 - **Filtro de texto del listado:** si el volumen crece, proyectar solo los campos del resumen antes de filtrar en memoria (hoy se cargan las entidades completas con la empresa).
 
 ### Detalles menores del segundo test de F0-F1 (para la F2)
@@ -211,7 +213,7 @@ Anotados al corregir la revisión de las fases 0 y 1; se harán en la fase indic
 
 ### Pendientes de la revisión de la F3
 - **Enlaces guardados antes de la F3:** normalizar los que ya están en la BD sin esquema (`www.x.com` → `https://www.x.com`); la importación y la API ya normalizan los nuevos.
-- **«Aplicar» se fía del lote del cliente (F6):** el servidor lo recalcula todo, pero no comprueba que el lote salga del registro actual. Revalidarlo con el hash del registro cuando llegue la sincronización por hash.
+- ~~**«Aplicar» se fía del lote del cliente (F6)**~~ **Hecho en la F7b (PR #21):** el cliente ya no manda filas. Manda el hash del registro que leyó y las claves elegidas, y el servidor rehace el lote; si el registro ha cambiado, da 409 y se vuelve a leer.
 - **`.tmp` huérfano en `radar\`:** si la API se cae entre escribir el temporal y moverlo, queda un `candidaturas.md.<guid>.tmp`. Limpiarlos al arrancar.
 - **`<details>` repetido en `importacion-page.component.html`:** los tres grupos plegados repiten el mismo marcado; sacarlo a un componente.
 - **Carpeta Curriculum vacía:** probar el caso de `CarpetaCurriculum` vacía con una configuración de test que no use la ruta real (hoy `appsettings.Local.json` apunta a ella).
@@ -219,6 +221,14 @@ Anotados al corregir la revisión de las fases 0 y 1; se harán en la fase indic
 ### Pendientes de la revisión de la F7a (para la F12)
 - **Token del móvil:** exigir `X-Radar-Token` en todo lo que llega por el endpoint «Remoto» (5181).
 - **`/openapi` y `/scalar` por el remoto:** que no se sirvan por el endpoint «Remoto» (hoy solo se ocultarán en modo Demo).
+
+### Pendientes al cerrar la F7b (24/11/2026)
+La lista completa, agrupada por destino, está en `F7-PLAN.md`, «Cierre de la F7b», «Pendientes que siguen abiertos». En resumen:
+- **Pruebas con `claude` real, con el OK de Eduardo:** analizar el encaje de dos ofertas suyas, una abierta y otra cerrada (lo que falta de la aceptación de la F7b); la evaluación del acierto con las 20 ofertas inventadas; y, opcional, repetir la extracción con Haiku 5.5.
+- **PR 12b:** pulir las pantallas de Claude (fallos y filtro en `/agentes`, elegir fila a fila en Importación y algunos textos).
+- **PR 6 de tests:** los tests que faltan de los agentes y los menores del evaluador del encaje, antes de la evaluación.
+- **F7c:** lanzar rastreo desde la app y el bloqueo en la tarea de los lunes.
+- **F8 en adelante:** endurecer AnalizarEncaje antes de reutilizar el patrón, el CV en el análisis, la sincronización incremental del registro (`SeccionImportada`, punto 4 del apartado 4, que no se ha hecho) y cambiar el tope diario desde Ajustes (F11).
 
 ## 12. Ampliación pedida por Eduardo el 06/11/2026 (replanificar F4-F6 al cerrar la F3)
 
