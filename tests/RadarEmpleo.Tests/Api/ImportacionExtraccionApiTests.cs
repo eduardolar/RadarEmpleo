@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using RadarEmpleo.Api.Controllers;
 using RadarEmpleo.Api.Seguridad;
 using RadarEmpleo.Data;
 using RadarEmpleo.Domain;
@@ -137,7 +138,12 @@ public sealed class ImportacionExtraccionApiTests
         using var fabrica = Fabrica();
         using var http = fabrica.CreateClient();
 
-        Assert.Equal(HttpStatusCode.NotFound, (await PostAsync(http, UrlPrevisualizar(999))).StatusCode);
+        using var respuesta = await PostAsync(http, UrlPrevisualizar(999));
+        var problema = await LeerAsync(respuesta, HttpStatusCode.NotFound);
+
+        Assert.Equal("application/problem+json", respuesta.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("No se ha encontrado.", problema.GetProperty("title").GetString());
+        Assert.Equal(ImportacionController.MensajeExtraccionNoEncontrada, problema.GetProperty("detail").GetString());
     }
 
     [Fact]

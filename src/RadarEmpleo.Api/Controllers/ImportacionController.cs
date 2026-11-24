@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using RadarEmpleo.Api.Errores;
 using RadarEmpleo.Api.Seguridad;
 using RadarEmpleo.Services.Contratos;
 using RadarEmpleo.Services.Importacion;
@@ -14,6 +15,9 @@ namespace RadarEmpleo.Api.Controllers;
 [Produces("application/json")]
 public class ImportacionController(ImportacionService importacion, DisponibilidadAgentes disponibilidad) : ControllerBase
 {
+    /// <summary>El <c>detail</c> del 404 de la vista previa de una extracción que ya no está.</summary>
+    public const string MensajeExtraccionNoEncontrada = "Ya no se encuentra lo que leyó Claude. Vuelve a extraer el texto libre.";
+
     /// <summary>
     /// Lee la tabla del registro y dice qué pasaría con cada fila. No escribe nada. Devuelve 409 si falta
     /// la carpeta Curriculum, el registro o la tabla.
@@ -37,7 +41,9 @@ public class ImportacionController(ImportacionService importacion, Disponibilida
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
     public async Task<ActionResult<VistaPreviaImportacionDto>> PrevisualizarExtraccion(int ejecucionId, PeticionVacia cuerpo) =>
-        await importacion.PrevisualizarExtraccionAsync(ejecucionId) is { } vista ? vista : NotFound();
+        await importacion.PrevisualizarExtraccionAsync(ejecucionId) is { } vista
+            ? vista
+            : RespuestasValidacion.NoEncontrado(MensajeExtraccionNoEncontrada);
 
     /// <summary>
     /// Vuelve a leer el registro, rehace el lote, lo compara otra vez y aplica las claves pedidas. Los conflictos no

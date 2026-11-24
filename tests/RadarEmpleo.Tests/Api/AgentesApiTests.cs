@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RadarEmpleo.Api.Configuracion;
+using RadarEmpleo.Api.Controllers;
 using RadarEmpleo.Api.Seguridad;
 using RadarEmpleo.Data;
 using RadarEmpleo.Domain;
@@ -184,9 +185,18 @@ public sealed class AgentesApiTests
         using var fabrica = Fabrica();
         using var http = fabrica.CreateClient();
 
-        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync("/api/agentes/ejecuciones/999")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await PostJson(http, "/api/agentes/ejecuciones/999/cancelar")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await PostJson(http, "/api/agentes/ejecuciones/999/reintentar")).StatusCode);
+        // La ejecución que no existe lo dice en «detail», que es lo que enseña el front.
+        foreach (var respuesta in new[]
+                 {
+                     await http.GetAsync("/api/agentes/ejecuciones/999"),
+                     await PostJson(http, "/api/agentes/ejecuciones/999/cancelar"),
+                     await PostJson(http, "/api/agentes/ejecuciones/999/reintentar")
+                 })
+        {
+            var problema = await LeerAsync(respuesta, HttpStatusCode.NotFound);
+            Assert.Equal(AgentesController.MensajeEjecucionNoEncontrada, problema.GetProperty("detail").GetString());
+            Assert.Equal("application/problem+json", respuesta.Content.Headers.ContentType?.MediaType);
+        }
         Assert.Equal(HttpStatusCode.NotFound, (await PostJson(http, "/api/agentes/analizar/999")).StatusCode);
     }
 
