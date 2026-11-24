@@ -7,6 +7,7 @@ import { of, Subject } from 'rxjs';
 import { AvisosService } from '../../../shared/services/avisos.service';
 import { CandidaturaDetalle } from '../../interfaces/candidatura.interface';
 import { crearDetalle } from '../../utils/candidatura-de-prueba';
+import { CandidaturasService } from '../../services/candidaturas.service';
 import { DialogoCandidatura } from './dialogo-candidatura';
 
 describe('DialogoCandidatura', () => {
@@ -361,6 +362,25 @@ describe('DialogoCandidatura', () => {
       });
       peticion.flush(crearDetalle({ id: 3 }));
     });
+
+    it('si la ficha se recarga con el diálogo abierto, manda la versión que se abrió, no la nueva', async () => {
+      await crear(crearDetalle({ id: 3, fechaUltimoCambio: '2026-11-23T10:00:00Z' }));
+      // Como cuando termina un análisis de Claude y la ficha de detrás se vuelve a leer
+      const servicio = TestBed.inject(CandidaturasService);
+      servicio.cargarDetalle(3);
+      http
+        .expectOne((r) => r.method === 'GET' && r.url === '/api/candidaturas/3')
+        .flush(crearDetalle({ id: 3, fechaUltimoCambio: '2026-11-23T10:05:00Z' }));
+      expect(servicio.detalle()?.fechaUltimoCambio).toBe('2026-11-23T10:05:00Z');
+
+      await pulsar('Guardar cambios');
+
+      const peticion = http.expectOne((r) => r.method === 'PUT');
+      expect(peticion.request.body).toMatchObject({
+        fechaUltimoCambioLeida: '2026-11-23T10:00:00Z',
+      });
+      peticion.flush(crearDetalle({ id: 3 }));
+    });
   });
 
   describe('la candidatura ha cambiado mientras se editaba (409)', () => {
@@ -374,20 +394,38 @@ describe('DialogoCandidatura', () => {
       http
         .expectOne('/api/candidaturas/3')
         .flush({ status: 409, detail: OTRA_PESTANA }, { status: 409, statusText: 'Conflict' });
-      await fixture.whenStable();
+      // Basta una vuelta (antes había dos, de sobra): pinta el aviso y corre el afterNextRender del foco
       await fixture.whenStable();
     }
 
-    it('lo dice dentro del diálogo, con el foco en el aviso, sin cerrar ni perder lo escrito', async () => {
+    function aviso(): HTMLElement | null {
+      return elemento().querySelector<HTMLElement>('mat-dialog-content > [role="alert"]');
+    }
+
+    it('lo dice dentro del diálogo con su texto, con el foco en el aviso, sin cerrar ni perder lo escrito', async () => {
       await guardarConConflicto();
 
-      const aviso = elemento().querySelector<HTMLElement>('mat-dialog-content > [role="alert"]')!;
-      expect(aviso.textContent).toContain(OTRA_PESTANA);
-      expect(document.activeElement).toBe(aviso);
+      expect(aviso()!.textContent).toContain(
+        'Esta candidatura ha cambiado mientras la editabas (en otra pestaña o con un análisis de Claude).',
+      );
+      // El de la API pide recargar «la página»: aquí el botón es «Recargar la ficha»
+      expect(aviso()!.textContent).not.toContain('Recarga la página');
+      expect(document.activeElement).toBe(aviso());
       expect(avisos.error).not.toHaveBeenCalled();
       expect(cerrar).not.toHaveBeenCalled();
       expect(campo('puesto').value).toBe('Dev senior');
-      expect(boton('Guardar cambios').disabled).toBe(false);
+    });
+
+    it('«Guardar cambios» queda desactivado y no vuelve a enviar (daría otro 409)', async () => {
+      await guardarConConflicto();
+
+      expect(boton('Guardar cambios').getAttribute('aria-disabled')).toBe('true');
+      await pulsar('Guardar cambios');
+      elemento().querySelector('form')!.dispatchEvent(new Event('submit'));
+      await fixture.whenStable();
+
+      http.expectNone('/api/candidaturas/3');
+      expect(aviso()).not.toBeNull();
     });
 
     it('«Recargar la ficha» vuelve a leerla y cierra sin guardar', async () => {
@@ -399,15 +437,6 @@ describe('DialogoCandidatura', () => {
       expect(lectura.request.method).toBe('GET');
       expect(cerrar).toHaveBeenCalledWith();
       lectura.flush(crearDetalle({ id: 3 }));
-    });
-
-    it('al volver a guardar se quita el aviso', async () => {
-      await guardarConConflicto();
-
-      await pulsar('Guardar cambios');
-
-      expect(elemento().querySelector('mat-dialog-content > [role="alert"]')).toBeNull();
-      http.expectOne('/api/candidaturas/3').flush(crearDetalle({ id: 3 }));
     });
   });
 });

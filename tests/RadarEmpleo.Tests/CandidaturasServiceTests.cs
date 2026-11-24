@@ -627,6 +627,13 @@ public class CandidaturasServiceTests : ArnesSqliteTests
 
     // ---------------------------------------------------------------- versión leída al editar
 
+    /// <summary>Una regla de negocio (no un choque de EF) con el texto de «otra pestaña».</summary>
+    private static async Task AssertOtraPestanaAsync(Func<Task> editar)
+    {
+        var error = await Assert.ThrowsAsync<ReglaNegocioException>(editar);
+        Assert.Equal(CandidaturasService.MensajeCambiadaEnOtraPestana, error.Message);
+    }
+
     [Fact]
     public async Task EditarAsync_ConLaVersionDeAntesDeUnAnalisis_ChocaSinTocarNada()
     {
@@ -637,7 +644,7 @@ public class CandidaturasServiceTests : ArnesSqliteTests
         var llamadas = Exportador.Llamadas;
         Reloj.Avanzar(TimeSpan.FromMinutes(1));
 
-        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => _candidaturas.EditarAsync(creada.Id,
+        await AssertOtraPestanaAsync(() => _candidaturas.EditarAsync(creada.Id,
             new GuardarCandidaturaRequest("Empresa nueva", "Vieja", Pega: "La de antes", FechaUltimoCambioLeida: creada.FechaUltimoCambio)));
 
         var ficha = (await _candidaturas.ObtenerAsync(creada.Id))!;
@@ -677,7 +684,7 @@ public class CandidaturasServiceTests : ArnesSqliteTests
             new GuardarCandidaturaRequest("Acme", "Primera", FechaUltimoCambioLeida: creada.FechaUltimoCambio));
         Reloj.Avanzar(TimeSpan.FromMinutes(1));
 
-        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => _candidaturas.EditarAsync(creada.Id,
+        await AssertOtraPestanaAsync(() => _candidaturas.EditarAsync(creada.Id,
             new GuardarCandidaturaRequest("Acme", "Segunda", FechaUltimoCambioLeida: creada.FechaUltimoCambio)));
 
         Assert.Equal("Primera", (await _candidaturas.ObtenerAsync(creada.Id))!.Puesto);

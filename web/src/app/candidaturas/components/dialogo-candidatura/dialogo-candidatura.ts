@@ -58,8 +58,11 @@ export class DialogoCandidatura {
   protected readonly textoGuardar = this.candidatura ? 'Guardar cambios' : 'Crear candidatura';
   protected readonly guardando = signal(false);
   protected readonly erroresServidor = signal<Record<string, string[]>>({});
-  /** El 409 al editar: la candidatura ha cambiado desde que se abrió (otra pestaña, un análisis de Claude) */
-  protected readonly conflicto = signal<string | null>(null);
+  /**
+   * El 409 al editar: la candidatura ha cambiado desde que se abrió (otra pestaña, un análisis de Claude).
+   * Mientras dure no se puede guardar: con la misma versión daría otro 409
+   */
+  protected readonly conflicto = signal(false);
   private readonly avisoConflicto = viewChild<ElementRef<HTMLElement>>('avisoConflicto');
   private readonly injector = inject(Injector);
 
@@ -71,9 +74,12 @@ export class DialogoCandidatura {
   }
 
   protected guardar(datos: GuardarCandidatura): void {
+    // También con Intro desde un campo: el botón desactivado no basta para cortarlo en todos los navegadores
+    if (this.conflicto()) {
+      return;
+    }
     this.guardando.set(true);
     this.erroresServidor.set({});
-    this.conflicto.set(null);
 
     // Al editar va la versión que se abrió: si ha cambiado desde entonces, la API no pisa nada (409)
     const peticion = this.candidatura
@@ -105,8 +111,9 @@ export class DialogoCandidatura {
         } else if (Object.keys(error.errores).length > 0) {
           this.erroresServidor.set(error.errores);
         } else if (this.candidatura && error.estado === 409) {
-          // Se queda abierto con lo escrito, para poder copiarlo antes de recargar
-          this.conflicto.set(error.mensaje);
+          // Se queda abierto con lo escrito, para poder copiarlo antes de recargar. Su propio texto: el de
+          // la API pide recargar «la página» y aquí el botón es «Recargar la ficha»
+          this.conflicto.set(true);
           afterNextRender(() => this.avisoConflicto()?.nativeElement.focus(), {
             injector: this.injector,
           });
