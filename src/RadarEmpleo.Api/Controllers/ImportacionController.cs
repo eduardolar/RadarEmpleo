@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using RadarEmpleo.Api.Errores;
 using RadarEmpleo.Api.Seguridad;
 using RadarEmpleo.Services.Contratos;
 using RadarEmpleo.Services.Importacion;
@@ -14,6 +15,9 @@ namespace RadarEmpleo.Api.Controllers;
 [Produces("application/json")]
 public class ImportacionController(ImportacionService importacion, DisponibilidadAgentes disponibilidad) : ControllerBase
 {
+    /// <summary>El <c>detail</c> del 404 de la vista previa de una extracción que ya no está.</summary>
+    public const string MensajeExtraccionNoEncontrada = "Ya no se encuentra lo que leyó Claude. Vuelve a extraer el texto libre.";
+
     /// <summary>
     /// Lee la tabla del registro y dice qué pasaría con cada fila. No escribe nada. Devuelve 409 si falta
     /// la carpeta Curriculum, el registro o la tabla.
@@ -37,7 +41,9 @@ public class ImportacionController(ImportacionService importacion, Disponibilida
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
     public async Task<ActionResult<VistaPreviaImportacionDto>> PrevisualizarExtraccion(int ejecucionId, PeticionVacia cuerpo) =>
-        await importacion.PrevisualizarExtraccionAsync(ejecucionId) is { } vista ? vista : NotFound();
+        await importacion.PrevisualizarExtraccionAsync(ejecucionId) is { } vista
+            ? vista
+            : RespuestasValidacion.NoEncontrado(MensajeExtraccionNoEncontrada);
 
     /// <summary>
     /// Vuelve a leer el registro, rehace el lote, lo compara otra vez y aplica las claves pedidas. Los conflictos no
@@ -45,7 +51,8 @@ public class ImportacionController(ImportacionService importacion, Disponibilida
     /// y 409 si el registro ha cambiado desde la vista previa (por su hash), si la extracción ya no vale o si otra
     /// aplicación se ha adelantado (en esos casos no cambia nada). Con la tabla vale también desde el móvil; con
     /// <see cref="OrigenLote.RegistroConClaude"/>, las mismas reglas que <see cref="SoloPcConAgentesAttribute"/> (403 antes de
-    /// leer el registro), como la vista previa de la extracción.
+    /// leer el registro), como la vista previa de la extracción; desde el móvil, con su propio mensaje
+    /// (<see cref="DisponibilidadAgentes.MensajeAplicarSoloPc"/>), que dice lo que sí se puede hacer.
     /// </summary>
     [HttpPost("lote/aplicar")]
     [ProducesResponseType<ResultadoAplicacionDto>(StatusCodes.Status200OK)]
@@ -54,6 +61,7 @@ public class ImportacionController(ImportacionService importacion, Disponibilida
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ResultadoAplicacionDto>> AplicarLote(AplicarImportacionRequest peticion) =>
         peticion.Origen == OrigenLote.RegistroConClaude && disponibilidad.Motivo(HttpContext) is { } motivo
-            ? SoloPcConAgentesAttribute.Prohibido(motivo)
+            ? SoloPcConAgentesAttribute.Prohibido(
+                motivo == DisponibilidadAgentes.MensajeSoloPc ? DisponibilidadAgentes.MensajeAplicarSoloPc : motivo)
             : await importacion.AplicarAsync(peticion);
 }

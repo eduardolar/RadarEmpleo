@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using RadarEmpleo.Api.Controllers;
 using RadarEmpleo.Api.Seguridad;
 using RadarEmpleo.Data;
 using RadarEmpleo.Domain;
@@ -96,7 +97,7 @@ public sealed class ImportacionExtraccionApiTests
 
         var problema = await LeerAsync(await PostAsync(http, UrlPrevisualizar(1)), HttpStatusCode.Forbidden);
 
-        Assert.Equal("Los agentes solo se pueden lanzar desde el PC.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeSoloPc, problema.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -116,7 +117,7 @@ public sealed class ImportacionExtraccionApiTests
 
         var problema = await LeerAsync(await PostAsync(http, UrlPrevisualizar(1)), HttpStatusCode.Forbidden);
 
-        Assert.Equal("Los agentes están apagados.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeApagados, problema.GetProperty("detail").GetString());
     }
 
     [Theory]
@@ -137,7 +138,12 @@ public sealed class ImportacionExtraccionApiTests
         using var fabrica = Fabrica();
         using var http = fabrica.CreateClient();
 
-        Assert.Equal(HttpStatusCode.NotFound, (await PostAsync(http, UrlPrevisualizar(999))).StatusCode);
+        using var respuesta = await PostAsync(http, UrlPrevisualizar(999));
+        var problema = await LeerAsync(respuesta, HttpStatusCode.NotFound);
+
+        Assert.Equal("application/problem+json", respuesta.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("No se ha encontrado.", problema.GetProperty("title").GetString());
+        Assert.Equal(ImportacionController.MensajeExtraccionNoEncontrada, problema.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -163,7 +169,7 @@ public sealed class ImportacionExtraccionApiTests
 
         var problema = await LeerAsync(await AplicarAsync(http, id, hash, []), HttpStatusCode.Forbidden);
 
-        Assert.Equal(DisponibilidadAgentes.MensajeSoloPc, problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeAplicarSoloPc, problema.GetProperty("detail").GetString());
         await using var db = await BdAsync(fabrica);
         Assert.Empty(db.Candidaturas);
     }
@@ -312,7 +318,8 @@ public sealed class ImportacionExtraccionApiTests
         var vista = await LeerAsync(await PostAsync(http, UrlPrevisualizar(id)), HttpStatusCode.OK);
         var dudas = vista.GetProperty("dudas").EnumerateArray().Select(d => d.GetString()!).ToList();
         Assert.StartsWith($"No se ha podido leer la parte {n} de {n} (desde «", Assert.Single(dudas));
-        Assert.EndsWith("): Claude ha devuelto un error.", dudas[0]);
+        Assert.EndsWith("): Claude ha devuelto un error. " + ManejadorExtraerRegistro.QueHacerConParte, dudas[0]);
+        Assert.Equal(1, vista.GetProperty("partesPerdidas").GetInt32());
         // Las de la tabla y una por parte leída: la que la segunda parte dice de la primera va a «Sin leer».
         Assert.Equal(n - 1, vista.GetProperty("resumen").GetProperty("delTextoLibre").GetInt32());
         var filas = vista.GetProperty("filas").EnumerateArray().ToList();

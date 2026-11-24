@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using RadarEmpleo.Api.Seguridad;
 
 namespace RadarEmpleo.Tests.Api;
 
@@ -69,7 +70,7 @@ public sealed class CanalKestrelTests : IDisposable
 
         var estado = await http.GetAsync("/api/agentes/estado");
         Assert.Equal(HttpStatusCode.Forbidden, estado.StatusCode);
-        Assert.Equal("Los agentes solo se pueden lanzar desde el PC.",
+        Assert.Equal(DisponibilidadAgentes.MensajeSoloPc,
             (await estado.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
         Assert.Equal(HttpStatusCode.Forbidden, (await http.PostAsync("/api/agentes/ejecuciones/1/cancelar",
             new StringContent("{}", Encoding.UTF8, "text/plain"))).StatusCode);

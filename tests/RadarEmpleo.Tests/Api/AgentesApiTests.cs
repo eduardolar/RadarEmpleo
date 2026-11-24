@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RadarEmpleo.Api.Configuracion;
+using RadarEmpleo.Api.Controllers;
 using RadarEmpleo.Api.Seguridad;
 using RadarEmpleo.Data;
 using RadarEmpleo.Domain;
@@ -88,7 +89,7 @@ public sealed class AgentesApiTests
 
         var problema = await LeerAsync(await Enviar(http, metodo, url), HttpStatusCode.Forbidden);
 
-        Assert.Equal("Los agentes solo se pueden lanzar desde el PC.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeSoloPc, problema.GetProperty("detail").GetString());
         await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
         Assert.Empty(db.EjecucionesAgente);
     }
@@ -121,7 +122,7 @@ public sealed class AgentesApiTests
         using var http = fabrica.CreateClient();
 
         var problema = await LeerAsync(await Enviar(http, metodo, url), HttpStatusCode.Forbidden);
-        Assert.Equal("Los agentes están apagados.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeApagados, problema.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -131,7 +132,7 @@ public sealed class AgentesApiTests
         using var http = fabrica.CreateClient();
 
         var problema = await LeerAsync(await http.GetAsync("/api/agentes/estado"), HttpStatusCode.Forbidden);
-        Assert.Equal("Los agentes están apagados.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeApagados, problema.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -146,7 +147,7 @@ public sealed class AgentesApiTests
         peticion.Headers.Add("Sec-Fetch-Site", "cross-site");
 
         var problema = await LeerAsync(await http.SendAsync(peticion), HttpStatusCode.Forbidden);
-        Assert.Equal("Esta petición no viene de RadarEmpleo.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeOtroSitio, problema.GetProperty("detail").GetString());
     }
 
     [Theory]
@@ -184,9 +185,18 @@ public sealed class AgentesApiTests
         using var fabrica = Fabrica();
         using var http = fabrica.CreateClient();
 
-        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync("/api/agentes/ejecuciones/999")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await PostJson(http, "/api/agentes/ejecuciones/999/cancelar")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await PostJson(http, "/api/agentes/ejecuciones/999/reintentar")).StatusCode);
+        // La ejecución que no existe lo dice en «detail», que es lo que enseña el front.
+        foreach (var respuesta in new[]
+                 {
+                     await http.GetAsync("/api/agentes/ejecuciones/999"),
+                     await PostJson(http, "/api/agentes/ejecuciones/999/cancelar"),
+                     await PostJson(http, "/api/agentes/ejecuciones/999/reintentar")
+                 })
+        {
+            var problema = await LeerAsync(respuesta, HttpStatusCode.NotFound);
+            Assert.Equal(AgentesController.MensajeEjecucionNoEncontrada, problema.GetProperty("detail").GetString());
+            Assert.Equal("application/problem+json", respuesta.Content.Headers.ContentType?.MediaType);
+        }
         Assert.Equal(HttpStatusCode.NotFound, (await PostJson(http, "/api/agentes/analizar/999")).StatusCode);
     }
 

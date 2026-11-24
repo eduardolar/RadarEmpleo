@@ -215,6 +215,16 @@ describe('textoVistaCombinada', () => {
     expect(textoVistaCombinada(34)).toBe('Tabla + 34 leídas del texto libre con Claude');
     expect(textoVistaCombinada(1)).toBe('Tabla + 1 leída del texto libre con Claude');
   });
+
+  it('dice las partes que no se han podido leer, si las hay', () => {
+    expect(textoVistaCombinada(34, 0)).toBe('Tabla + 34 leídas del texto libre con Claude');
+    expect(textoVistaCombinada(34, 1)).toBe(
+      'Tabla + 34 leídas del texto libre con Claude · 1 parte no se ha podido leer',
+    );
+    expect(textoVistaCombinada(1, 3)).toBe(
+      'Tabla + 1 leída del texto libre con Claude · 3 partes no se han podido leer',
+    );
+  });
 });
 
 describe('textoExtraccionLeida', () => {

@@ -132,9 +132,18 @@ export function textoEnviosEnTexto(enviosEnTexto: number, conClaude = false): st
     : `Hay unos ${enviosEnTexto} envíos escritos como texto; esos se podrán importar más adelante.`;
 }
 
-/** La línea que dice que la vista es la combinada: «Tabla + texto libre leído con Claude (34 de texto libre)» */
-export function textoVistaCombinada(delTextoLibre: number): string {
-  return `Tabla + ${delTextoLibre} ${delTextoLibre === 1 ? 'leída' : 'leídas'} del texto libre con Claude`;
+/**
+ * La línea que dice que la vista es la combinada: «Tabla + 34 leídas del texto libre con Claude», y
+ * si se ha perdido alguna parte, « · 1 parte no se ha podido leer»
+ */
+export function textoVistaCombinada(delTextoLibre: number, partesPerdidas = 0): string {
+  const leidas = `Tabla + ${delTextoLibre} ${delTextoLibre === 1 ? 'leída' : 'leídas'} del texto libre con Claude`;
+  if (partesPerdidas <= 0) {
+    return leidas;
+  }
+  return partesPerdidas === 1
+    ? `${leidas} · 1 parte no se ha podido leer`
+    : `${leidas} · ${partesPerdidas} partes no se han podido leer`;
 }
 
 export const EXPLICACION_FUERA =
@@ -146,7 +155,7 @@ export const EXPLICACION_DUDAS =
 export const AVISO_SOLO_LEE = 'Claude solo lee: verás lo que encuentre antes de añadir nada.';
 /** Junto a la tarjeta mientras la extracción no ha terminado */
 export const AVISO_PUEDE_TARDAR =
-  'Puede tardar un rato si el texto es largo. Puedes salir: la tarea sigue y la verás aquí al volver.';
+  'Suele tardar unos 2 o 3 min, más si el texto es largo. Puedes salir: la tarea sigue y la verás aquí al volver.';
 
 /** «Claude terminó de leer el texto libre (hace 12 min).»: una extracción ya hecha que se puede ver */
 export function textoExtraccionLeida(fin: string, ahora: Date): string {

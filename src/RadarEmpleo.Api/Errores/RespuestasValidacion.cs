@@ -39,6 +39,17 @@ public static class RespuestasValidacion
         Extensions = { ["errors"] = errores }
     };
 
+    /// <summary>
+    /// Un 404 que dice en <c>detail</c> qué es lo que ya no está (el front enseña ese texto). El título lo pone
+    /// <see cref="TraducirTitulo"/>.
+    /// </summary>
+    public static ActionResult NoEncontrado(string detalle) => new ResultadoProblema(new ProblemDetails
+    {
+        Status = StatusCodes.Status404NotFound,
+        Detail = detalle,
+        Type = "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    });
+
     /// <summary>Para <see cref="ApiBehaviorOptions.InvalidModelStateResponseFactory"/>.</summary>
     public static IActionResult CrearRespuesta(ActionContext contexto)
     {
@@ -99,9 +110,9 @@ public static class RespuestasValidacion
     /// excepciones: así sale con <c>application/problem+json</c> y <c>traceId</c> aunque el controlador
     /// tenga <c>[Produces("application/json")]</c> (que con un ObjectResult pisaría el tipo de contenido).
     /// </summary>
-    private sealed class ResultadoProblema(ProblemDetails problema) : IActionResult
+    private sealed class ResultadoProblema(ProblemDetails problema) : ActionResult
     {
-        public async Task ExecuteResultAsync(ActionContext context)
+        public override async Task ExecuteResultAsync(ActionContext context)
         {
             var http = context.HttpContext;
             http.Response.StatusCode = problema.Status ?? StatusCodes.Status400BadRequest;

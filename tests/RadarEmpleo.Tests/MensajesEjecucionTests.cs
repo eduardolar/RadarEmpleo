@@ -90,9 +90,9 @@ public class MensajesEjecucionTests
     }
 
     [Theory]
-    [InlineData(5 * 60, "Ha tardado más de 5 min y la he parado.")]
-    [InlineData(90, "Ha tardado más de 1 min 30 s y la he parado.")]
-    [InlineData(30 * 60, "Ha tardado más de 30 min y la he parado.")]
+    [InlineData(5 * 60, "Ha tardado más de 5 min y la he parado. Reinténtala; si se repite, prueba más tarde.")]
+    [InlineData(90, "Ha tardado más de 1 min 30 s y la he parado. Reinténtala; si se repite, prueba más tarde.")]
+    [InlineData(30 * 60, "Ha tardado más de 30 min y la he parado. Reinténtala; si se repite, prueba más tarde.")]
     public void De_TiempoAgotado_DiceElTiempoMaximo(int segundos, string esperado)
     {
         Assert.Equal(esperado, MensajesEjecucion.De(FalloClaude.TiempoAgotado, TimeSpan.FromSeconds(segundos)));

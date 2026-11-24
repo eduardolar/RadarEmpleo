@@ -244,7 +244,7 @@ describe('textoEstado', () => {
 
   it.each([
     ['AnalizarEncaje', 'Analizando el encaje… · 1 min 20 s (máximo 5 min)'],
-    ['ExtraerRegistro', 'Leyendo el registro… · 1 min 20 s (máximo 5 min)'],
+    ['ExtraerRegistro', 'Leyendo el texto libre… · 1 min 20 s (máximo 5 min)'],
     ['Rastreo', 'Rastreando ofertas… · 1 min 20 s (máximo 5 min)'],
     ['RellenarEnvio', 'Preparando el envío… · 1 min 20 s (máximo 5 min)'],
   ] as const)('en curso (%s): lo que hace y el tiempo con su máximo', (tarea, esperado) => {
@@ -419,7 +419,7 @@ describe('etiquetas', () => {
       'Cancelada',
     ]);
     expect(NOMBRE_TAREA.AnalizarEncaje).toBe('Análisis del encaje');
-    expect(NOMBRE_TAREA.ExtraerRegistro).toBe('Lectura del registro');
+    expect(NOMBRE_TAREA.ExtraerRegistro).toBe('Lectura del texto libre');
     expect(NOMBRE_TAREA.RellenarEnvio).toBe('Preparar el envío');
   });
 });

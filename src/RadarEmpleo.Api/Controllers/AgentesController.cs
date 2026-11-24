@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using RadarEmpleo.Api.Errores;
 using RadarEmpleo.Api.Seguridad;
 using RadarEmpleo.Domain;
 using RadarEmpleo.Services.Agentes;
@@ -20,6 +21,9 @@ namespace RadarEmpleo.Api.Controllers;
 public class AgentesController(AgentesService agentes, DisponibilidadAgentes disponibilidad) : ControllerBase
 {
     public const string RutaObtener = "ObtenerEjecucion";
+
+    /// <summary>El <c>detail</c> del 404 de una ejecución que no existe (verla, cancelarla o reintentarla).</summary>
+    public const string MensajeEjecucionNoEncontrada = "Ya no se encuentra esta tarea de Claude.";
 
     /// <summary>Si están disponibles, la versión de Claude Code, el gasto de hoy y lo que está en curso y en cola.</summary>
     [HttpGet("estado")]
@@ -75,7 +79,7 @@ public class AgentesController(AgentesService agentes, DisponibilidadAgentes dis
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<EjecucionAgenteDto>> Obtener(int id, CancellationToken cancelacion) =>
-        await agentes.ObtenerAsync(id, cancelacion) is { } ejecucion ? ejecucion : NotFound();
+        await agentes.ObtenerAsync(id, cancelacion) is { } ejecucion ? ejecucion : EjecucionNoEncontrada();
 
     /// <summary>
     /// Cancela: en cola queda Cancelada al momento; en curso se corta el proceso y queda Cancelada en unos segundos
@@ -88,7 +92,7 @@ public class AgentesController(AgentesService agentes, DisponibilidadAgentes dis
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
     public async Task<ActionResult<EjecucionAgenteDto>> Cancelar(int id, PeticionVacia cuerpo, CancellationToken cancelacion) =>
-        await agentes.CancelarAsync(id, cancelacion) is { } ejecucion ? ejecucion : NotFound();
+        await agentes.CancelarAsync(id, cancelacion) is { } ejecucion ? ejecucion : EjecucionNoEncontrada();
 
     /// <summary>
     /// Lanza otra vez la misma tarea con los mismos parámetros (revalidados): 202 con la ejecución nueva y su
@@ -102,7 +106,9 @@ public class AgentesController(AgentesService agentes, DisponibilidadAgentes dis
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
     public async Task<ActionResult<EjecucionAgenteDto>> Reintentar(int id, PeticionVacia cuerpo, CancellationToken cancelacion) =>
-        Encolada(await agentes.ReintentarAsync(id, cancelacion));
+        await agentes.ReintentarAsync(id, cancelacion) is { } encolada ? Encolada(encolada) : EjecucionNoEncontrada();
+
+    private static ActionResult EjecucionNoEncontrada() => RespuestasValidacion.NoEncontrado(MensajeEjecucionNoEncontrada);
 
     /// <summary>202 con <c>Location</c> si es nueva; 200 si ya había una activa; 404 si lo pedido no existe.</summary>
     private ActionResult<EjecucionAgenteDto> Encolada((EjecucionAgenteDto Ejecucion, bool Nueva)? encolada) => encolada switch

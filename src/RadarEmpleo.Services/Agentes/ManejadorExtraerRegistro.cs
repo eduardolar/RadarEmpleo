@@ -169,11 +169,18 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
         var resultado = new ResultadoExtraccionRegistro(
             leidas.SelectMany(r => r.Candidaturas).ToList(),
             perdidas.Concat(leidas.SelectMany(r => r.Dudas)).Distinct(StringComparer.Ordinal).Take(MaximoDudasGuardadas).ToList(),
-            leidas.SelectMany(r => r.SinLeer).ToList());
+            leidas.SelectMany(r => r.SinLeer).ToList(),
+            perdidas.Count);
         return Task.FromResult(new ResultadoTarea(Resumen(resultado, perdidas.Count), Guardar(resultado)));
     }
 
-    /// <summary>«No se ha podido leer la parte 2 de 4 (desde «## Agosto»): ha tardado más de 10 min y la he parado.»</summary>
+    /// <summary>Lo que hay que hacer con una parte perdida: va al final de su duda y no se recorta.</summary>
+    public const string QueHacerConParte = "Vuelve a extraer el texto libre para leerla.";
+
+    /// <summary>
+    /// «No se ha podido leer la parte 2 de 4 (desde «## Agosto»): ha tardado más de 5 min y la he parado. Vuelve a extraer el
+    /// texto libre para leerla.»
+    /// </summary>
     private string DudaParte(PeticionClaude peticion, RespuestaClaude respuesta)
     {
         var parte = peticion.Parte ?? "1 de 1";
@@ -189,7 +196,8 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
             FalloClaude.NoInstalado => "no encuentro Claude Code en este PC",
             _ => "Claude ha devuelto un error"
         };
-        return Recortar($"No se ha podido leer la parte {parte}{desde}: {motivo}.", LargoDudaGuardada);
+        return Recortar($"No se ha podido leer la parte {parte}{desde}: {motivo}.", LargoDudaGuardada - QueHacerConParte.Length - 1)
+            + " " + QueHacerConParte;
     }
 
     /// <summary>
@@ -312,6 +320,7 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
             // Las opciones no miran dentro de las listas: un elemento null tampoco es algo que haya guardado Guardar.
             return JsonSerializer.Deserialize<ResultadoExtraccionRegistro>(json, LecturaGuardado) is { } leido
                 && !leido.Candidaturas.Any(f => f is null) && !leido.Dudas.Any(d => d is null) && !leido.SinLeer.Any(f => f is null)
+                && leido.PartesPerdidas >= 0
                 ? leido
                 : null;
         }
