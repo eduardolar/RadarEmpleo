@@ -20,6 +20,15 @@ public static class ReglasImportacion
     public const string AvisoEnlaceNoValido = "El enlace no es válido: se importará sin enlace.";
     public const string AvisoEstadoDeducido = "Estado deducido del texto: compruébalo.";
     public const string AvisoEmpresaNoEnLaLinea = "Revisa la empresa: Claude no la ve escrita en esa línea. Si está mal, corrígela en tu archivo antes de añadir.";
+    public const string AvisoEstadoDeClaude = "Estado leído por Claude: compruébalo en tu archivo.";
+
+    /// <summary>Conflicto de una fila del texto libre que cambiaría el estado sin que su línea lo respalde.</summary>
+    public static string MotivoEstadoSinRespaldo(EstadoCandidatura estado) =>
+        $"Claude dice que pasó a «{ReglasEstado.Texto(estado)}», pero tu archivo no lo dice: revísalo en la ficha.";
+
+    /// <summary>Conflicto de una fila del texto libre que cerraría la candidatura (Descartada o Cerrada), aunque su línea lo diga.</summary>
+    public static string MotivoEstadoFinalDelTextoLibre(EstadoCandidatura estado) =>
+        $"Claude ha leído en el texto libre que pasó a «{ReglasEstado.Texto(estado)}»: eso no se aplica solo, cámbialo tú en la ficha.";
 
     /// <summary>
     /// Clave de idempotencia: <c>empresa normalizada|puesto normalizado|AAAA-MM-DD</c>. Se guarda al
@@ -88,8 +97,16 @@ public static class ReglasImportacion
             return Fila(fila, clave, ResultadoFila.Conflicto, misma, motivo);
         }
 
-        var resultado = ReglasEstado.PuedePasar(misma.Estado, fila.Estado) ? ResultadoFila.AvanzaEstado : ResultadoFila.YaExiste;
-        return Fila(fila, clave, resultado, misma, null);
+        if (!ReglasEstado.PuedePasar(misma.Estado, fila.Estado))
+            return Fila(fila, clave, ResultadoFila.YaExiste, misma, null);
+
+        // Lo del texto libre lo ha leído Claude: un cambio que su línea no respalda, o que cierra la candidatura, no se
+        // aplica con el botón general. Las filas de la tabla (sin sección) no pasan por aquí.
+        if (fila.Seccion is not null && fila.EstadoSinRespaldo)
+            return Fila(fila, clave, ResultadoFila.Conflicto, misma, MotivoEstadoSinRespaldo(fila.Estado));
+        if (fila.Seccion is not null && ReglasEstado.EsFinal(fila.Estado))
+            return Fila(fila, clave, ResultadoFila.Conflicto, misma, MotivoEstadoFinalDelTextoLibre(fila.Estado));
+        return Fila(fila, clave, ResultadoFila.AvanzaEstado, misma, null);
     }
 
     private static FilaVistaPreviaDto Fila(FilaLote fila, string clave, ResultadoFila resultado, CandidaturaExistente? existente, string? motivo) =>
@@ -103,6 +120,7 @@ public static class ReglasImportacion
         if (fila.FechaAproximada) avisos.Add(AvisoFechaAproximada);
         if (fila.EstadoDeducido) avisos.Add(AvisoEstadoDeducido);
         if (fila.EmpresaFueraDeLaCita) avisos.Add(AvisoEmpresaNoEnLaLinea);
+        if (fila.Seccion is not null && fila.EstadoSinRespaldo) avisos.Add(AvisoEstadoDeClaude);
         if (!string.IsNullOrWhiteSpace(fila.Enlace) && EnlaceParaGuardar(fila.Enlace) is null) avisos.Add(AvisoEnlaceNoValido);
         return avisos;
     }
