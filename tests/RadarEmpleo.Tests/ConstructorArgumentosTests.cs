@@ -50,7 +50,7 @@ public class ConstructorArgumentosTests
     public void ExtraerRegistro_ListaExacta()
     {
         // Haiku desde el 24/11: con Sonnet, la salida se comía el presupuesto de la parte.
-        Assert.Equal(Con("2.00", "--tools", "", "--model", "haiku"), Construir(DefinicionesTareas.ExtraerRegistro));
+        Assert.Equal(Con("1.50", "--tools", "", "--model", "haiku"), Construir(DefinicionesTareas.ExtraerRegistro));
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public class ConstructorArgumentosTests
     [Theory]
     [InlineData(0)]
     [InlineData(-0.5)]
-    [InlineData(2.01)]
+    [InlineData(1.51)]
     public void UnPresupuestoQueNoEsPositivoOPasaDelDeLaTarea_Lanza(double presupuesto)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>

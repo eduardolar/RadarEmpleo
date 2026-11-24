@@ -486,18 +486,18 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     [Fact]
-    public async Task UnRegistroPequeno_VaEnUnaSolaParteConUnoYDiezMinutos()
+    public async Task UnRegistroPequeno_VaEnUnaSolaParteConMedioYCincoMinutos()
     {
         _claude.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida([Fila()])));
 
         var ejecucion = await ExtraerAsync();
 
         Assert.Equal(EstadoEjecucion.Ok, ejecucion.Estado);
-        Assert.Equal(2.00m, ejecucion.PresupuestoUsd);
+        Assert.Equal(1.50m, ejecucion.PresupuestoUsd);
         var peticion = Assert.Single(_claude.Peticiones);
         Assert.Equal("1 de 1", peticion.Parte);
-        Assert.Equal("1.00", Presupuesto(peticion));
-        Assert.Equal(TimeSpan.FromMinutes(10), peticion.TiempoMaximo);
+        Assert.Equal("0.50", Presupuesto(peticion));
+        Assert.Equal(TimeSpan.FromMinutes(5), peticion.TiempoMaximo);
         Assert.Equal("Parte 1 de 1 del texto libre.", Datos(peticion)[0]);
     }
 
@@ -682,7 +682,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     {
         TresPartes();
         _claude.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
-            new RespuestaFalsa(ModoFalso.PresupuestoAgotado, CosteUsd: 0.66m), Leida(2), new RespuestaFalsa(ModoFalso.Error));
+            new RespuestaFalsa(ModoFalso.PresupuestoAgotado, CosteUsd: 0.50m), Leida(2), new RespuestaFalsa(ModoFalso.Error));
 
         var ejecucion = await ExtraerAsync();
 

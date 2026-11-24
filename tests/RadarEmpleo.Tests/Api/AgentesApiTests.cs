@@ -324,7 +324,7 @@ public sealed class AgentesApiTests
         Assert.Equal("ExtraerRegistro", nueva.GetProperty("tarea").GetString());
         Assert.Equal(JsonValueKind.Null, nueva.GetProperty("candidaturaId").ValueKind);
         // Lo que se reserva al encolar es el total de todas las partes.
-        Assert.Equal(2.00m, nueva.GetProperty("presupuestoUsd").GetDecimal());
+        Assert.Equal(1.50m, nueva.GetProperty("presupuestoUsd").GetDecimal());
 
         Assert.Equal(ejecucionId, (await LeerAsync(await PostJson(http, "/api/agentes/extraer-registro"), HttpStatusCode.OK)).GetProperty("id").GetInt32());
         await EsperarAsync(http, ejecucionId, "EnCurso");
