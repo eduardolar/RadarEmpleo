@@ -215,4 +215,108 @@ describe('ImportacionService', () => {
       expect(service.vistaPrevia()).toEqual(nueva);
     });
   });
+
+  describe('con la extracción de Claude', () => {
+    const URL_COMBINADA = '/api/importacion/extraccion/7/previsualizar';
+    const NO_VALE = 'Esa extracción no ha terminado bien. Vuelve a extraer con Claude.';
+    const COMBINADA = crearVista([crearFila({ clave: 'gamma' })], {
+      origen: 'RegistroConClaude',
+      ejecucionId: 7,
+      dudas: ['Sin fecha.'],
+    });
+    let alNoValer: ReturnType<typeof vi.fn<(mensaje: string) => void>>;
+
+    beforeEach(() => (alNoValer = vi.fn()));
+
+    function cargarCombinada(): void {
+      service.previsualizarExtraccion(7, alNoValer);
+      http.expectOne(URL_COMBINADA).flush(COMBINADA);
+    }
+
+    it('pide la vista combinada con un cuerpo JSON vacío y borra antes la anterior', () => {
+      cargarVista();
+
+      service.previsualizarExtraccion(7, alNoValer);
+
+      const peticion = http.expectOne(URL_COMBINADA);
+      expect(peticion.request.method).toBe('POST');
+      expect(peticion.request.body).toEqual({});
+      expect(service.vistaPrevia()).toBeNull();
+      expect(service.cargando()).toBe(true);
+      peticion.flush(COMBINADA);
+
+      expect(service.vistaPrevia()).toEqual(COMBINADA);
+      expect(alNoValer).not.toHaveBeenCalled();
+    });
+
+    it.each([403, 404, 409])(
+      'con un %i la extracción ya no vale: pide la tabla y pasa el mensaje',
+      (status) => {
+        service.previsualizarExtraccion(7, alNoValer);
+        http.expectOne(URL_COMBINADA).flush({ detail: NO_VALE }, { status, statusText: 'No' });
+
+        expect(alNoValer).toHaveBeenCalledExactlyOnceWith(NO_VALE);
+        expect(service.error()).toBeNull();
+        expect(service.cargando()).toBe(true);
+        previsualizacion().flush(crearVista());
+        expect(service.vistaPrevia()?.origen).toBe('Tabla');
+      },
+    );
+
+    it('sin conexión deja el error y no vuelve a la tabla', () => {
+      service.previsualizarExtraccion(7, alNoValer);
+      http.expectOne(URL_COMBINADA).error(new ProgressEvent('error'));
+
+      expect(service.error()).toContain('No se puede conectar con RadarEmpleo');
+      expect(alNoValer).not.toHaveBeenCalled();
+      http.expectNone(URL_PREVISUALIZAR);
+    });
+
+    it('«volver a leer» repite la última: la combinada o, tras pedir la tabla, la tabla', () => {
+      cargarCombinada();
+
+      service.volverALeer(alNoValer);
+      http.expectOne(URL_COMBINADA).flush(COMBINADA);
+
+      service.previsualizar();
+      previsualizacion().flush(crearVista());
+      service.volverALeer(alNoValer);
+      previsualizacion().flush(crearVista());
+    });
+
+    it('aplicar manda RegistroConClaude con la ejecución y vuelve a leer la combinada', () => {
+      cargarCombinada();
+
+      service.aplicar().subscribe();
+      const peticion = http.expectOne(URL_APLICAR);
+      expect(peticion.request.body).toStrictEqual({
+        origen: 'RegistroConClaude',
+        ejecucionId: 7,
+        hashRegistro: 'a'.repeat(64),
+        claves: ['gamma'],
+      });
+      peticion.flush(crearResultado());
+
+      http.expectOne(URL_COMBINADA).flush(COMBINADA);
+    });
+
+    it('con un 409 al aplicar, si la extracción ya no vale vuelve a la tabla sin repetir el aviso', () => {
+      cargarCombinada();
+
+      let error: ErrorApi | undefined;
+      service.aplicar().subscribe({ error: (e: ErrorApi) => (error = e) });
+      http
+        .expectOne(URL_APLICAR)
+        .flush({ detail: 'Cambiado.' }, { status: 409, statusText: 'Conflict' });
+      http
+        .expectOne(URL_COMBINADA)
+        .flush({ detail: NO_VALE }, { status: 409, statusText: 'Conflict' });
+      previsualizacion().flush(crearVista());
+
+      expect(error?.mensaje).toBe('Cambiado.');
+      expect(alNoValer).not.toHaveBeenCalled();
+      expect(service.error()).toBeNull();
+      expect(service.vistaPrevia()?.origen).toBe('Tabla');
+    });
+  });
 });

@@ -1,5 +1,8 @@
+import { conPunto } from '../../agentes/utils/textos-ejecucion';
 import { ETIQUETAS_ESTADO } from '../../candidaturas/utils/etiquetas';
+import { formatearFecha } from '../../shared/utils/fechas-madrid';
 import {
+  FilaFuera,
   FilaVistaPrevia,
   ResultadoAplicacion,
   ResultadoFila,
@@ -110,14 +113,38 @@ export function textoNadaQueAnadir(resumen: ResumenImportacion): string {
     : 'No hay candidaturas nuevas que añadir.';
 }
 
-/** null si no hay ninguno. Son una estimación: por eso «unos» */
-export function textoEnviosEnTexto(enviosEnTexto: number): string | null {
+/**
+ * null si no hay ninguno. Son una estimación: por eso «unos». Con `conClaude`, el aviso lleva al lado el botón
+ * de extraerlos: ya no es «más adelante»
+ */
+export function textoEnviosEnTexto(enviosEnTexto: number, conClaude = false): string | null {
   if (enviosEnTexto === 0) {
     return null;
+  }
+  if (conClaude) {
+    return enviosEnTexto === 1
+      ? 'Hay 1 envío escrito como texto, fuera de la tabla: Claude puede leerlo.'
+      : `Hay unos ${enviosEnTexto} envíos escritos como texto, fuera de la tabla: Claude puede leerlos.`;
   }
   return enviosEnTexto === 1
     ? 'Hay 1 envío escrito como texto; ese se podrá importar más adelante.'
     : `Hay unos ${enviosEnTexto} envíos escritos como texto; esos se podrán importar más adelante.`;
+}
+
+/** La línea que dice que la vista es la combinada: «Tabla + texto libre leído con Claude (34 de texto libre)» */
+export function textoVistaCombinada(delTextoLibre: number): string {
+  return `Tabla + texto libre leído con Claude (${delTextoLibre} de texto libre)`;
+}
+
+export const EXPLICACION_FUERA =
+  'Claude las ha leído en el texto libre, pero no se añaden. Cada una dice por qué.';
+export const EXPLICACION_DUDAS =
+  'Lo que Claude no ha tenido claro al leer el texto libre. Si hace falta, corrígelo en tu archivo.';
+
+/** «Línea 12 · Acme · Backend · 12 sept 2026: Ya está en la tabla del registro.» Sin línea (0), sin ese trozo */
+export function textoFilaFuera({ linea, empresa, puesto, fecha, aviso }: FilaFuera): string {
+  const datos = [linea > 0 ? `Línea ${linea}` : null, empresa, puesto, formatearFecha(fecha)];
+  return `${datos.filter(Boolean).join(' · ')}: ${conPunto(aviso)}`;
 }
 
 /** «De Enviada a Entrevista» si cambia; si ya existe, cómo está en la app; si no, cómo llega */

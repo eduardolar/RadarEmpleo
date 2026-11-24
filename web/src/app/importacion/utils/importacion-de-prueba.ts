@@ -41,10 +41,12 @@ export function crearVista(
       paraRevisar: contar('Conflicto'),
       sinLeer: sinLeer.length,
       enviosEnTexto: 0,
+      delTextoLibre: 0,
     },
     filas,
     sinLeer,
     fuera: [],
+    dudas: [],
     ...cambios,
   };
 }
