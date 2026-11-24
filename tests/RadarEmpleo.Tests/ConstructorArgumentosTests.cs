@@ -62,6 +62,30 @@ public class ConstructorArgumentosTests
     }
 
     [Theory]
+    [InlineData("-p")]
+    [InlineData("--dangerously-skip-permissions")]
+    [InlineData("son net")]
+    [InlineData("Sonnet")]
+    [InlineData("")]
+    public void UnModeloQueNoEsUnNombre_Lanza(string modelo)
+    {
+        Assert.False(ConstructorArgumentos.EsModeloValido(modelo));
+        Assert.Throws<ArgumentException>(() =>
+            ConstructorArgumentos.Construir(DefinicionesTareas.ExtraerRegistro with { Modelo = modelo }, Esquema, Valores()));
+    }
+
+    [Theory]
+    [InlineData("sonnet")]
+    [InlineData("claude-haiku-4-5")]
+    [InlineData("claude-sonnet-4-5[1m]")]
+    public void UnNombreDeModelo_VaEnSuArgumento(string modelo)
+    {
+        Assert.True(ConstructorArgumentos.EsModeloValido(modelo));
+        Assert.Equal(["--model", modelo],
+            ConstructorArgumentos.Construir(DefinicionesTareas.ExtraerRegistro with { Modelo = modelo }, Esquema, Valores()).TakeLast(2));
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(-0.5)]
     [InlineData(1.51)]
