@@ -265,6 +265,23 @@
           >
             Ver lo que ha leído
           </button>
+          <!-- Secundario, como texto: volver a extraer sin tener que tocar el archivo -->
+          @if (verExtraerOtraVez()) {
+            <button
+              mat-button
+              type="button"
+              class="-mt-2 [--mat-button-text-container-height:48px]"
+              disabledInteractive
+              [disabled]="lanzandoExtraccion()"
+              aria-describedby="gasto-extraer-otra-vez"
+              (click)="extraer()"
+            >
+              {{ lanzandoExtraccion() ? 'Lanzando…' : 'Extraer otra vez' }}
+            </button>
+            <p id="gasto-extraer-otra-vez" class="-mt-2 text-xs text-on-surface-variant">
+              {{ avisoExtraer }}
+            </p>
+          }
         }
         @if (verBotonExtraer()) {
           <button
@@ -340,7 +357,7 @@
           <ul class="flex flex-col gap-2 px-2 pt-2 text-sm text-on-surface">
             @for (fila of previa.sinLeer; track $index) {
               <li class="rounded-md bg-surface-container-lowest p-3">
-                Línea {{ fila.linea }}: {{ fila.motivo }}
+                {{ textoFilaSinLeer(fila) }}
               </li>
             }
           </ul>

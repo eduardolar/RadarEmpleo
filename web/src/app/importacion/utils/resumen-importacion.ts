@@ -3,6 +3,7 @@ import { ETIQUETAS_ESTADO } from '../../candidaturas/utils/etiquetas';
 import { formatearFecha } from '../../shared/utils/fechas-madrid';
 import {
   FilaFuera,
+  FilaSinLeer,
   FilaVistaPrevia,
   ResultadoAplicacion,
   ResultadoFila,
@@ -157,6 +158,11 @@ export function textoExtraccionLeida(fin: string, ahora: Date): string {
         ? `hace ${minutos} min`
         : `hace ${Math.floor(minutos / 60)} h`;
   return `Claude terminó de leer el texto libre (${hace}).`;
+}
+
+/** «Línea 12: motivo»; sin línea (0, una cita que no se ha encontrado), solo el motivo */
+export function textoFilaSinLeer({ linea, motivo }: FilaSinLeer): string {
+  return linea > 0 ? `Línea ${linea}: ${motivo}` : motivo;
 }
 
 /** «Línea 12 · Acme · Backend · 12 sept 2026: Ya está en la tabla del registro.» Sin línea (0), sin ese trozo */

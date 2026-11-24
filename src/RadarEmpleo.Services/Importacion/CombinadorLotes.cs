@@ -69,7 +69,9 @@ public static partial class CombinadorLotes
             .Select(l =>
             {
                 var texto = Comparable(l.Texto);
-                return new LineaComparable(l.Numero, texto, SinMarcado(texto));
+                // Una más larga que dos citas no puede encajar, y las regex de énfasis tardarían mucho con ella
+                var sinMarcado = texto.Length > 2 * ManejadorExtraerRegistro.LargoCita ? "" : SinMarcado(texto);
+                return new LineaComparable(l.Numero, texto, sinMarcado);
             })
             .Where(l => l.Texto.Length > 0)
             .ToList();
@@ -180,7 +182,8 @@ public static partial class CombinadorLotes
     /// Una línea ya <see cref="Comparable"/> sin el formato de Markdown, que es lo que Claude suele quitar al copiarla: el
     /// principio de título, cita o viñeta («# », «> », «- », «* », «+ », «• », «1. », «1) »), los enlaces y las imágenes (se
     /// queda el texto), «**», «__», «~~» y «`», el énfasis con «*x*» o «_x_» (sin tocar un snake_case) y las comillas
-    /// tipográficas, que pasan a rectas. Solo se quita formato: las palabras tienen que seguir siendo las mismas.
+    /// tipográficas y las españolas, que pasan a rectas. Solo se quita formato: las palabras tienen que seguir siendo las
+    /// mismas.
     /// </summary>
     internal static string SinMarcado(string linea)
     {
@@ -188,12 +191,14 @@ public static partial class CombinadorLotes
         texto = MarcasDobles().Replace(texto, "");
         texto = EnfasisAsterisco().Replace(texto, "$1");
         texto = EnfasisGuion().Replace(texto, "$1");
-        texto = texto.Replace('“', '"').Replace('”', '"').Replace('‘', '\'').Replace('’', '\'');
+        texto = texto.Replace('“', '"').Replace('”', '"').Replace('‘', '\'').Replace('’', '\'')
+            .Replace('«', '"').Replace('»', '"');
         texto = PrincipioDeBloque().Replace(texto, "");
         return HtmlATexto.NormalizarEspacios(texto).Trim();
     }
 
-    [GeneratedRegex(@"!?\[([^\]]*)\]\([^)]*\)")]
+    // Solo con una dirección dentro del paréntesis: en «[Gamma](rechazada)» el paréntesis es texto
+    [GeneratedRegex(@"!?\[([^\]]*)\]\((?:https?://|www\.)[^)]*\)")]
     private static partial Regex Enlace();
 
     [GeneratedRegex(@"\*\*|__|~~|`")]

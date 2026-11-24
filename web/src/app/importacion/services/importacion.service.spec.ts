@@ -299,6 +299,37 @@ describe('ImportacionService', () => {
       http.expectNone(URL_PREVISUALIZAR);
     });
 
+    it('si el aplicar falla sin ser un 409 y se apuntó una extracción mientras guardaba, pide la combinada', () => {
+      cargarVista();
+
+      service.aplicar().subscribe({ error: () => undefined });
+      service.apuntarExtraccion(7, alNoValer);
+      http.expectOne(URL_APLICAR).flush({ detail: 'Fallo.' }, { status: 500, statusText: 'Error' });
+
+      http.expectOne(URL_COMBINADA).flush(COMBINADA);
+      expect(service.vistaPrevia()?.origen).toBe('RegistroConClaude');
+    });
+
+    it('con la combinada a la vista, un fallo que no es 409 no vuelve a leer nada', () => {
+      cargarCombinada();
+
+      service.aplicar().subscribe({ error: () => undefined });
+      http.expectOne(URL_APLICAR).flush({ detail: 'Fallo.' }, { status: 500, statusText: 'Error' });
+
+      http.expectNone(URL_COMBINADA);
+      expect(service.vistaPrevia()).toEqual(COMBINADA);
+    });
+
+    it('olvidar la extracción hace que volver a leer pida la tabla', () => {
+      cargarCombinada();
+
+      service.olvidarExtraccion();
+      service.volverALeer();
+
+      expect(service.extraccionId()).toBeNull();
+      previsualizacion().flush(crearVista());
+    });
+
     it('comprueba si una extracción vale sin tocar la vista que se enseña', () => {
       cargarVista();
       const resultados: boolean[] = [];

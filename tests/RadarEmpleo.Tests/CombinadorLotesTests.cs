@@ -138,6 +138,8 @@ public class CombinadorLotesTests
     [InlineData("1. Gamma: enviada.", "Gamma: enviada.")]                                                        // lista numerada
     [InlineData("> Gamma: “enviada” por `correo`.", "Gamma: \"enviada\" por correo.")]                          // cita, comillas y código
     [InlineData("- Gamma: _enviada_ por ~~correo~~ web, en mi_carpeta.", "- Gamma: enviada por correo web, en mi_carpeta.")]
+    [InlineData("- Gamma: «enviada» por correo.", "- Gamma: \"enviada\" por correo.")]                    // comillas españolas
+    [InlineData("- [Gamma](www.gamma.example): enviada.", "- Gamma: enviada.")]                                 // enlace con www.
     public void Combinar_CitaSinElMarcadoDeLaLinea_EntraConEsaLinea(string linea, string cita)
     {
         var lote = Combinar($"# Notas\n\n{linea}\n", Extraida(cita));
@@ -159,12 +161,26 @@ public class CombinadorLotesTests
     [Theory]
     [InlineData("- **Gamma**: enviada el 2026-09-12 por correo.", "Gamma: enviada el 2026-09-12.")] // le faltan palabras
     [InlineData("- **Gamma**: enviada.", "Gamma enviada.")]                                           // y un signo
+    [InlineData("- [Gamma](rechazada) el 2026-09-12.", "- Gamma el 2026-09-12.")]                     // el paréntesis no es un enlace
     public void Combinar_CitaQueSoloEncajaQuitandoAlgoMasQueElFormato_VaASinLeer(string linea, string cita)
     {
         var lote = Combinar($"# Notas\n{linea}\n", Extraida(cita));
 
         Assert.Empty(lote.Filas);
         Assert.StartsWith(CombinadorLotes.MotivoCitaInexistente, Assert.Single(lote.SinLeer).Motivo);
+    }
+
+    [Fact]
+    public void Combinar_LineaMasLargaQueDosCitas_SoloEncajaExacta()
+    {
+        var largo = new string('x', 2 * ManejadorExtraerRegistro.LargoCita);
+        var linea = $"- **Gamma**: {largo}";
+
+        var sinFormato = Combinar($"# Notas\n{linea}\n", Extraida($"Gamma: {largo}"));
+        var exacta = Combinar($"# Notas\n{linea}\n", Extraida(linea));
+
+        Assert.Empty(sinFormato.Filas);
+        Assert.Equal(2, Assert.Single(exacta.Filas).Linea);
     }
 
     [Fact]

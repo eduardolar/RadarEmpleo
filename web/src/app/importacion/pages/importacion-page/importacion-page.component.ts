@@ -49,6 +49,7 @@ import {
   textoEnviosEnTexto,
   textoExtraccionLeida,
   textoFilaFuera,
+  textoFilaSinLeer,
   textoNadaQueAnadir,
   textoResultado,
   textoVistaCombinada,
@@ -96,6 +97,7 @@ export default class ImportacionPageComponent {
   protected readonly explicacionFuera = EXPLICACION_FUERA;
   protected readonly explicacionDudas = EXPLICACION_DUDAS;
   protected readonly textoFilaFuera = textoFilaFuera;
+  protected readonly textoFilaSinLeer = textoFilaSinLeer;
   protected readonly avisoExtraer = `${AVISO_SOLO_LEE} ${AVISO_GASTO}`;
   protected readonly avisoPuedeTardar = AVISO_PUEDE_TARDAR;
   /** La petición que ha fallado era la de la vista combinada: también se puede ir a la de la tabla */
@@ -190,6 +192,9 @@ export default class ImportacionPageComponent {
   protected readonly verLeida = computed(
     () => this.leida() !== null && this.vista()?.origen === 'Tabla' && !this.aplicando(),
   );
+  protected readonly verExtraerOtraVez = computed(
+    () => this.verLeida() && this.agentes.puedeLanzar(),
+  );
   protected readonly verBotonExtraer = computed(() => {
     const e = this.extraccionActual();
     // En Error o Cancelada la tarjeta ya ofrece «Reintentar»
@@ -224,6 +229,12 @@ export default class ImportacionPageComponent {
 
   constructor() {
     this.importacion.previsualizar();
+    // Su aviso retendría la página cerrada; si está guardando, la lectura del final aún la necesita
+    this.destroyRef.onDestroy(() => {
+      if (!this.aplicando()) {
+        this.importacion.olvidarExtraccion();
+      }
+    });
 
     // Al entrar (también directo o con F5) se retoma la extracción que siga en marcha; una ya
     // terminada no se enseña
@@ -247,7 +258,12 @@ export default class ImportacionPageComponent {
       const boton = this.botonExtraer()?.nativeElement;
       const linea = this.lineaCombinada()?.nativeElement;
       const hayVista = this.vista() !== null;
+      const hayError = this.error() !== null;
       untracked(() => {
+        // Si la tabla tampoco se ha podido leer, el aviso de error ya está a la vista
+        if (hayError) {
+          this.enfocarTrasVolver = false;
+        }
         if (this.enfocarTrasVolver && hayVista) {
           this.enfocarTrasVolver = false;
           // Del DOM ya pintado: la consulta del botón que sale con la vista aún no se ha puesto al día
@@ -327,6 +343,8 @@ export default class ImportacionPageComponent {
       .subscribe({
         next: (e) => {
           this.enfocarTarjeta = true;
+          // Lo leído antes deja de ofrecerse: la nueva lo sustituye
+          this.leida.set(null);
           this.extraccion.set(e);
         },
         error: (error: ErrorApi) => this.avisos.error(error.mensaje),

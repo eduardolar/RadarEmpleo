@@ -9,6 +9,7 @@ import {
   textoEstadoFila,
   textoExtraccionLeida,
   textoFilaFuera,
+  textoFilaSinLeer,
   textoNadaQueAnadir,
   textoResultado,
   textoVistaCombinada,
@@ -288,5 +289,16 @@ describe('textoEstadoFila', () => {
     });
 
     expect(textoEstadoFila(fila)).toBe('Enviada');
+  });
+});
+
+describe('textoFilaSinLeer', () => {
+  it('nombra la línea solo si la hay', () => {
+    expect(textoFilaSinLeer({ linea: 4, motivo: 'Falta la fecha.' })).toBe(
+      'Línea 4: Falta la fecha.',
+    );
+    expect(textoFilaSinLeer({ linea: 0, motivo: 'No encuentro esta línea.' })).toBe(
+      'No encuentro esta línea.',
+    );
   });
 });

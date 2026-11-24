@@ -80,6 +80,11 @@ export class ImportacionService {
     this._extraccion.set({ id: ejecucionId, alNoValer });
   }
 
+  /** Deja de apuntar la extracción (y su aviso), sin pedir nada: la página que la apuntó se ha cerrado */
+  olvidarExtraccion(): void {
+    this._extraccion.set(null);
+  }
+
   /** Vuelve a pedir la misma vista previa: la de la tabla o la combinada */
   volverALeer(): void {
     this.leerOtraVez(false);
@@ -117,6 +122,9 @@ export class ImportacionService {
           error: (error: ErrorApi) => {
             if (error.estado === 409) {
               this.leerOtraVez(true);
+            } else if (this.extraccionId() !== vista.ejecucionId) {
+              // Se apuntó una extracción mientras guardaba: la vista que queda ya no es la que se volvería a leer
+              this.leerOtraVez(false);
             }
           },
         }),

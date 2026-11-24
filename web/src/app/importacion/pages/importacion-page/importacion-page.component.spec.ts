@@ -15,6 +15,7 @@ import {
   EXPLICACION_SIN_LEER,
   EXPLICACION_YA_EXISTEN,
 } from '../../utils/resumen-importacion';
+import { ImportacionService } from '../../services/importacion.service';
 import ImportacionPageComponent from './importacion-page.component';
 
 const URL_PREVISUALIZAR = '/api/importacion/tabla/previsualizar';
@@ -1002,6 +1003,33 @@ describe('ImportacionPageComponent', () => {
       botonLeido()!.click();
       await responder(urlCombinada(7), COMBINADA);
       expect(elemento().textContent).toContain(LINEA);
+    });
+
+    it('mientras ofrece lo leído, «Extraer otra vez» va como texto, con el gasto, y lanza otra', async () => {
+      await abrirCombinada();
+      boton('Ver solo la tabla')!.click();
+      await responder(URL_PREVISUALIZAR, TABLA);
+
+      const otraVez = boton('Extraer otra vez')!;
+      expect(otraVez.hasAttribute('mat-button')).toBe(true);
+      expect(
+        elemento().querySelector(`#${otraVez.getAttribute('aria-describedby')}`)?.textContent,
+      ).toContain('Gasta un poco de tu tope diario de Claude.');
+
+      otraVez.click();
+      http.expectOne(URL_EXTRAER).flush(extraccion({ id: 9 }));
+      await pasan(MARGEN_PINTADO_MS);
+
+      expect(botonLeido()).toBeUndefined();
+      expect(tarjeta()).not.toBeNull();
+    });
+
+    it('al cerrar la página sin estar guardando deja de apuntar la extracción', async () => {
+      await abrirCombinada();
+
+      fixture.destroy();
+
+      expect(TestBed.inject(ImportacionService).extraccionId()).toBeNull();
     });
 
     it('al entrar retoma la extracción en marcha', async () => {
