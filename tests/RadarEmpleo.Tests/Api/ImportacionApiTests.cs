@@ -118,6 +118,7 @@ public sealed class ImportacionApiTests : IDisposable
         Assert.Equal("Tabla", vista["origen"]!.GetValue<string>());
         Assert.Null(vista["ejecucionId"]);
         Assert.Empty(vista["fuera"]!.AsArray());
+        Assert.Empty(vista["dudas"]!.AsArray());
     }
 
     [Fact]

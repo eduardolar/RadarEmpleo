@@ -141,9 +141,11 @@ public class ImportacionService
 
     // ---------------------------------------------------------------- auxiliares
 
-    /// <summary>El lote que monta el servidor: las filas, las que no se han leído, las que se quedan fuera y los envíos en texto.</summary>
+    /// <summary>El lote que monta el servidor: las filas, las que no se han leído, las que se quedan fuera, los envíos en texto y
+    /// las dudas de la extracción.</summary>
     private sealed record LoteServidor(
-        IReadOnlyList<FilaLote> Filas, IReadOnlyList<FilaSinLeerDto> SinLeer, IReadOnlyList<FilaFueraDelLote> Fuera, int EnviosEnTexto);
+        IReadOnlyList<FilaLote> Filas, IReadOnlyList<FilaSinLeerDto> SinLeer, IReadOnlyList<FilaFueraDelLote> Fuera, int EnviosEnTexto,
+        IReadOnlyList<string> Dudas);
 
     /// <summary>
     /// La tabla del registro (409 si no la tiene) o, con una extracción, la tabla más lo extraído. Con la extracción, los envíos
@@ -155,10 +157,10 @@ public class ImportacionService
         if (extraccion is not null)
         {
             var combinado = CombinadorLotes.Combinar(analisis, registro, extraccion);
-            return new LoteServidor(combinado.Filas, combinado.SinLeer, combinado.Fuera, 0);
+            return new LoteServidor(combinado.Filas, combinado.SinLeer, combinado.Fuera, 0, extraccion.Dudas);
         }
         return analisis.TablaEncontrada
-            ? new LoteServidor(analisis.Lote.Filas, analisis.SinLeer, [], analisis.EnviosEnTexto)
+            ? new LoteServidor(analisis.Lote.Filas, analisis.SinLeer, [], analisis.EnviosEnTexto, [])
             : throw new ReglaNegocioException(MensajeSinTabla);
     }
 
@@ -167,7 +169,7 @@ public class ImportacionService
     {
         var filas = ReglasImportacion.Comparar(lote.Filas, await LeerExistentesAsync(db));
         return new VistaPreviaImportacionDto(origen, hash, ejecucionId,
-            ReglasImportacion.Resumir(filas, lote.SinLeer.Count, lote.EnviosEnTexto), filas, lote.SinLeer, lote.Fuera);
+            ReglasImportacion.Resumir(filas, lote.SinLeer.Count, lote.EnviosEnTexto), filas, lote.SinLeer, lote.Fuera, lote.Dudas);
     }
 
     /// <summary>

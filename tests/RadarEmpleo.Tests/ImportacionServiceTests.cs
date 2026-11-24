@@ -712,6 +712,18 @@ public class ImportacionServiceTests : ArnesSqliteTests
     }
 
     [Fact]
+    public async Task PrevisualizarExtraccion_TraeLasDudasDeClaudeTalCualYLaTablaNinguna()
+    {
+        UsarTablaYTextoLibre();
+        var dudas = new[] { "La línea 6 no dice el puesto.", "<b>¿Gamma o Gama?</b>" };
+        var id = await SembrarEjecucionAsync(e => e.Terminar(Reloj.AhoraUtc, 0.1m, 1, null, "x",
+            JsonSerializer.Serialize(new ResultadoExtraccionRegistro([Extraida()], dudas, []), FabricaApi.Json), null, null));
+
+        Assert.Equal(dudas, (await _importacion.PrevisualizarExtraccionAsync(id))!.Dudas);
+        Assert.Empty((await _importacion.PrevisualizarTablaAsync()).Dudas);
+    }
+
+    [Fact]
     public async Task PrevisualizarExtraccion_NoExiste_DaNull()
     {
         UsarTablaYTextoLibre();
