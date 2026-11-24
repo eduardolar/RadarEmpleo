@@ -983,6 +983,30 @@ public class ImportacionServiceTests : ArnesSqliteTests
         Assert.DoesNotContain(ficha.Historial, h => h.A == EstadoCandidatura.Descartada);
     }
 
+    [Fact]
+    public async Task Aplicar_ClaudeDiceOfertaPorUnaLineaQueSoloNombraLaOferta_LaNuevaAvisaYLaExistenteNoAvanzaSola()
+    {
+        // «oferta» sale en cualquier línea: no basta para poner ni para cambiar a Oferta sin que se revise.
+        _lector.Texto = "## Notas sueltas\n- Vi la oferta de Gamma en LinkedIn.\n";
+        var primera = await SembrarExtraccionAsync(Extraida(linea: 2));
+        await _importacion.AplicarAsync(PeticionConClaude((await _importacion.PrevisualizarExtraccionAsync(primera))!));
+        var id = await SembrarExtraccionAsync(Extraida(linea: 2, estado: EstadoCandidatura.Oferta),
+            Extraida(linea: 2, fecha: "2026-10-20", estado: EstadoCandidatura.Oferta) with { Puesto = "Otro puesto" });
+
+        var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
+        var existente = Assert.Single(vista.Filas, f => f.Puesto == "Sin indicar");
+        var nueva = Assert.Single(vista.Filas, f => f.Puesto == "Otro puesto");
+        var peticion = PeticionConClaude(vista);
+        await _importacion.AplicarAsync(peticion with { Claves = [.. peticion.Claves, existente.Clave] });
+
+        Assert.Equal((ResultadoFila.Conflicto, ReglasImportacion.MotivoEstadoFinalDelTextoLibre(EstadoCandidatura.Oferta)),
+            (existente.Resultado, existente.Motivo));
+        Assert.DoesNotContain(ReglasImportacion.AvisoEstadoDeClaude, existente.Avisos);
+        Assert.Equal(ResultadoFila.Nueva, nueva.Resultado);
+        Assert.Equal([ReglasImportacion.AvisoEstadoDeClaude], nueva.Avisos);
+        Assert.Equal(EstadoCandidatura.Enviada, (await FichaAsync("Sin indicar")).Estado);
+    }
+
     private sealed class LectorFalso : ILectorCurriculum
     {
         public string Texto { get; set; } = "";

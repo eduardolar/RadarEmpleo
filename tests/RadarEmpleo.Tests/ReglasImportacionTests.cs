@@ -217,6 +217,33 @@ public class ReglasImportacionTests
     }
 
     [Theory]
+    [InlineData(EstadoCandidatura.Oferta)]
+    [InlineData(EstadoCandidatura.Descartada)]
+    [InlineData(EstadoCandidatura.Cerrada)]
+    public void Comparar_NuevaDelTextoLibreEnOfertaOFinalConRespaldo_LlevaSiempreElAviso(EstadoCandidatura estado)
+    {
+        var fila = Comparar(Fila(estado: estado) with { Seccion = SeccionLibre });
+
+        Assert.Equal(ResultadoFila.Nueva, fila.Resultado);
+        Assert.Equal([ReglasImportacion.AvisoEstadoDeClaude], fila.Avisos);
+    }
+
+    [Theory]
+    [InlineData(EstadoCandidatura.Enviada)]
+    [InlineData(EstadoCandidatura.Entrevista)]
+    public void Comparar_NuevaDelTextoLibreEnOtroEstadoConRespaldo_NoLlevaAviso(EstadoCandidatura estado)
+    {
+        Assert.Empty(Comparar(Fila(estado: estado) with { Seccion = SeccionLibre }).Avisos);
+    }
+
+    [Fact]
+    public void Comparar_NuevaDeLaTablaEnOferta_NoLlevaElAvisoDeClaude()
+    {
+        Assert.Empty(Comparar(Fila(estado: EstadoCandidatura.Oferta)).Avisos);
+    }
+
+    [Theory]
+    [InlineData(EstadoCandidatura.Oferta)]
     [InlineData(EstadoCandidatura.Descartada)]
     [InlineData(EstadoCandidatura.Cerrada)]
     public void Comparar_DelTextoLibreQueCerrariaConRespaldo_TambienEsConflicto(EstadoCandidatura estado)

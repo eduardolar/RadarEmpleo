@@ -373,22 +373,36 @@ public static partial class AnalizadorRegistro
     /// Si una línea del texto libre respalda el estado que dice Claude: tiene una palabra de ese estado («enviada»,
     /// «descartado»…) y ninguna de otro que mande más (uno final, o uno más adelantado en el camino si el de Claude no es
     /// final). «Enviada; entrevista el 11/11» respalda Entrevista y no Enviada; una línea con «oferta» y «descartada» no
-    /// respalda Oferta. Es lo que impide que un texto pegado en el registro, o un error de Claude, ponga un estado que
+    /// respalda Oferta. Una palabra de estado dudada, negada o en espera no cuenta («No descartada aún», «Pendiente de
+    /// entrevista», «¿enviada?»): son las <see cref="PalabrasDeDuda"/> de la tabla, pero aquí solo valen pegadas al estado
+    /// (hasta <see cref="PalabrasDeDudaAntes"/> palabras antes), porque una línea entera sí puede decir «enviada, sin
+    /// respuesta». Es lo que impide que un texto pegado en el registro, o un error de Claude, ponga un estado que
     /// el archivo no dice.
     /// </summary>
     public static bool RespaldaEstado(string linea, EstadoCandidatura estado)
     {
-        var palabras = SeparadorPalabras().Split(TextoComparable.Normalizar(linea)).Where(p => p.Length > 0).ToArray();
-        var enLaLinea = PrefijosEstado.Where(p => AparecePalabraDeEstado(palabras, p.Prefijo)).Select(p => p.Estado).ToHashSet();
+        var palabras = PalabraConInterrogacion().Matches(TextoComparable.Normalizar(linea)).Select(m => m.Value).ToArray();
+        var enLaLinea = PrefijosEstado.Where(p => AparecePalabraDeEstado(palabras, p.Prefijo, sinDuda: true)).Select(p => p.Estado).ToHashSet();
         return enLaLinea.Contains(estado)
             && !enLaLinea.Any(otro => otro != estado && (ReglasEstado.EsFinal(otro) || !ReglasEstado.EsFinal(estado) && otro > estado));
     }
 
-    private static bool AparecePalabraDeEstado(string[] palabras, string raiz)
+    /// <summary>Palabras de antes de un estado en las que se busca una duda al contrastar una línea del texto libre.</summary>
+    private const int PalabrasDeDudaAntes = 3;
+
+    // Como SeparadorPalabras, pero dejando la interrogación pegada a su palabra («enviada?»).
+    [GeneratedRegex(@"[\p{L}\p{N}]+\??")]
+    private static partial Regex PalabraConInterrogacion();
+
+    /// <param name="sinDuda">No vale una aparición con interrogación ni con una de <see cref="PalabrasDeDuda"/> justo antes.</param>
+    private static bool AparecePalabraDeEstado(string[] palabras, string raiz, bool sinDuda = false)
     {
         for (var i = 0; i < palabras.Length; i++)
         {
             if (!palabras[i].StartsWith(raiz, StringComparison.Ordinal)) continue;
+            if (sinDuda && (palabras[i].EndsWith('?')
+                || palabras[Math.Max(0, i - PalabrasDeDudaAntes)..i].Any(p => PalabrasDeDuda.Contains(p.TrimEnd('?')))))
+                continue;
             // Mira las dos palabras de antes: «inscripciones cerradas», «plazo ya cerrado».
             var cierreDeLaOferta = raiz == "cerrad"
                 && palabras[Math.Max(0, i - 2)..i].Any(CierresQueNoSonDeLaCandidatura.Contains);
