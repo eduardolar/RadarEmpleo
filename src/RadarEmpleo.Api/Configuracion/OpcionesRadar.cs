@@ -97,6 +97,12 @@ public sealed class OpcionesAgentes
     /// <summary>Respuestas del ejecutor falso. Vacía: <c>datos-ejemplo\agentes</c> junto a la API.</summary>
     public string? CarpetaRespuestasFalso { get; set; }
 
+    /// <summary>
+    /// El <c>--model</c> de ExtraerRegistro («sonnet», «claude-haiku-4-5»…). Vacío: el de su definición («haiku»). Se
+    /// comprueba al arrancar (<see cref="ConfiguracionAgentes.ExigirModeloValido"/>).
+    /// </summary>
+    public string? ModeloExtraerRegistro { get; set; }
+
     /// <summary>Ruta final de <c>claude.exe</c>, con las variables de entorno expandidas.</summary>
     public string RutaClaudeEfectiva()
     {

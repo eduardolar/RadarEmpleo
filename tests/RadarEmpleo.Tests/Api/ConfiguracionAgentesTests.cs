@@ -44,6 +44,49 @@ public sealed class ConfiguracionAgentesTests : IDisposable
         Assert.Contains("RutaBaseDatos", error.Message);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("sonnet")]
+    [InlineData("haiku")]
+    [InlineData("claude-haiku-4-5")]
+    [InlineData("claude-sonnet-4-5[1m]")]
+    public void ModeloDeExtraerRegistro_VacioOUnNombre_Arranca(string? modelo) =>
+        ConfiguracionAgentes.ExigirModeloValido(new OpcionesAgentes { ModeloExtraerRegistro = modelo });
+
+    public static TheoryData<string> ModelosQueNoArrancan => new()
+    {
+        "-p",
+        "--dangerously-skip-permissions",
+        "son net",
+        "Sonnet",
+        "sonnet\n--tools",
+        "sonnet,haiku",
+        new string('a', 51)
+    };
+
+    [Theory]
+    [MemberData(nameof(ModelosQueNoArrancan))]
+    public void ModeloDeExtraerRegistro_QueNoEsUnNombre_NoArranca(string modelo)
+    {
+        var agentes = new OpcionesAgentes { ModeloExtraerRegistro = modelo, CarpetaDatos = _raiz };
+
+        Assert.Contains("ModeloExtraerRegistro", Assert.Throws<InvalidOperationException>(() => ConfiguracionAgentes.ExigirModeloValido(agentes)).Message);
+        Assert.Throws<InvalidOperationException>(() => ConfiguracionAgentes.Opciones(agentes, new OpcionesRadar { RutaBaseDatos = Path.Combine(_raiz, "x.db") }));
+    }
+
+    [Fact]
+    public void ModeloDeExtraerRegistro_LlegaAlEjecutorSinEspaciosYVacioEsNull()
+    {
+        var radar = new OpcionesRadar { RutaBaseDatos = Path.Combine(_raiz, "x.db") };
+        Assert.Equal("sonnet", ConfiguracionAgentes.Opciones(new OpcionesAgentes { ModeloExtraerRegistro = " sonnet ", CarpetaDatos = _raiz }, radar).ModeloExtraerRegistro);
+        Assert.Null(ConfiguracionAgentes.Opciones(new OpcionesAgentes { ModeloExtraerRegistro = "", CarpetaDatos = _raiz }, radar).ModeloExtraerRegistro);
+        // Con 50 caracteres justos (lo que guarda la ejecución) todavía vale.
+        Assert.Equal(50, ConfiguracionAgentes.Opciones(new OpcionesAgentes { ModeloExtraerRegistro = new string('a', 50), CarpetaDatos = _raiz }, radar)
+            .ModeloExtraerRegistro!.Length);
+    }
+
     [Fact]
     public void RutaDeLaBd_Normal_Vale()
     {

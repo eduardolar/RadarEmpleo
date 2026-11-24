@@ -117,6 +117,7 @@ var app = builder.Build();
 app.Services.GetRequiredService<IOptions<OpcionesRadar>>().Value.ExigirRutaBaseDatosValida();
 ConfiguracionAgentes.ExigirFalsoPermitido(app.Services.GetRequiredService<IOptions<OpcionesAgentes>>().Value,
     app.Services.GetRequiredService<IOptions<OpcionesRadar>>().Value);
+ConfiguracionAgentes.ExigirModeloValido(app.Services.GetRequiredService<IOptions<OpcionesAgentes>>().Value);
 
 // Crea la base de datos si no existe y aplica las migraciones pendientes.
 using (var scope = app.Services.CreateScope())

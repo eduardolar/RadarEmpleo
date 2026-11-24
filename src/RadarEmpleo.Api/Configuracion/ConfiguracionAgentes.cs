@@ -6,7 +6,7 @@ using RadarEmpleo.Services.Ofertas;
 namespace RadarEmpleo.Api.Configuracion;
 
 /// <summary>Monta lo que los agentes necesitan de la configuración y comprueba que tiene sentido al arrancar.</summary>
-public static class ConfiguracionAgentes
+public static partial class ConfiguracionAgentes
 {
     /// <summary>Las opciones del ejecutor a partir de las de la API (Services no referencia a Api).</summary>
     public static OpcionesEjecutor Opciones(OpcionesAgentes agentes, OpcionesRadar radar)
@@ -14,12 +14,32 @@ public static class ConfiguracionAgentes
         var carpetaDatos = string.IsNullOrWhiteSpace(agentes.CarpetaDatos)
             ? Path.GetDirectoryName(radar.RutaBaseDatosEfectiva())!
             : Path.GetFullPath(Environment.ExpandEnvironmentVariables(agentes.CarpetaDatos));
+        ExigirModeloValido(agentes);
         return new OpcionesEjecutor(agentes.RutaClaudeEfectiva(), agentes.ArgumentosPrevios, carpetaDatos,
             agentes.TopeGastoDiarioUsd, agentes.VersionProbada)
         {
-            RutaExclusion = radar.RutaBaseDatosEfectiva()
+            RutaExclusion = radar.RutaBaseDatosEfectiva(),
+            ModeloExtraerRegistro = string.IsNullOrWhiteSpace(agentes.ModeloExtraerRegistro) ? null : agentes.ModeloExtraerRegistro.Trim()
         };
     }
+
+    /// <summary>
+    /// <c>Agentes:ModeloExtraerRegistro</c> vacío (el de la definición) o un nombre de modelo: minúsculas, números, «.», «-»,
+    /// «[» y «]», sin empezar por «-» (no puede pasar por otro argumento) y como mucho
+    /// <see cref="RadarEmpleo.Domain.EjecucionAgente.LargoModelo"/> caracteres (lo que se guarda en la ejecución).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No es un nombre de modelo válido.</exception>
+    public static void ExigirModeloValido(OpcionesAgentes agentes)
+    {
+        if (string.IsNullOrWhiteSpace(agentes.ModeloExtraerRegistro)) return;
+        var modelo = agentes.ModeloExtraerRegistro.Trim();
+        if (modelo.Length > RadarEmpleo.Domain.EjecucionAgente.LargoModelo || !NombreModelo().IsMatch(modelo))
+            throw new InvalidOperationException(
+                "Agentes:ModeloExtraerRegistro no es un nombre de modelo válido («sonnet», «haiku», «claude-haiku-4-5»…); déjalo vacío para usar el de por defecto.");
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\A[a-z0-9][a-z0-9.\-\[\]]{0,49}\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex NombreModelo();
 
     /// <summary>
     /// El ejecutor configurado. El falso solo se admite en modo Local y con una base de datos que no sea la de por

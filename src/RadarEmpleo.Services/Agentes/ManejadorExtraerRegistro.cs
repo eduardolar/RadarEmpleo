@@ -16,7 +16,7 @@ namespace RadarEmpleo.Services.Agentes;
 /// <see cref="PartesTarea.MaximoPartes"/>), una consulta cada una dentro de la misma ejecución, y lo de todas se junta en un
 /// solo resultado: si alguna no se ha podido leer, queda una duda que lo dice.
 /// </summary>
-public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurriculum rutas) : IManejadorTarea
+public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurriculum rutas, OpcionesEjecutor opciones) : IManejadorTarea
 {
     public const string MensajeSinRegistro = $"No se encuentra {RutasCurriculum.ArchivoRegistro} en la carpeta Curriculum.";
     public const string MensajeSinTextoLibre = "El registro no tiene texto libre fuera de la tabla y los rastreos: no hay nada que extraer.";
@@ -64,7 +64,10 @@ public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurr
         RespectRequiredConstructorParameters = true
     };
 
-    public DefinicionTarea Definicion => DefinicionesTareas.ExtraerRegistro;
+    /// <summary>La de <see cref="DefinicionesTareas.ExtraerRegistro"/>, con el modelo de la configuración si lo hay.</summary>
+    public DefinicionTarea Definicion { get; } = string.IsNullOrWhiteSpace(opciones.ModeloExtraerRegistro)
+        ? DefinicionesTareas.ExtraerRegistro
+        : DefinicionesTareas.ExtraerRegistro with { Modelo = opciones.ModeloExtraerRegistro.Trim() };
 
     public Task<bool> ValidarAsync(int? candidaturaId, CancellationToken cancelacion)
     {
