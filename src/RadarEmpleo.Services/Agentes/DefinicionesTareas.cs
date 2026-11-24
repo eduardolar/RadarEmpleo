@@ -129,7 +129,7 @@ public static class DefinicionesTareas
         Herramientas: "",
         Permitidas: null,
         Denegadas: null,
-        Modelo: "haiku",
+        Modelo: "claude-haiku-5-5",
         NombrePrompt: "extraer-registro",
         SalidaConDatosPersonales: true,
         Partes: new PartesTarea(LargoParte: 16_000, MaximoPartes: 6, PresupuestoMaximoParte: 0.50m, TiempoMaximoParte: TimeSpan.FromMinutes(5)));

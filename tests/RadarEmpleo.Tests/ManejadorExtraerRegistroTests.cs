@@ -151,8 +151,8 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
         Assert.DoesNotContain("Talleres Ficticios", peticion.EntradaEstandar);
         Assert.DoesNotContain("Empresa Rastreo", peticion.EntradaEstandar);
         Assert.Equal(new[] { "--tools", "" }, peticion.Argumentos.SkipWhile(a => a != "--tools").Take(2));
-        Assert.Equal(new[] { "--model", "haiku" }, peticion.Argumentos.SkipWhile(a => a != "--model").Take(2));
-        Assert.Equal("haiku", ejecucion.Modelo);
+        Assert.Equal(new[] { "--model", "claude-haiku-5-5" }, peticion.Argumentos.SkipWhile(a => a != "--model").Take(2));
+        Assert.Equal("claude-haiku-5-5", ejecucion.Modelo);
         Assert.True(peticion.SalidaPrivada);
 
         await using var db = _factory.CreateDbContext();
@@ -394,9 +394,9 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     // ---------------------------------------------------------------- modelo
 
     [Theory]
-    [InlineData(null, "haiku")]
-    [InlineData("", "haiku")]
-    [InlineData("  ", "haiku")]
+    [InlineData(null, "claude-haiku-5-5")]
+    [InlineData("", "claude-haiku-5-5")]
+    [InlineData("  ", "claude-haiku-5-5")]
     [InlineData(" sonnet ", "sonnet")]
     public void ElModelo_EsElDeLaConfiguracionOHaiku(string? configurado, string modelo)
     {
