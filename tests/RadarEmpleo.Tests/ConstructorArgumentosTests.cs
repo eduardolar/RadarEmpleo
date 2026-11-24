@@ -49,7 +49,7 @@ public class ConstructorArgumentosTests
     [Fact]
     public void ExtraerRegistro_ListaExacta()
     {
-        Assert.Equal(Con("1.00", "--tools", "", "--model", "sonnet"), Construir(DefinicionesTareas.ExtraerRegistro));
+        Assert.Equal(Con("2.00", "--tools", "", "--model", "sonnet"), Construir(DefinicionesTareas.ExtraerRegistro));
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class ConstructorArgumentosTests
     [Theory]
     [InlineData(0)]
     [InlineData(-0.5)]
-    [InlineData(1.01)]
+    [InlineData(2.01)]
     public void UnPresupuestoQueNoEsPositivoOPasaDelDeLaTarea_Lanza(double presupuesto)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>

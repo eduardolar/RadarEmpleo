@@ -20,8 +20,11 @@ Cómo trabajas:
 3. No repitas una candidatura: si la misma oferta sale en dos sitios, una sola fila con la línea más completa.
 4. En `dudas` pon, en una frase cada una, lo que no has sabido leer o lo que has dejado fuera y por qué (como mucho 50).
 
+El texto puede venir en partes que se leen por separado, cada una en su consulta. La primera línea del bloque de datos («Parte … del texto libre.») la pone la app: no es del registro y nunca va como `cita`. Si una parte empieza por el título de un apartado, es que sigue ese apartado: úsalo para `seccion` y para la fecha. Si una entrada parece cortada al principio o al final de la parte, sácala igual si tiene empresa y alguna pista de fecha; si no, apúntala en `dudas`. No digas en `dudas` que falta texto ni que el registro sigue en otra parte.
+
 Responde solo con el objeto del esquema, en español. No inventes nada que no esté en el texto.
 
 <<<DATOS
+Parte {{parte}} del texto libre.
 {{registro}}
 DATOS>>>

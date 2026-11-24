@@ -107,10 +107,17 @@ public class PartesTareaTests
     }
 
     [Fact]
-    public void ExtraerRegistro_TodaviaNoVaPorPartes()
+    public void ExtraerRegistro_VaPorPartesConLoAprobado_YLasDemasDeUnaVez()
     {
-        // Se activa en el PR B, con el manejador que parte el texto libre.
-        Assert.All(DefinicionesTareas.Todas, d => Assert.Null(d.Partes));
+        // Decisión de Eduardo del 24/11.
+        var extraer = DefinicionesTareas.ExtraerRegistro;
+        Assert.Equal(2.00m, extraer.PresupuestoUsd);
+        Assert.Equal(TimeSpan.FromMinutes(50), extraer.TiempoMaximo);
+        Assert.Equal(new PartesTarea(16_000, 6, 1.00m, TimeSpan.FromMinutes(10)), extraer.Partes);
+        // El bloqueo caduca 5 min después del tiempo máximo: por debajo de la hora en la que cualquiera lo da por caducado.
+        Assert.True(extraer.TiempoMaximo + TimeSpan.FromMinutes(5) < BloqueoEjecucion.DuracionMaxima);
+        Assert.Null(DefinicionesTareas.AnalizarEncaje.Partes);
+        Assert.Null(DefinicionesTareas.Rastreo.Partes);
     }
 
     private static PeticionClaude Peticion(string? parte = null) =>
