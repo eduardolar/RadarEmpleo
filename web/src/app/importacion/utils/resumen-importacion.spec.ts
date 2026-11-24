@@ -7,6 +7,7 @@ import {
   textoBotonAplicar,
   textoEnviosEnTexto,
   textoEstadoFila,
+  textoExtraccionLeida,
   textoFilaFuera,
   textoNadaQueAnadir,
   textoResultado,
@@ -210,8 +211,24 @@ describe('textoEnviosEnTexto', () => {
 
 describe('textoVistaCombinada', () => {
   it('dice cuántas salen del texto libre', () => {
-    expect(textoVistaCombinada(34)).toBe(
-      'Tabla + texto libre leído con Claude (34 de texto libre)',
+    expect(textoVistaCombinada(34)).toBe('Tabla + 34 leídas del texto libre con Claude');
+    expect(textoVistaCombinada(1)).toBe('Tabla + 1 leída del texto libre con Claude');
+  });
+});
+
+describe('textoExtraccionLeida', () => {
+  const fin = '2026-11-23T10:00:00Z';
+  const tras = (ms: number) => new Date(new Date(fin).getTime() + ms);
+
+  it('dice hace cuánto terminó, en minutos y luego en horas', () => {
+    expect(textoExtraccionLeida(fin, tras(20_000))).toBe(
+      'Claude terminó de leer el texto libre (hace un momento).',
+    );
+    expect(textoExtraccionLeida(fin, tras(12 * 60_000))).toBe(
+      'Claude terminó de leer el texto libre (hace 12 min).',
+    );
+    expect(textoExtraccionLeida(fin, tras(150 * 60_000))).toBe(
+      'Claude terminó de leer el texto libre (hace 2 h).',
     );
   });
 });

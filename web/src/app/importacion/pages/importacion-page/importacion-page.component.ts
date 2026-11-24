@@ -25,15 +25,18 @@ import { AgentesService, esTerminal } from '../../../agentes/services/agentes.se
 import { AVISO_GASTO } from '../../../agentes/utils/textos-ejecucion';
 import { ErrorApi } from '../../../core/interfaces/error-api.interface';
 import { SistemaService } from '../../../core/services/sistema.service';
+import { diaMadrid } from '../../../shared/utils/fechas-madrid';
 import { CabeceraPagina } from '../../../shared/components/cabecera-pagina/cabecera-pagina';
 import { EnlaceVolver } from '../../../shared/components/enlace-volver/enlace-volver';
 import { SeccionPlegable } from '../../../shared/components/seccion-plegable/seccion-plegable';
 import { AvisosService } from '../../../shared/services/avisos.service';
 import { ListaImportacion } from '../../components/lista-importacion/lista-importacion';
 import { ResultadoAplicacion } from '../../interfaces/importacion.interface';
-import { ImportacionService } from '../../services/importacion.service';
+import { AlNoValerExtraccion, ImportacionService } from '../../services/importacion.service';
 import {
+  AVISO_PUEDE_TARDAR,
   AVISO_RADAR,
+  AVISO_SOLO_LEE,
   EXPLICACION_DUDAS,
   EXPLICACION_FUERA,
   EXPLICACION_PARA_REVISAR,
@@ -44,6 +47,7 @@ import {
   lineasResumen,
   textoBotonAplicar,
   textoEnviosEnTexto,
+  textoExtraccionLeida,
   textoFilaFuera,
   textoNadaQueAnadir,
   textoResultado,
@@ -92,7 +96,12 @@ export default class ImportacionPageComponent {
   protected readonly explicacionFuera = EXPLICACION_FUERA;
   protected readonly explicacionDudas = EXPLICACION_DUDAS;
   protected readonly textoFilaFuera = textoFilaFuera;
-  protected readonly avisoGasto = AVISO_GASTO;
+  protected readonly avisoExtraer = `${AVISO_SOLO_LEE} ${AVISO_GASTO}`;
+  protected readonly avisoPuedeTardar = AVISO_PUEDE_TARDAR;
+  /** La petición que ha fallado era la de la vista combinada: también se puede ir a la de la tabla */
+  protected readonly fallaLaCombinada = computed(
+    () => this.error() !== null && this.importacion.extraccionId() !== null,
+  );
   /** Con más filas que estas, el botón se repite al final de la lista */
   protected readonly filasParaRepetirBoton = 3;
 
@@ -163,11 +172,31 @@ export default class ImportacionPageComponent {
     const e = this.extraccion();
     return e && this.perdidaId() !== e.id ? (this.agentes.ejecuciones().get(e.id) ?? e) : null;
   });
+  protected readonly enMarcha = computed(() => {
+    const e = this.extraccionActual();
+    return e !== null && !esTerminal(e);
+  });
+  /**
+   * La que ya ha terminado bien y se puede volver a ver (al entrar, si sigue valiendo, o tras «Ver solo la
+   * tabla»): se ofrece en vez de extraer otra vez
+   */
+  protected readonly leida = signal<EjecucionAgente | null>(null);
+  /** Cuándo se ha empezado a ofrecer: «hace 12 min» se cuenta hasta ahí */
+  private readonly ofrecidaEn = signal(new Date());
+  protected readonly textoLeida = computed(() => {
+    const e = this.leida();
+    return e ? textoExtraccionLeida(e.fin ?? e.fechaAlta, this.ofrecidaEn()) : null;
+  });
+  protected readonly verLeida = computed(
+    () => this.leida() !== null && this.vista()?.origen === 'Tabla' && !this.aplicando(),
+  );
   protected readonly verBotonExtraer = computed(() => {
     const e = this.extraccionActual();
     // En Error o Cancelada la tarjeta ya ofrece «Reintentar»
     const libre = e === null || (esTerminal(e) && !e.puedeReintentar);
-    return this.agentes.puedeLanzar() && this.avisoEnvios() !== null && libre;
+    return (
+      this.agentes.puedeLanzar() && this.avisoEnvios() !== null && libre && this.leida() === null
+    );
   });
   // Aparte del effect: volver a guardar la misma info no repite la consulta de la última
   private readonly segunInfo = computed(() => this.sistema.info()?.agentesDisponibles === true);
@@ -177,9 +206,21 @@ export default class ImportacionPageComponent {
   private enfocarTarjeta = false;
   // Mientras se lee la vista combinada la tarjeta se va y el foco cae en <body>: al salir, va a su línea
   private enfocarCombinada = false;
+  // La combinada ya no vale y se vuelve a la tabla: el foco no se queda en <body>
+  private enfocarTrasVolver = false;
   private botonVisto: HTMLElement | undefined;
-  /** Si la extracción ya no vale y se vuelve a la tabla, se dice por qué */
-  private readonly avisarNoVale = (mensaje: string) => this.avisos.error(mensaje);
+  /** Si la extracción ya no vale, se vuelve a la tabla diciendo por qué (salvo que el 409 de aplicar ya lo diga) */
+  private readonly alNoValer: AlNoValerExtraccion = (mensaje, yaAvisado) => {
+    this.leida.set(null);
+    this.enfocarCombinada = false;
+    if (this.destroyRef.destroyed) {
+      return;
+    }
+    this.enfocarTrasVolver = true;
+    if (!yaAvisado) {
+      this.avisos.error(mensaje);
+    }
+  };
 
   constructor() {
     this.importacion.previsualizar();
@@ -205,7 +246,17 @@ export default class ImportacionPageComponent {
       const tarjeta = this.tarjetaExtraccion();
       const boton = this.botonExtraer()?.nativeElement;
       const linea = this.lineaCombinada()?.nativeElement;
+      const hayVista = this.vista() !== null;
       untracked(() => {
+        if (this.enfocarTrasVolver && hayVista) {
+          this.enfocarTrasVolver = false;
+          // Del DOM ya pintado: la consulta del botón que sale con la vista aún no se ha puesto al día
+          const inicio = this.inicio().nativeElement;
+          const destino = inicio.querySelector<HTMLElement>('#boton-extraer') ?? inicio;
+          if (this.focoSinSitio()) {
+            destino.focus({ preventScroll: true });
+          }
+        }
         if (this.enfocarTarjeta && tarjeta) {
           this.enfocarTarjeta = false;
           tarjeta.enfocar();
@@ -248,7 +299,7 @@ export default class ImportacionPageComponent {
     }
     // El resultado era de la lectura anterior: el título tiene que hablar de la nueva
     this.resultado.set(null);
-    this.importacion.volverALeer(this.avisarNoVale);
+    this.importacion.volverALeer();
     this.enfocarInicio();
   }
 
@@ -257,6 +308,7 @@ export default class ImportacionPageComponent {
       return;
     }
     this.resultado.set(null);
+    this.enfocarCombinada = false;
     this.importacion.previsualizar();
     this.enfocarInicio();
   }
@@ -291,11 +343,27 @@ export default class ImportacionPageComponent {
       this.extraccion.set(e);
       return;
     }
-    // La vista combinada ocupa su sitio; si luego se vuelve a la tabla, sale otra vez el botón
+    // La vista combinada ocupa su sitio; tras «Ver solo la tabla» se ofrece verla otra vez
     this.extraccion.set(null);
+    this.ofrecer(e);
+    this.enfocarCombinada = true;
+    if (this.aplicando()) {
+      // Pedirla ahora borraría la vista que se está guardando: la pide la lectura del final del aplicar
+      this.importacion.apuntarExtraccion(e.id, this.alNoValer);
+      return;
+    }
+    this.resultado.set(null);
+    this.importacion.previsualizarExtraccion(e.id, this.alNoValer);
+  }
+
+  protected verLoLeido(): void {
+    const e = this.leida();
+    if (!e || this.aplicando()) {
+      return;
+    }
     this.resultado.set(null);
     this.enfocarCombinada = true;
-    this.importacion.previsualizarExtraccion(e.id, this.avisarNoVale);
+    this.importacion.previsualizarExtraccion(e.id, this.alNoValer);
   }
 
   protected alPerderExtraccion(id: number): void {
@@ -311,8 +379,13 @@ export default class ImportacionPageComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (e) => {
-          if (e && !esTerminal(e) && this.extraccion() === null) {
+          if (!e || this.extraccion() !== null || this.leida() !== null) {
+            return;
+          }
+          if (!esTerminal(e)) {
             this.extraccion.set(e);
+          } else if (e.estado === 'Ok' && this.deHoy(e)) {
+            this.ofrecerSiVale(e);
           }
         },
         // Sin la última se puede lanzar igual: la API devuelve la que esté en marcha
@@ -336,6 +409,27 @@ export default class ImportacionPageComponent {
       },
       { injector: this.injector },
     );
+  }
+
+  private ofrecer(e: EjecucionAgente): void {
+    this.ofrecidaEn.set(new Date());
+    this.leida.set(e);
+  }
+
+  private deHoy(e: EjecucionAgente): boolean {
+    return diaMadrid(e.fin ?? e.fechaAlta) === diaMadrid(new Date());
+  }
+
+  /** Solo si su vista combinada sigue valiendo; si no, queda el botón de extraer, sin aviso */
+  private ofrecerSiVale(e: EjecucionAgente): void {
+    this.importacion
+      .extraccionVale(e.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((vale) => {
+        if (vale && this.extraccion() === null && this.leida() === null) {
+          this.ofrecer(e);
+        }
+      });
   }
 
   private focoSinSitio(): boolean {

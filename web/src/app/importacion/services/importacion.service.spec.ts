@@ -224,7 +224,7 @@ describe('ImportacionService', () => {
       ejecucionId: 7,
       dudas: ['Sin fecha.'],
     });
-    let alNoValer: ReturnType<typeof vi.fn<(mensaje: string) => void>>;
+    let alNoValer: ReturnType<typeof vi.fn<(mensaje: string, yaAvisado: boolean) => void>>;
 
     beforeEach(() => (alNoValer = vi.fn()));
 
@@ -255,7 +255,7 @@ describe('ImportacionService', () => {
         service.previsualizarExtraccion(7, alNoValer);
         http.expectOne(URL_COMBINADA).flush({ detail: NO_VALE }, { status, statusText: 'No' });
 
-        expect(alNoValer).toHaveBeenCalledExactlyOnceWith(NO_VALE);
+        expect(alNoValer).toHaveBeenCalledExactlyOnceWith(NO_VALE, false);
         expect(service.error()).toBeNull();
         expect(service.cargando()).toBe(true);
         previsualizacion().flush(crearVista());
@@ -275,13 +275,44 @@ describe('ImportacionService', () => {
     it('«volver a leer» repite la última: la combinada o, tras pedir la tabla, la tabla', () => {
       cargarCombinada();
 
-      service.volverALeer(alNoValer);
+      service.volverALeer();
       http.expectOne(URL_COMBINADA).flush(COMBINADA);
+      expect(service.extraccionId()).toBe(7);
 
       service.previsualizar();
       previsualizacion().flush(crearVista());
-      service.volverALeer(alNoValer);
+      expect(service.extraccionId()).toBeNull();
+      service.volverALeer();
       previsualizacion().flush(crearVista());
+    });
+
+    it('apuntar una extracción no pide nada: al acabar de aplicar se lee la combinada', () => {
+      cargarVista();
+
+      service.aplicar().subscribe();
+      service.apuntarExtraccion(7, alNoValer);
+      http.expectNone(URL_COMBINADA);
+      expect(service.vistaPrevia()).not.toBeNull();
+
+      http.expectOne(URL_APLICAR).flush(crearResultado());
+      http.expectOne(URL_COMBINADA).flush(COMBINADA);
+      http.expectNone(URL_PREVISUALIZAR);
+    });
+
+    it('comprueba si una extracción vale sin tocar la vista que se enseña', () => {
+      cargarVista();
+      const resultados: boolean[] = [];
+
+      service.extraccionVale(7).subscribe((vale) => resultados.push(vale));
+      http.expectOne(URL_COMBINADA).flush(COMBINADA);
+      service.extraccionVale(7).subscribe((vale) => resultados.push(vale));
+      http
+        .expectOne(URL_COMBINADA)
+        .flush({ detail: NO_VALE }, { status: 409, statusText: 'Conflict' });
+
+      expect(resultados).toEqual([true, false]);
+      expect(service.vistaPrevia()?.origen).toBe('Tabla');
+      expect(service.extraccionId()).toBeNull();
     });
 
     it('aplicar manda RegistroConClaude con la ejecución y vuelve a leer la combinada', () => {
@@ -314,7 +345,7 @@ describe('ImportacionService', () => {
       previsualizacion().flush(crearVista());
 
       expect(error?.mensaje).toBe('Cambiado.');
-      expect(alNoValer).not.toHaveBeenCalled();
+      expect(alNoValer).toHaveBeenCalledExactlyOnceWith(NO_VALE, true);
       expect(service.error()).toBeNull();
       expect(service.vistaPrevia()?.origen).toBe('Tabla');
     });

@@ -83,7 +83,7 @@
               class="[--mat-button-text-container-height:48px]"
               (click)="reintentar()"
             >
-              Volver a leer
+              Leer el archivo otra vez
             </button>
           }
         </div>
@@ -109,14 +109,27 @@
       </svg>
       <div class="min-w-0">
         <p>{{ mensaje }}</p>
-        <button
-          mat-button
-          type="button"
-          class="mt-2 [--mat-button-text-container-height:48px]"
-          (click)="reintentar()"
-        >
-          Reintentar
-        </button>
+        <div class="mt-2 flex flex-wrap gap-x-2">
+          <button
+            mat-button
+            type="button"
+            class="[--mat-button-text-container-height:48px]"
+            (click)="reintentar()"
+          >
+            Reintentar
+          </button>
+          <!-- Sin conexión con la vista combinada, la de la tabla puede seguir sirviendo -->
+          @if (fallaLaCombinada()) {
+            <button
+              mat-button
+              type="button"
+              class="[--mat-button-text-container-height:48px]"
+              (click)="verSoloLaTabla()"
+            >
+              Ver solo la tabla
+            </button>
+          }
+        </div>
       </div>
     </div>
   }
@@ -171,7 +184,7 @@
           [disabled]="aplicando()"
           (click)="verSoloLaTabla()"
         >
-          Volver a solo la tabla
+          Ver solo la tabla
         </button>
       </div>
     }
@@ -191,7 +204,7 @@
         }
 
         @if (porAplicar().length > 0) {
-          <!-- Volver a leer también aquí: tras corregir el archivo no hay que buscarlo en los grupos plegados -->
+          <!-- «Leer el archivo otra vez» también aquí: tras corregir el archivo no hay que buscarlo en los grupos plegados -->
           <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
             <button
               mat-stroked-button
@@ -201,7 +214,7 @@
               [disabled]="aplicando()"
               (click)="reintentar()"
             >
-              Volver a leer
+              Leer el archivo otra vez
             </button>
             <ng-container [ngTemplateOutlet]="botonAplicar" />
           </div>
@@ -211,7 +224,7 @@
 
     <!-- Con borde: el relleno de la página es «Aplicar». La tarjeta sale donde estaba el botón y su
          «Cancelar» no hace caso a un doble toque -->
-    @if (avisoEnvios() || extraccion()) {
+    @if (avisoEnvios() || extraccion() || verLeida()) {
       <div class="flex flex-col items-start gap-3 rounded-md bg-surface-container px-3 py-2.5">
         @if (avisoEnvios(); as aviso) {
           <p class="flex items-start gap-2 text-sm text-on-surface-variant">
@@ -238,10 +251,25 @@
             (reintentada)="guardarExtraccion($event)"
             (perdida)="alPerderExtraccion($event)"
           />
+          @if (enMarcha()) {
+            <p class="-mt-1 text-sm text-on-surface-variant">{{ avisoPuedeTardar }}</p>
+          }
+        }
+        @if (verLeida()) {
+          <p class="text-sm text-on-surface">{{ textoLeida() }}</p>
+          <button
+            mat-stroked-button
+            type="button"
+            class="min-h-12 w-full text-balance sm:w-auto"
+            (click)="verLoLeido()"
+          >
+            Ver lo que ha leído
+          </button>
         }
         @if (verBotonExtraer()) {
           <button
             #botonExtraer
+            id="boton-extraer"
             mat-stroked-button
             type="button"
             class="min-h-12 w-full text-balance sm:w-auto"
@@ -253,7 +281,7 @@
             {{ lanzandoExtraccion() ? 'Lanzando…' : 'Extraer el texto libre con Claude' }}
           </button>
           <p id="gasto-extraccion" class="-mt-1 text-xs text-on-surface-variant">
-            {{ avisoGasto }}
+            {{ avisoExtraer }}
           </p>
         }
       </div>
@@ -325,7 +353,7 @@
               [disabled]="aplicando()"
               (click)="reintentar()"
             >
-              Volver a leer
+              Leer el archivo otra vez
             </button>
           </div>
         </app-seccion-plegable>

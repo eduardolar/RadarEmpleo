@@ -51,7 +51,7 @@ export const EXPLICACION_YA_EXISTEN = 'Ya están en la app. No se tocan.';
 export const EXPLICACION_PARA_REVISAR =
   'Estas no se guardan. Cada una dice por qué; si hace falta, corrígela a mano en la app o en tu archivo.';
 export const EXPLICACION_SIN_LEER =
-  'Corrige estas líneas en tu archivo, guárdalo y pulsa «Volver a leer».';
+  'Corrige estas líneas en tu archivo, guárdalo y pulsa «Leer el archivo otra vez».';
 
 /** «Añadir 3 candidaturas», «Actualizar 1 candidatura» o «Añadir 3 candidaturas y actualizar 2» */
 export function textoBotonAplicar({ nuevas, avanzan }: ResumenImportacion): string {
@@ -133,13 +133,31 @@ export function textoEnviosEnTexto(enviosEnTexto: number, conClaude = false): st
 
 /** La línea que dice que la vista es la combinada: «Tabla + texto libre leído con Claude (34 de texto libre)» */
 export function textoVistaCombinada(delTextoLibre: number): string {
-  return `Tabla + texto libre leído con Claude (${delTextoLibre} de texto libre)`;
+  return `Tabla + ${delTextoLibre} ${delTextoLibre === 1 ? 'leída' : 'leídas'} del texto libre con Claude`;
 }
 
 export const EXPLICACION_FUERA =
-  'Claude las ha leído en el texto libre, pero no se añaden. Cada una dice por qué.';
+  'Claude las ha leído en el texto libre, pero no se añaden. Cada una dice por qué. No tienes que hacer nada salvo que el motivo esté mal.';
 export const EXPLICACION_DUDAS =
-  'Lo que Claude no ha tenido claro al leer el texto libre. Si hace falta, corrígelo en tu archivo.';
+  'Lo que Claude no ha tenido claro. Si algo está mal, corrígelo en tu archivo y vuelve a extraer.';
+
+/** Debajo del botón de extraer, antes de lo que gasta */
+export const AVISO_SOLO_LEE = 'Claude solo lee: verás lo que encuentre antes de añadir nada.';
+/** Junto a la tarjeta mientras la extracción no ha terminado */
+export const AVISO_PUEDE_TARDAR =
+  'Puede tardar un rato si el texto es largo. Puedes salir: la tarea sigue y la verás aquí al volver.';
+
+/** «Claude terminó de leer el texto libre (hace 12 min).»: una extracción ya hecha que se puede ver */
+export function textoExtraccionLeida(fin: string, ahora: Date): string {
+  const minutos = Math.max(0, Math.floor((ahora.getTime() - new Date(fin).getTime()) / 60_000));
+  const hace =
+    minutos < 1
+      ? 'hace un momento'
+      : minutos < 60
+        ? `hace ${minutos} min`
+        : `hace ${Math.floor(minutos / 60)} h`;
+  return `Claude terminó de leer el texto libre (${hace}).`;
+}
 
 /** «Línea 12 · Acme · Backend · 12 sept 2026: Ya está en la tabla del registro.» Sin línea (0), sin ese trozo */
 export function textoFilaFuera({ linea, empresa, puesto, fecha, aviso }: FilaFuera): string {
