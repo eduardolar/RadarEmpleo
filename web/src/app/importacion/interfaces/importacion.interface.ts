@@ -32,6 +32,8 @@ export interface FilaVistaPrevia {
   /** Por qué es un conflicto, para enseñarlo tal cual */
   motivo: string | null;
   avisos: string[];
+  /** La ha leído Claude en el texto libre (no viene de la tabla) */
+  delTextoLibre: boolean;
 }
 
 /** `linea` puede repetirse (o ser 0): no sirve para identificar la fila */

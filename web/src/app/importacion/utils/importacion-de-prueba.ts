@@ -18,6 +18,7 @@ export function crearFila(cambios: Partial<FilaVistaPrevia> = {}): FilaVistaPrev
     candidaturaId: null,
     motivo: null,
     avisos: [],
+    delTextoLibre: false,
     ...cambios,
   };
 }
