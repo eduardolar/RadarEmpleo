@@ -97,7 +97,7 @@ public sealed class ImportacionExtraccionApiTests
 
         var problema = await LeerAsync(await PostAsync(http, UrlPrevisualizar(1)), HttpStatusCode.Forbidden);
 
-        Assert.Equal("Los agentes solo se pueden lanzar desde el PC.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeSoloPc, problema.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class ImportacionExtraccionApiTests
 
         var problema = await LeerAsync(await PostAsync(http, UrlPrevisualizar(1)), HttpStatusCode.Forbidden);
 
-        Assert.Equal("Los agentes están apagados.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeApagados, problema.GetProperty("detail").GetString());
     }
 
     [Theory]
@@ -169,7 +169,7 @@ public sealed class ImportacionExtraccionApiTests
 
         var problema = await LeerAsync(await AplicarAsync(http, id, hash, []), HttpStatusCode.Forbidden);
 
-        Assert.Equal(DisponibilidadAgentes.MensajeSoloPc, problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeAplicarSoloPc, problema.GetProperty("detail").GetString());
         await using var db = await BdAsync(fabrica);
         Assert.Empty(db.Candidaturas);
     }

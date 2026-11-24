@@ -89,7 +89,7 @@ public sealed class AgentesApiTests
 
         var problema = await LeerAsync(await Enviar(http, metodo, url), HttpStatusCode.Forbidden);
 
-        Assert.Equal("Los agentes solo se pueden lanzar desde el PC.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeSoloPc, problema.GetProperty("detail").GetString());
         await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
         Assert.Empty(db.EjecucionesAgente);
     }
@@ -122,7 +122,7 @@ public sealed class AgentesApiTests
         using var http = fabrica.CreateClient();
 
         var problema = await LeerAsync(await Enviar(http, metodo, url), HttpStatusCode.Forbidden);
-        Assert.Equal("Los agentes están apagados.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeApagados, problema.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class AgentesApiTests
         using var http = fabrica.CreateClient();
 
         var problema = await LeerAsync(await http.GetAsync("/api/agentes/estado"), HttpStatusCode.Forbidden);
-        Assert.Equal("Los agentes están apagados.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeApagados, problema.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class AgentesApiTests
         peticion.Headers.Add("Sec-Fetch-Site", "cross-site");
 
         var problema = await LeerAsync(await http.SendAsync(peticion), HttpStatusCode.Forbidden);
-        Assert.Equal("Esta petición no viene de RadarEmpleo.", problema.GetProperty("detail").GetString());
+        Assert.Equal(DisponibilidadAgentes.MensajeOtroSitio, problema.GetProperty("detail").GetString());
     }
 
     [Theory]

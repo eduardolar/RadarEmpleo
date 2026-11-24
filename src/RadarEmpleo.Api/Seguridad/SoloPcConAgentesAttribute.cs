@@ -9,9 +9,14 @@ namespace RadarEmpleo.Api.Seguridad;
 public sealed class DisponibilidadAgentes(IClasificadorCanal clasificador, IOptions<OpcionesAgentes> agentes, IOptions<OpcionesRadar> radar,
     IHostEnvironment entorno)
 {
-    public const string MensajeSoloPc = "Los agentes solo se pueden lanzar desde el PC.";
-    public const string MensajeApagados = "Los agentes están apagados.";
-    public const string MensajeOtroSitio = "Esta petición no viene de RadarEmpleo.";
+    // Valen para todo lo de /api/agentes (también ver, cancelar o previsualizar), así que no hablan de «lanzar».
+    public const string MensajeSoloPc = "Lo de Claude solo se puede usar desde el PC donde está instalada la app.";
+    public const string MensajeApagados = "Los agentes de Claude están apagados en la configuración de la app.";
+    public const string MensajeOtroSitio = "Esto solo se puede hacer desde la propia app RadarEmpleo.";
+
+    /// <summary>Al aplicar desde el móvil un lote con lo que ha leído Claude: dice qué sí se puede hacer desde ahí.</summary>
+    public const string MensajeAplicarSoloPc =
+        "Lo que ha leído Claude solo se puede añadir desde el PC. Desde aquí puedes añadir las de la tabla con «Ver solo la tabla».";
 
     /// <summary>
     /// El front de desarrollo (<c>ng serve</c>): con su proxy llega <c>same-origin</c>, pero en el entorno Development también

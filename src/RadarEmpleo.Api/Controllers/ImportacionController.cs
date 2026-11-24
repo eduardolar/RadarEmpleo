@@ -51,7 +51,8 @@ public class ImportacionController(ImportacionService importacion, Disponibilida
     /// y 409 si el registro ha cambiado desde la vista previa (por su hash), si la extracción ya no vale o si otra
     /// aplicación se ha adelantado (en esos casos no cambia nada). Con la tabla vale también desde el móvil; con
     /// <see cref="OrigenLote.RegistroConClaude"/>, las mismas reglas que <see cref="SoloPcConAgentesAttribute"/> (403 antes de
-    /// leer el registro), como la vista previa de la extracción.
+    /// leer el registro), como la vista previa de la extracción; desde el móvil, con su propio mensaje
+    /// (<see cref="DisponibilidadAgentes.MensajeAplicarSoloPc"/>), que dice lo que sí se puede hacer.
     /// </summary>
     [HttpPost("lote/aplicar")]
     [ProducesResponseType<ResultadoAplicacionDto>(StatusCodes.Status200OK)]
@@ -60,6 +61,7 @@ public class ImportacionController(ImportacionService importacion, Disponibilida
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ResultadoAplicacionDto>> AplicarLote(AplicarImportacionRequest peticion) =>
         peticion.Origen == OrigenLote.RegistroConClaude && disponibilidad.Motivo(HttpContext) is { } motivo
-            ? SoloPcConAgentesAttribute.Prohibido(motivo)
+            ? SoloPcConAgentesAttribute.Prohibido(
+                motivo == DisponibilidadAgentes.MensajeSoloPc ? DisponibilidadAgentes.MensajeAplicarSoloPc : motivo)
             : await importacion.AplicarAsync(peticion);
 }
