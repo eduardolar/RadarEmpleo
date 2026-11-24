@@ -177,6 +177,17 @@ public class PartidorTextoLibreTests
     }
 
     [Fact]
+    public void UnTituloConLineasEnBlancoDetras_TampocoQuedaSuelto()
+    {
+        var texto = Texto("- Acme: enviada.", "## Agosto", "", "  ", "- " + new string('x', 200), "", "- Beta: enviada.");
+
+        var trozos = PartidorTextoLibre.Partir(texto, 50);
+
+        // El título va con su primera línea con texto; nunca solo al final del trozo de antes.
+        Assert.Equal([[1], [2, 3, 4, 5, 6], [2, 7]], trozos.Select(Numeros).ToArray());
+    }
+
+    [Fact]
     public void UnApartadoSinTituloQueNoCabe_SeParteSinRepetirNada()
     {
         var texto = Texto("- Acme: enviada.", "", "- Beta: enviada.", "", "- Gamma: enviada.");

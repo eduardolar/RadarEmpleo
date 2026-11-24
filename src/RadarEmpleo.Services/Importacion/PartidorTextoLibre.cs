@@ -99,7 +99,7 @@ public static class PartidorTextoLibre
         // El primer párrafo ya lleva el título; los demás pueden necesitarlo repetido delante.
         var cabeDetras = largo - (cabecera is null ? 0 : Medir(cabecera));
         var primera = true;
-        foreach (var parrafo in Parrafos(apartado.Lineas))
+        foreach (var parrafo in Parrafos(apartado.Lineas, cabecera))
         {
             if (parrafo.Sum(Medir) <= (primera ? largo : cabeDetras))
             {
@@ -124,8 +124,7 @@ public static class PartidorTextoLibre
         var pieza = new List<LineaRegistro>();
         foreach (var linea in parrafo)
         {
-            var soloElTitulo = pieza.Count == 1 && ReferenceEquals(pieza[0], cabecera);
-            if (pieza.Count > 0 && !soloElTitulo && !string.IsNullOrWhiteSpace(linea.Texto))
+            if (pieza.Count > 0 && !SoloElTitulo(pieza, cabecera) && !EnBlanco(linea))
             {
                 yield return pieza;
                 pieza = [];
@@ -135,18 +134,27 @@ public static class PartidorTextoLibre
         if (pieza.Count > 0) yield return pieza;
     }
 
-    /// <summary>Un párrafo empieza en una línea con texto que va detrás de una en blanco; las líneas en blanco van con el de antes.</summary>
-    private static List<List<LineaRegistro>> Parrafos(List<LineaRegistro> lineas)
+    /// <summary>
+    /// Un párrafo empieza en una línea con texto que va detrás de una en blanco; las líneas en blanco van con el de antes. El
+    /// título no es un párrafo solo, aunque lleve líneas en blanco detrás: va con el primero.
+    /// </summary>
+    private static List<List<LineaRegistro>> Parrafos(List<LineaRegistro> lineas, LineaRegistro? cabecera)
     {
         var parrafos = new List<List<LineaRegistro>>();
         var anteriorEnBlanco = true;
         foreach (var linea in lineas)
         {
-            var enBlanco = string.IsNullOrWhiteSpace(linea.Texto);
-            if (parrafos.Count == 0 || (anteriorEnBlanco && !enBlanco)) parrafos.Add([]);
+            var enBlanco = EnBlanco(linea);
+            if (parrafos.Count == 0 || (anteriorEnBlanco && !enBlanco && !SoloElTitulo(parrafos[^1], cabecera))) parrafos.Add([]);
             parrafos[^1].Add(linea);
             anteriorEnBlanco = enBlanco;
         }
         return parrafos;
     }
+
+    /// <summary>Las líneas son el título del apartado y, si acaso, líneas en blanco.</summary>
+    private static bool SoloElTitulo(List<LineaRegistro> lineas, LineaRegistro? cabecera) =>
+        cabecera is not null && ReferenceEquals(lineas[0], cabecera) && lineas.Skip(1).All(EnBlanco);
+
+    private static bool EnBlanco(LineaRegistro linea) => string.IsNullOrWhiteSpace(linea.Texto);
 }
