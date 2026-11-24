@@ -266,4 +266,65 @@ public sealed class ImportacionExtraccionApiTests
         Assert.Equal("Texto libre del registro: Notas sueltas de septiembre", extraida.SeccionOrigen);
         Assert.Equal(Origen.Registro, extraida.Origen);
     }
+
+    [Fact]
+    public async Task ExtraerPorPartesYPrevisualizar_DePrincipioAFinConElFalso_CombinaLoDeTodasConSuLineaYLaDudaDeLaPerdida()
+    {
+        using var fabrica = Fabrica();
+        using var http = fabrica.CreateClient();
+        // Unos 40 KB de texto libre delante del registro de ejemplo: el primer mes no cabe en una parte y se reparte en dos.
+        var registro = ManejadorExtraerRegistroTests.RegistroPorMeses(200, 50, 50, 50, 50) + await File.ReadAllTextAsync(RutaRegistro(fabrica));
+        await File.WriteAllTextAsync(RutaRegistro(fabrica), registro);
+        var trozos = PartidorTextoLibre.Partir(AnalizadorRegistro.TextoLibre(registro), DefinicionesTareas.ExtraerRegistro.Partes!.LargoParte);
+        var n = trozos.Count;
+        Assert.InRange(n, 3, 6);
+        Assert.Equal("## Mes 1 de 2026", trozos[1].Lineas[0].Texto);
+
+        // Cada parte menos la última lee la última entrada de las suyas; la segunda repite además la de la primera, y la
+        // última falla.
+        var elegidas = trozos.Take(n - 1)
+            .Select(t => t.Lineas.Last(l => l.Texto.StartsWith("- Empresa Parte", StringComparison.Ordinal)))
+            .Select(l => (Linea: l, Mes: int.Parse(l.Texto[15..l.Texto.IndexOf('-', 15)]),
+                Numero: int.Parse(l.Texto[(l.Texto.IndexOf('-', 15) + 1)..l.Texto.IndexOf(' ', 15)])))
+            .ToList();
+        var respuestas = elegidas.Select((e, k) =>
+        {
+            var filas = new JsonArray(ManejadorExtraerRegistroTests.FilaDe(e.Mes, e.Numero));
+            if (k == 1) filas.Add(ManejadorExtraerRegistroTests.FilaDe(elegidas[0].Mes, elegidas[0].Numero));
+            return new RespuestaFalsa(Salida: JsonSerializer.SerializeToElement(new JsonObject { ["candidaturas"] = filas, ["dudas"] = new JsonArray() }),
+                CosteUsd: 0.10m);
+        }).Append(new RespuestaFalsa(ModoFalso.Error, CosteUsd: 0.02m)).ToArray();
+        var falso = (EjecutorClaudeFalso)fabrica.Services.GetRequiredService<IEjecutorClaude>();
+        falso.ProgramarSecuencia(TareaAgente.ExtraerRegistro, respuestas);
+
+        var id = (await LeerAsync(await PostAsync(http, "/api/agentes/extraer-registro"), HttpStatusCode.Accepted)).GetProperty("id").GetInt32();
+        var ok = await Esperar.HastaAsync(() => http.GetFromJsonAsync<JsonElement>($"/api/agentes/ejecuciones/{id}"),
+            e => e.GetProperty("estado").GetString() is "Ok" or "Error" or "Cancelada",
+            e => $"La ejecución {id} sigue en {e.GetProperty("estado")}.");
+
+        Assert.Equal("Ok", ok.GetProperty("estado").GetString());
+        Assert.Equal(0.10m * (n - 1) + 0.02m, ok.GetProperty("costeUsd").GetDecimal());
+        Assert.Contains("1 parte no se ha podido leer.", ok.GetProperty("resumen").GetString());
+        Assert.Equal(n, falso.Peticiones.Count);
+        await using (var db = await BdAsync(fabrica))
+            Assert.Equal(1, await db.EjecucionesAgente.CountAsync());
+
+        var vista = await LeerAsync(await PostAsync(http, UrlPrevisualizar(id)), HttpStatusCode.OK);
+        var dudas = vista.GetProperty("dudas").EnumerateArray().Select(d => d.GetString()!).ToList();
+        Assert.StartsWith($"No se ha podido leer la parte {n} de {n} (desde «", Assert.Single(dudas));
+        Assert.EndsWith("): Claude ha devuelto un error.", dudas[0]);
+        // Las de la tabla y una por parte leída: la repetida entre la primera y la segunda parte sale una sola vez.
+        Assert.Equal(n - 1, vista.GetProperty("resumen").GetProperty("delTextoLibre").GetInt32());
+        var filas = vista.GetProperty("filas").EnumerateArray().ToList();
+        Assert.Equal(8 + n - 1, filas.Count);
+        Assert.All(elegidas, e => Assert.Single(filas, f => f.GetProperty("empresa").GetString() == $"Empresa Parte{e.Mes}-{e.Numero} S.L."));
+
+        // Cada cita encaja con su línea del registro.
+        await using var bd = await BdAsync(fabrica);
+        var extraccion = ManejadorExtraerRegistro.LeerGuardado((await bd.EjecucionesAgente.SingleAsync()).ResultadoJson)!;
+        var combinado = CombinadorLotes.Combinar(AnalizadorRegistro.Analizar(registro), registro, extraccion);
+        Assert.All(elegidas, e => Assert.Equal(e.Linea.Numero,
+            combinado.Filas.Single(f => f.Empresa == $"Empresa Parte{e.Mes}-{e.Numero} S.L.").Linea));
+        Assert.Equal(elegidas[0].Linea.Numero, Assert.Single(combinado.Fuera).Linea);
+    }
 }

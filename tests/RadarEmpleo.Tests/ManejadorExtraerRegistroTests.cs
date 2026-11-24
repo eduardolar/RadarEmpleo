@@ -408,7 +408,7 @@ public sealed class ManejadorExtraerRegistroTests : IDisposable
     }
 
     /// <summary>La fila de la entrada <paramref name="i"/> del mes <paramref name="mes"/>, con su línea como cita.</summary>
-    private static JsonObject FilaDe(int mes, int i)
+    public static JsonObject FilaDe(int mes, int i)
     {
         var fila = Fila();
         fila["seccion"] = $"Mes {mes} de 2026";
