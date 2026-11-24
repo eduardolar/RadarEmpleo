@@ -703,6 +703,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
 
         Assert.Equal((OrigenLote.RegistroConClaude, id, _lector.Hash), (vista.Origen, vista.EjecucionId, vista.HashRegistro));
         Assert.Equal(["Acme", "Gamma"], vista.Filas.Select(f => f.Empresa));
+        Assert.Equal(1, vista.Resumen.DelTextoLibre);
         Assert.All(vista.Filas, f => Assert.Equal(ResultadoFila.Nueva, f.Resultado));
         Assert.Empty(vista.Filas[1].Avisos);
         Assert.Empty(vista.SinLeer);
@@ -785,6 +786,7 @@ public class ImportacionServiceTests : ArnesSqliteTests
         var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
 
         Assert.Equal("Acme", Assert.Single(vista.Filas).Empresa);
+        Assert.Equal(0, vista.Resumen.DelTextoLibre);
         var fuera = Assert.Single(vista.Fuera);
         Assert.Equal((6, CombinadorLotes.AvisoYaEnLaTabla), (fuera.Linea, fuera.Aviso));
     }

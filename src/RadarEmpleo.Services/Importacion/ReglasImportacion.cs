@@ -61,12 +61,13 @@ public static class ReglasImportacion
     }
 
     /// <summary>Cuenta las filas comparadas de cada tipo.</summary>
-    public static ResumenImportacionDto Resumir(IReadOnlyCollection<FilaVistaPreviaDto> filas, int sinLeer, int enviosEnTexto)
+    public static ResumenImportacionDto Resumir(IReadOnlyCollection<FilaVistaPreviaDto> filas, int sinLeer, int enviosEnTexto,
+        int delTextoLibre = 0)
     {
         int Contar(ResultadoFila resultado) => filas.Count(f => f.Resultado == resultado);
 
         return new ResumenImportacionDto(Contar(ResultadoFila.Nueva), Contar(ResultadoFila.AvanzaEstado),
-            Contar(ResultadoFila.YaExiste), Contar(ResultadoFila.Conflicto), sinLeer, enviosEnTexto);
+            Contar(ResultadoFila.YaExiste), Contar(ResultadoFila.Conflicto), sinLeer, enviosEnTexto, delTextoLibre);
     }
 
     /// <summary>Enlace listo para guardar, o null si no hay o no es una dirección web de un tamaño admitido.</summary>

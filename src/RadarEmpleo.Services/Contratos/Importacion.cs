@@ -74,7 +74,9 @@ public sealed record LoteImportacion(
 
 /// <summary>Cuántas filas hay de cada tipo en la vista previa.</summary>
 /// <param name="EnviosEnTexto">Líneas con «ENVIADA» fuera de la tabla: solo se cuentan, no se importan.</param>
-public sealed record ResumenImportacionDto(int Nuevas, int Avanzan, int YaExisten, int ParaRevisar, int SinLeer, int EnviosEnTexto);
+/// <param name="DelTextoLibre">Filas del lote que ha leído Claude en el texto libre; 0 con la tabla.</param>
+public sealed record ResumenImportacionDto(int Nuevas, int Avanzan, int YaExisten, int ParaRevisar, int SinLeer, int EnviosEnTexto,
+    int DelTextoLibre = 0);
 
 /// <summary>Una fila de la vista previa, comparada con lo que ya hay en la app.</summary>
 /// <param name="EstadoActual">Estado en la app, si ya hay una candidatura igual o parecida.</param>

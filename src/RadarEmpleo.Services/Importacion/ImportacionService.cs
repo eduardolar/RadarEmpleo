@@ -169,7 +169,9 @@ public class ImportacionService
     {
         var filas = ReglasImportacion.Comparar(lote.Filas, await LeerExistentesAsync(db));
         return new VistaPreviaImportacionDto(origen, hash, ejecucionId,
-            ReglasImportacion.Resumir(filas, lote.SinLeer.Count, lote.EnviosEnTexto), filas, lote.SinLeer, lote.Fuera, lote.Dudas);
+            ReglasImportacion.Resumir(filas, lote.SinLeer.Count, lote.EnviosEnTexto,
+                // Las de la tabla no llevan sección: las extraídas siempre («Texto libre del registro…»).
+                lote.Filas.Count(f => f.Seccion is not null)), filas, lote.SinLeer, lote.Fuera, lote.Dudas);
     }
 
     /// <summary>

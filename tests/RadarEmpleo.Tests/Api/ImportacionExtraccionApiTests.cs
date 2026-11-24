@@ -247,6 +247,7 @@ public sealed class ImportacionExtraccionApiTests
         Assert.Equal(id, vista.GetProperty("ejecucionId").GetInt32());
         Assert.Equal(HashRegistro(fabrica), vista.GetProperty("hashRegistro").GetString());
         Assert.Equal(0, vista.GetProperty("resumen").GetProperty("enviosEnTexto").GetInt32());
+        Assert.Equal(1, vista.GetProperty("resumen").GetProperty("delTextoLibre").GetInt32());
         Assert.Equal(["La línea de Empresa Texto Dos no dice la fecha (ejemplo inventado)."],
             vista.GetProperty("dudas").EnumerateArray().Select(d => d.GetString()));
         var filas = vista.GetProperty("filas").EnumerateArray().ToList();
