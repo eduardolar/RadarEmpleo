@@ -9,6 +9,8 @@ namespace RadarEmpleo.Services.Agentes;
 /// <param name="EntradaEstandar">El prompt completo (se escribe en UTF-8 sin BOM).</param>
 /// <param name="RutaLog">Ruta absoluta del log de esta ejecución.</param>
 /// <param name="SalidaPrivada">El log no guarda la salida (<see cref="DefinicionTarea.SalidaConDatosPersonales"/>).</param>
+/// <param name="Parte">En una tarea que se lanza en varias partes (<see cref="DefinicionTarea.Partes"/>), cuál es («2 de 4»),
+/// para el log; null si va de una vez.</param>
 public sealed record PeticionClaude(
     TareaAgente Tarea,
     IReadOnlyList<string> Argumentos,
@@ -16,7 +18,8 @@ public sealed record PeticionClaude(
     string EntradaEstandar,
     TimeSpan TiempoMaximo,
     string RutaLog,
-    bool SalidaPrivada = false);
+    bool SalidaPrivada = false,
+    string? Parte = null);
 
 /// <summary>Cómo ha acabado una llamada a Claude.</summary>
 /// <param name="Correcta">Salida 0, JSON legible e <c>is_error</c> a false.</param>

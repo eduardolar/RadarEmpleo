@@ -21,16 +21,23 @@ public sealed record ValoresArgumentos(string CarpetaDatos, string? NombreInform
 public static partial class ConstructorArgumentos
 {
     /// <param name="esquemaJson">El esquema de la salida; se minifica en un solo argumento.</param>
+    /// <param name="presupuesto">El de <c>--max-budget-usd</c> si no es el de la definición: el de cada parte de una tarea
+    /// por partes (<see cref="DefinicionTarea.PresupuestoParte"/>). Nunca puede pasar del de la definición.</param>
     /// <exception cref="ArgumentException">El esquema no es JSON, falta o no vale el nombre del informe, o la carpeta de
     /// datos no se puede escribir como regla.</exception>
-    public static IReadOnlyList<string> Construir(DefinicionTarea definicion, string esquemaJson, ValoresArgumentos valores)
+    /// <exception cref="ArgumentOutOfRangeException">El presupuesto no es positivo o pasa del de la definición.</exception>
+    public static IReadOnlyList<string> Construir(DefinicionTarea definicion, string esquemaJson, ValoresArgumentos valores,
+        decimal? presupuesto = null)
     {
+        var tope = presupuesto ?? definicion.PresupuestoUsd;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tope, nameof(presupuesto));
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(tope, definicion.PresupuestoUsd, nameof(presupuesto));
         var argumentos = new List<string>
         {
             "-p",
             "--output-format", "json",
             "--json-schema", Minificar(esquemaJson),
-            "--max-budget-usd", definicion.PresupuestoUsd.ToString("0.00", CultureInfo.InvariantCulture),
+            "--max-budget-usd", tope.ToString("0.00", CultureInfo.InvariantCulture),
             "--permission-mode", "dontAsk",
             "--no-session-persistence",
             "--strict-mcp-config",

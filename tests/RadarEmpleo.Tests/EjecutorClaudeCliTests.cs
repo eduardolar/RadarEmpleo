@@ -205,6 +205,19 @@ public sealed class EjecutorClaudeCliTests : IDisposable
     }
 
     [Fact]
+    public async Task LasPartes_SeApuntanUnaDetrasDeOtraEnElMismoLog()
+    {
+        await Ejecutar(Ejecutor(), Peticion() with { Parte = "1 de 2" });
+        await Ejecutar(Ejecutor(), Peticion() with { Parte = "2 de 2" });
+
+        var log = await File.ReadAllTextAsync(Ruta("logs/ejecucion-1.log"));
+        var primera = log.IndexOf("AnalizarEncaje (parte 1 de 2) en ", StringComparison.Ordinal);
+        var segunda = log.IndexOf("AnalizarEncaje (parte 2 de 2) en ", StringComparison.Ordinal);
+        Assert.True(primera >= 0 && segunda > primera);
+        Assert.Equal(2, log.Split("] Fin: código ").Length - 1);
+    }
+
+    [Fact]
     public async Task ConLaSalidaPrivada_ElLogNoGuardaResultNiStructuredOutputSoloSuResumen()
     {
         const string Centinela = "EMPRESA-CENTINELA-DEL-REGISTRO";

@@ -48,7 +48,9 @@ public sealed partial class EjecutorClaudeCli : IEjecutorClaude
     {
         Directory.CreateDirectory(Path.GetDirectoryName(peticion.RutaLog)!);
         await using var log = new StreamWriter(new FileStream(peticion.RutaLog, FileMode.Append, FileAccess.Write, FileShare.Read), Utf8SinBom);
-        await log.WriteLineAsync($"[{_reloj.AhoraUtc:O}] {peticion.Tarea} en {peticion.CarpetaTrabajo}");
+        // Cada parte de una tarea por partes se apunta en el mismo log, una detrás de otra, con su hora de inicio y de fin.
+        var parte = peticion.Parte is { } cual ? $" (parte {cual})" : "";
+        await log.WriteLineAsync($"[{_reloj.AhoraUtc:O}] {peticion.Tarea}{parte} en {peticion.CarpetaTrabajo}");
         // Los argumentos sí (sin datos de Eduardo, salvo el esquema); el prompt nunca.
         await log.WriteLineAsync("Argumentos: " + string.Join(" ", peticion.Argumentos.Select(Citar)));
         await log.WriteLineAsync($"Entrada: {Utf8SinBom.GetByteCount(peticion.EntradaEstandar)} bytes (no se guarda).");
