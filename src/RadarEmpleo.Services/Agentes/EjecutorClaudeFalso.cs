@@ -48,6 +48,7 @@ public sealed class EjecutorClaudeFalso : IEjecutorClaude
     };
 
     private readonly ConcurrentDictionary<TareaAgente, RespuestaFalsa> _respuestas = new();
+    private readonly ConcurrentDictionary<TareaAgente, ConcurrentQueue<RespuestaFalsa>> _secuencias = new();
     private readonly ConcurrentQueue<PeticionClaude> _peticiones = new();
     private readonly IClock _reloj;
 
@@ -65,6 +66,13 @@ public sealed class EjecutorClaudeFalso : IEjecutorClaude
 
     /// <summary>Programa la respuesta de una tarea (sin programar: Ok con <c>{}</c>).</summary>
     public void Programar(TareaAgente tarea, RespuestaFalsa respuesta) => _respuestas[tarea] = respuesta;
+
+    /// <summary>
+    /// Programa una respuesta para cada una de las próximas llamadas de la tarea, en orden (las partes de una tarea por
+    /// partes). Cuando se acaban, vuelve a responder lo de <see cref="Programar"/>. Sustituye la secuencia anterior.
+    /// </summary>
+    public void ProgramarSecuencia(TareaAgente tarea, params RespuestaFalsa[] respuestas) =>
+        _secuencias[tarea] = new ConcurrentQueue<RespuestaFalsa>(respuestas);
 
     /// <summary>
     /// Lee las respuestas de <c>&lt;carpeta&gt;\&lt;tarea-en-kebab&gt;.json</c> («analizar-encaje.json»…), con la
@@ -91,7 +99,9 @@ public sealed class EjecutorClaudeFalso : IEjecutorClaude
     public async Task<RespuestaClaude> EjecutarAsync(PeticionClaude peticion, Action<int, DateTime> alEmpezar, CancellationToken cancelacion)
     {
         _peticiones.Enqueue(peticion);
-        var respuesta = _respuestas.GetValueOrDefault(peticion.Tarea, new RespuestaFalsa());
+        var respuesta = _secuencias.TryGetValue(peticion.Tarea, out var secuencia) && secuencia.TryDequeue(out var siguiente)
+            ? siguiente
+            : _respuestas.GetValueOrDefault(peticion.Tarea, new RespuestaFalsa());
         alEmpezar(PidFalso, _reloj.AhoraUtc);
 
         using var limite = CancellationTokenSource.CreateLinkedTokenSource(cancelacion);

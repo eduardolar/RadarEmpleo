@@ -187,12 +187,18 @@ public static partial class AnalizadorRastreo
                 continue;
 
             var fin = i + 1;
-            while (fin < lineas.Count && !Encabezado().IsMatch(lineas[fin])) fin++;
+            while (fin < lineas.Count && !EsEncabezado(lineas[fin])) fin++;
             secciones.Add((i, fin));
             i = fin - 1;
         }
         return secciones;
     }
+
+    /// <summary>
+    /// La línea es un encabezado de nivel 1 o 2 («# …», «## …»), el que cierra una sección; los «###» no. También lo usa
+    /// <see cref="Importacion.PartidorTextoLibre"/>, para partir el texto libre por los mismos apartados.
+    /// </summary>
+    public static bool EsEncabezado(string linea) => Encabezado().IsMatch(linea);
 
     /// <summary>
     /// Un informe <c>rastreos\rastreo_AAAA-MM-DD.md</c> entero: la fecha sale del nombre del archivo y el

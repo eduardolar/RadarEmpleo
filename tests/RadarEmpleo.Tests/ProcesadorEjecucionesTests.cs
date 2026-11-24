@@ -23,9 +23,12 @@ public sealed class ManejadorDePrueba : IManejadorTarea
     public static readonly DefinicionTarea ConCandidatura = new(TareaAgente.AnalizarEncaje, 0.50m, TimeSpan.FromMinutes(5),
         CarpetaTrabajo.Curriculum, "Read", "Read", "Bash", null, "prueba-encaje");
 
-    public ManejadorDePrueba(DefinicionTarea definicion) => Definicion = definicion;
+    private readonly DefinicionTarea _definicion;
 
-    public DefinicionTarea Definicion { get; }
+    public ManejadorDePrueba(DefinicionTarea definicion) => _definicion = definicion;
+
+    /// <summary>La que se le da y, con <see cref="Partes"/>, con el reparto de <see cref="PorPartes"/>.</summary>
+    public DefinicionTarea Definicion => Partes is null ? _definicion : _definicion with { Partes = PorPartes };
 
     /// <summary>Lo que hace al aplicar la respuesta (por defecto, nada).</summary>
     public static Func<RespuestaClaude, Task>? AlAplicar { get; set; }
@@ -35,6 +38,29 @@ public sealed class ManejadorDePrueba : IManejadorTarea
 
     /// <summary>Si no es null, la tarea termina al prepararla con este resultado, sin lanzar Claude.</summary>
     public static ResultadoTarea? SinClaude { get; set; }
+
+    /// <summary>Si no es null, la tarea se lanza en tantas partes, con el reparto de <see cref="PorPartes"/>.</summary>
+    public static int? Partes { get; set; }
+
+    /// <summary>Si no es null, las peticiones que prepara, en vez de las suyas (para probar las que no caben).</summary>
+    public static Func<ContextoTarea, DefinicionTarea, IReadOnlyList<PeticionClaude>>? OtrasPeticiones { get; set; }
+
+    /// <summary>Lo que ha recibido <see cref="AplicarPartesAsync"/> la última vez.</summary>
+    public static IReadOnlyList<(PeticionClaude Peticion, RespuestaClaude Respuesta)>? PartesRecibidas { get; set; }
+
+    /// <summary>Como mucho 0,20 y 2 min por parte: con 3 partes de 0,50 y 5 min, 0,16 y 1 min 40 s cada una.</summary>
+    public static readonly PartesTarea PorPartes = new(16_000, 6, 0.20m, TimeSpan.FromMinutes(2));
+
+    /// <summary>Deja los estáticos como al principio.</summary>
+    public static void Limpiar()
+    {
+        AlAplicar = null;
+        AlConstruir = null;
+        SinClaude = null;
+        Partes = null;
+        OtrasPeticiones = null;
+        PartesRecibidas = null;
+    }
 
     public Task<bool> ValidarAsync(int? candidaturaId, CancellationToken cancelacion)
     {
@@ -47,8 +73,29 @@ public sealed class ManejadorDePrueba : IManejadorTarea
     {
         if (AlConstruir is { } alConstruir) await alConstruir(cancelacion);
         if (SinClaude is { } sinClaude) return PreparacionTarea.Terminada(sinClaude);
-        return PreparacionTarea.ConClaude(contexto.Peticion(Definicion,
-            ConstructorArgumentos.Construir(Definicion, """{"type":"object"}""", new ValoresArgumentos(contexto.CarpetaDatos)), "Prompt de prueba"));
+        var valores = new ValoresArgumentos(contexto.CarpetaDatos);
+        if (OtrasPeticiones is { } otras) return PreparacionTarea.ConClaude(otras(contexto, Definicion));
+        if (Partes is { } n)
+        {
+            var definicion = Definicion;
+            return PreparacionTarea.ConClaude(Enumerable.Range(1, n).Select(k => contexto.Peticion(definicion,
+                ConstructorArgumentos.Construir(definicion, Esquema, valores, definicion.PresupuestoParte(n)), $"Prompt de prueba {k}",
+                definicion.TiempoParte(n), $"{k} de {n}")).ToList());
+        }
+        return PreparacionTarea.ConClaude(contexto.Peticion(Definicion, ConstructorArgumentos.Construir(Definicion, Esquema, valores), "Prompt de prueba"));
+    }
+
+    private const string Esquema = """{"type":"object"}""";
+
+    /// <summary>Con una parte, como <see cref="AplicarAsync"/>; con varias, junta las salidas de las que han salido bien.</summary>
+    public async Task<ResultadoTarea> AplicarPartesAsync(EjecucionAgente ejecucion,
+        IReadOnlyList<(PeticionClaude Peticion, RespuestaClaude Respuesta)> partes, CancellationToken cancelacion)
+    {
+        PartesRecibidas = partes;
+        if (partes.Count == 1) return await AplicarAsync(ejecucion, partes[0].Respuesta, cancelacion);
+        var buenas = partes.Where(p => p.Respuesta.Correcta).ToList();
+        return new ResultadoTarea($"Hecho en {buenas.Count} de {partes.Count} partes.",
+            $"[{string.Join(",", buenas.Select(p => p.Respuesta.SalidaEstructurada?.GetRawText()))}]");
     }
 
     public async Task<ResultadoTarea> AplicarAsync(EjecucionAgente ejecucion, RespuestaClaude respuesta, CancellationToken cancelacion)
@@ -116,9 +163,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
             .AddScoped<IManejadorTarea>(_ => new ManejadorDePrueba(ManejadorDePrueba.SinCandidatura))
             .AddScoped<IManejadorTarea>(_ => new ManejadorDePrueba(ManejadorDePrueba.ConCandidatura))
             .BuildServiceProvider();
-        ManejadorDePrueba.AlAplicar = null;
-        ManejadorDePrueba.AlConstruir = null;
-        ManejadorDePrueba.SinClaude = null;
+        ManejadorDePrueba.Limpiar();
 
         // Sin ruta de exclusión: esta «API» lleva siempre la cola (los tests de dos APIs crean sus propias guardias).
         _guardia = new GuardiaCola(_opciones);
@@ -143,9 +188,7 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         await _procesador.StopAsync(CancellationToken.None);
         _procesador.Dispose();
         await _servicios.DisposeAsync();
-        ManejadorDePrueba.AlAplicar = null;
-        ManejadorDePrueba.AlConstruir = null;
-        ManejadorDePrueba.SinClaude = null;
+        ManejadorDePrueba.Limpiar();
         _guardia.Dispose();
         SqliteConnection.ClearAllPools();
         try { Directory.Delete(_raiz, recursive: true); } catch (IOException) { /* temporal */ }
@@ -1120,6 +1163,407 @@ public sealed class ProcesadorEjecucionesTests : IAsyncLifetime
         await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
 
         Assert.Equal(MensajesEjecucion.SinManejador, (await LeerAsync(huerfana.Id)).Error);
+    }
+
+    // ---------------------------------------------------------------- por partes
+
+    private static JsonElement Salida(int parte) => JsonSerializer.SerializeToElement(new { parte });
+
+    [Fact]
+    public async Task PorPartes_SeLanzanEnSerieYEnOrdenEnUnaSolaEjecucionConElCosteYLosTurnosSumados()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        _falso.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(Salida: Salida(1), CosteUsd: 0.10m, Turnos: 1),
+            new RespuestaFalsa(Salida: Salida(2), CosteUsd: 0.20m, Turnos: 2),
+            new RespuestaFalsa(Salida: Salida(3), CosteUsd: 0.30m, Turnos: 3));
+        // Si fueran a la vez, la primera ya vería las tres peticiones.
+        var vistas = new List<int>();
+        _falso.AntesDeResponder = (_, _) =>
+        {
+            vistas.Add(_falso.Peticiones.Count);
+            return Task.CompletedTask;
+        };
+
+        Assert.True(await _procesador.ProcesarSiguienteAsync(CancellationToken.None));
+
+        Assert.Equal([1, 2, 3], vistas);
+        var peticiones = _falso.Peticiones.ToList();
+        Assert.Equal(["1 de 3", "2 de 3", "3 de 3"], peticiones.Select(p => p.Parte));
+        Assert.Equal(["Prompt de prueba 1", "Prompt de prueba 2", "Prompt de prueba 3"], peticiones.Select(p => p.EntradaEstandar));
+        // Todas en el mismo log y con el tiempo de su parte.
+        Assert.Single(peticiones.Select(p => p.RutaLog).Distinct());
+        Assert.All(peticiones, p => Assert.Equal(TimeSpan.FromSeconds(100), p.TiempoMaximo));
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Ok, final.Estado);
+        Assert.Equal(0.60m, final.CosteUsd);
+        Assert.Equal(6, final.Turnos);
+        Assert.Equal("Hecho en 3 de 3 partes.", final.Resumen);
+        Assert.Equal("""[{"parte":1},{"parte":2},{"parte":3}]""", final.ResultadoJson);
+        Assert.Equal([1, 2, 3],
+            ManejadorDePrueba.PartesRecibidas!.Select(p => p.Respuesta.SalidaEstructurada!.Value.GetProperty("parte").GetInt32()));
+        await using var db = _factory.CreateDbContext();
+        Assert.Equal(1, await db.EjecucionesAgente.CountAsync());
+        Assert.False(File.Exists(RutaBloqueo));
+    }
+
+    [Fact]
+    public async Task PorPartes_CadaParteLlevaSuPresupuestoEnLosArgumentos()
+    {
+        ManejadorDePrueba.Partes = 3;
+        await EncolarAsync();
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        // 0,50 entre 3, hacia abajo, y por debajo del máximo de 0,20.
+        Assert.Equal(3, _falso.Peticiones.Count);
+        Assert.All(_falso.Peticiones, p =>
+            Assert.Equal("0.16", p.Argumentos[p.Argumentos.ToList().IndexOf("--max-budget-usd") + 1]));
+    }
+
+    [Theory]
+    [InlineData(ModoFalso.Error)]
+    [InlineData(ModoFalso.PresupuestoAgotado)]
+    [InlineData(ModoFalso.SalidaNoValida)]
+    public async Task PorPartes_UnaParteQueFalla_NoParaLasDemasYElManejadorRecibeLasTres(ModoFalso modo)
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        _falso.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(Salida: Salida(1), CosteUsd: 0.10m),
+            new RespuestaFalsa(modo, CosteUsd: 0.05m),
+            new RespuestaFalsa(Salida: Salida(3), CosteUsd: 0.10m));
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        Assert.Equal(3, _falso.Peticiones.Count);
+        var recibidas = ManejadorDePrueba.PartesRecibidas!;
+        Assert.Equal(["1 de 3", "2 de 3", "3 de 3"], recibidas.Select(p => p.Peticion.Parte));
+        Assert.Equal([true, false, true], recibidas.Select(p => p.Respuesta.Correcta));
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Ok, final.Estado);
+        Assert.Equal("Hecho en 2 de 3 partes.", final.Resumen);
+        // La salida no válida del falso no trae coste: entonces no se sabe cuánto ha gastado.
+        Assert.Equal(modo == ModoFalso.SalidaNoValida ? null : 0.25m, final.CosteUsd);
+    }
+
+    [Fact]
+    public async Task PorPartes_SiFallanTodas_QuedaErrorConElMensajeDeLaPrimeraYElCosteSumado()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        _falso.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(ModoFalso.PresupuestoAgotado, CosteUsd: 0.16m),
+            new RespuestaFalsa(ModoFalso.Error, CosteUsd: 0.02m),
+            new RespuestaFalsa(ModoFalso.Error, CosteUsd: 0.03m));
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Error, final.Estado);
+        Assert.Equal(MensajesEjecucion.TopeTarea, final.Error);
+        Assert.Equal(0.21m, final.CosteUsd);
+        Assert.Equal(3, _falso.Peticiones.Count);
+        Assert.Null(ManejadorDePrueba.PartesRecibidas);
+        Assert.False(File.Exists(RutaBloqueo));
+    }
+
+    [Fact]
+    public async Task PorPartes_SiTodasSeQuedanSinTiempo_ElMensajeDiceElTiempoDeUnaParteYElCosteNoSeSabe()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        _falso.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(ModoFalso.NoResponde));
+
+        await Procesador(_cola, ejecutor: new PeticionAcortada(_falso)).ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Error, final.Estado);
+        Assert.Equal("Ha tardado más de 1 min 40 s y la he parado.", final.Error);
+        Assert.Null(final.CosteUsd);
+        Assert.Equal(3, _falso.Peticiones.Count);
+    }
+
+    [Fact]
+    public async Task PorPartes_UnaParteCortadaSinCoste_DejaElCosteSinSaberAunqueLasDemasSalganBien()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        _falso.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(Salida: Salida(1), CosteUsd: 0.10m),
+            new RespuestaFalsa(ModoFalso.NoResponde),
+            new RespuestaFalsa(Salida: Salida(3), CosteUsd: 0.10m));
+
+        await Procesador(_cola, ejecutor: new PeticionAcortada(_falso)).ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Ok, final.Estado);
+        Assert.Null(final.CosteUsd);
+        // En el tope del día cuenta el presupuesto entero de la ejecución.
+        Assert.Equal(final.PresupuestoUsd, ReglasGasto.GastoComputable(final));
+        Assert.Equal(FalloClaude.TiempoAgotado, ManejadorDePrueba.PartesRecibidas![1].Respuesta.Fallo);
+    }
+
+    [Fact]
+    public async Task PorPartes_CancelarDuranteLaSegunda_QuedaCanceladaYLaTerceraNoSeLanza()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        _falso.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(Salida: Salida(1), CosteUsd: 0.10m),
+            new RespuestaFalsa(ModoFalso.NoResponde));
+
+        var procesando = _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+        await Esperar.HastaAsync(() => _falso.Peticiones.Count == 2, "La segunda parte no ha empezado.");
+        await _cola.CancelarAsync(ejecucion.Id);
+        await procesando;
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Cancelada, final.Estado);
+        Assert.Equal(2, _falso.Peticiones.Count);
+        Assert.Equal(1, _falso.Canceladas);
+        // La segunda se ha cortado sin coste: no se sabe lo que ha gastado.
+        Assert.Null(final.CosteUsd);
+        Assert.Null(ManejadorDePrueba.PartesRecibidas);
+        Assert.False(File.Exists(RutaBloqueo));
+    }
+
+    [Fact]
+    public async Task PorPartes_CancelarJustoAlAcabarUnaParte_NoLanzaLaSiguienteYCuentaLoGastado()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        _falso.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida(1), CosteUsd: 0.10m));
+        // Se cancela mientras responde la primera, que aun así sale bien.
+        _falso.AntesDeResponder = async (_, _) =>
+        {
+            if (_falso.Peticiones.Count == 1) await _cola.CancelarAsync(ejecucion.Id);
+        };
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Cancelada, final.Estado);
+        Assert.Single(_falso.Peticiones);
+        Assert.Equal(0.10m, final.CosteUsd);
+        Assert.Null(ManejadorDePrueba.PartesRecibidas);
+    }
+
+    [Fact]
+    public async Task PorPartes_PararLaApiDuranteUnaParte_QuedaInterrumpidaYNoLanzaMas()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        using var parada = new CancellationTokenSource();
+        _falso.AntesDeResponder = async (_, corte) =>
+        {
+            if (_falso.Peticiones.Count < 2) return;
+            await parada.CancelAsync();
+            await Task.Delay(Timeout.Infinite, corte);
+        };
+
+        try
+        {
+            await _procesador.ProcesarSiguienteAsync(parada.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Parar la API puede acabar en la cancelación: lo que importa es cómo queda la ejecución.
+        }
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Error, final.Estado);
+        Assert.Equal(EjecucionAgente.MensajeInterrumpida, final.Error);
+        Assert.Equal(2, _falso.Peticiones.Count);
+        Assert.Null(ManejadorDePrueba.PartesRecibidas);
+        Assert.False(File.Exists(RutaBloqueo));
+    }
+
+    [Fact]
+    public async Task PorPartes_ElPidDeCadaParteSeApuntaAntesDeLanzarLaSiguiente()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        var contado = new EjecutorContado(_falso);
+        var vistos = new List<int?>();
+        contado.AlEmpezarLlamada = async _ => vistos.Add((await LeerAsync(ejecucion.Id)).Pid);
+
+        await Procesador(_cola, ejecutor: contado).ProcesarSiguienteAsync(CancellationToken.None);
+
+        // Antes de la primera no hay ninguno; antes de cada siguiente, ya está el de la anterior.
+        Assert.Equal([null, 1001, 1002], vistos);
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(1003, final.Pid);
+        Assert.Equal(EstadoEjecucion.Ok, final.Estado);
+    }
+
+    [Fact]
+    public async Task PorPartes_SinClaudeInstalado_NoLanzaLasDemasYElManejadorLasRecibeSinLanzar()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        var contado = new EjecutorContado(_falso)
+        {
+            Sustituir = n => n == 2 ? RespuestaClaude.Fallida(FalloClaude.NoInstalado) : null
+        };
+
+        await Procesador(_cola, ejecutor: contado).ProcesarSiguienteAsync(CancellationToken.None);
+
+        Assert.Equal(2, contado.Llamadas);
+        var recibidas = ManejadorDePrueba.PartesRecibidas!;
+        Assert.Equal([null, FalloClaude.NoInstalado, FalloClaude.NoInstalado], recibidas.Select(p => p.Respuesta.Fallo));
+        Assert.Equal("3 de 3", recibidas[2].Peticion.Parte);
+        Assert.Equal(EstadoEjecucion.Ok, (await LeerAsync(ejecucion.Id)).Estado);
+    }
+
+    [Fact]
+    public async Task PorPartes_SinClaudeInstaladoEnLaPrimera_QuedaErrorSinLanzarLasDemas()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        var contado = new EjecutorContado(_falso) { Sustituir = _ => RespuestaClaude.Fallida(FalloClaude.NoInstalado) };
+
+        await Procesador(_cola, ejecutor: contado).ProcesarSiguienteAsync(CancellationToken.None);
+
+        Assert.Equal(1, contado.Llamadas);
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Error, final.Estado);
+        Assert.Equal(MensajesEjecucion.NoInstalado, final.Error);
+        Assert.Null(ManejadorDePrueba.PartesRecibidas);
+    }
+
+    /// <summary>Una petición de prueba con ese presupuesto y ese tiempo.</summary>
+    private static PeticionClaude Parte(ContextoTarea contexto, DefinicionTarea definicion, decimal presupuesto, TimeSpan tiempo, string parte) =>
+        contexto.Peticion(definicion, ConstructorArgumentos.Construir(definicion, """{"type":"object"}""",
+            new ValoresArgumentos(contexto.CarpetaDatos), presupuesto), "Prompt de prueba", tiempo, parte);
+
+    public static TheoryData<int?, int, double, int> PartesQueNoCaben => new()
+    {
+        // Sin partes en la definición.
+        { null, 2, 0.10, 1 },
+        // Más de las seis partes que admite.
+        { 3, 7, 0.05, 0 },
+        // Tres de 2 min con 5 min en total: el bloqueo caducaría antes.
+        { 3, 3, 0.10, 2 },
+        // Tres de 0,20 con 0,50 en total.
+        { 3, 3, 0.20, 1 }
+    };
+
+    [Theory]
+    [MemberData(nameof(PartesQueNoCaben))]
+    public async Task PorPartes_LasQueNoCabenEnLaTarea_FallanSinLanzarNadaNiGastar(int? partes, int peticiones, double presupuesto, int minutos)
+    {
+        ManejadorDePrueba.Partes = partes;
+        ManejadorDePrueba.OtrasPeticiones = (contexto, definicion) => Enumerable.Range(1, peticiones)
+            .Select(k => Parte(contexto, definicion, (decimal)presupuesto, minutos == 0 ? TimeSpan.FromSeconds(10) : TimeSpan.FromMinutes(minutos),
+                $"{k} de {peticiones}"))
+            .ToList();
+        var ejecucion = await EncolarAsync();
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Error, final.Estado);
+        Assert.Equal(MensajesEjecucion.PartesNoCaben, final.Error);
+        Assert.Equal(0m, final.CosteUsd);
+        Assert.Empty(_falso.Peticiones);
+        Assert.False(File.Exists(RutaBloqueo));
+    }
+
+    [Fact]
+    public async Task PorPartes_ConUnPresupuestoQueNoLlegaAUnCentimoPorParte_FallaConSuMensajeSinGastar()
+    {
+        ManejadorDePrueba.Partes = 3;
+        ManejadorDePrueba.OtrasPeticiones = (contexto, definicion) =>
+            [Parte(contexto, definicion with { PresupuestoUsd = 0.02m }, (definicion with { PresupuestoUsd = 0.02m }).PresupuestoParte(3),
+                TimeSpan.FromMinutes(1), "1 de 3")];
+        var ejecucion = await EncolarAsync();
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(MensajesEjecucion.PresupuestoNoLlegaParaLasPartes, final.Error);
+        Assert.Equal(0m, final.CosteUsd);
+        Assert.Empty(_falso.Peticiones);
+    }
+
+    [Fact]
+    public async Task PorPartes_PararLaApiAlAcabarUnaParte_InterrumpeConLoQueHaGastado()
+    {
+        ManejadorDePrueba.Partes = 3;
+        var ejecucion = await EncolarAsync();
+        _falso.Programar(TareaAgente.ExtraerRegistro, new RespuestaFalsa(Salida: Salida(1), CosteUsd: 0.10m));
+        using var parada = new CancellationTokenSource();
+        // Se para mientras responde la primera, que aun así sale bien.
+        _falso.AntesDeResponder = async (_, _) => await parada.CancelAsync();
+
+        try
+        {
+            await _procesador.ProcesarSiguienteAsync(parada.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Lo que importa es cómo queda la ejecución.
+        }
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EjecucionAgente.MensajeInterrumpida, final.Error);
+        Assert.Single(_falso.Peticiones);
+        Assert.Equal(0.10m, final.CosteUsd);
+    }
+
+    [Fact]
+    public async Task PorPartes_SiUnaParteNoTraeTurnos_ElTotalNoSeSabe()
+    {
+        ManejadorDePrueba.Partes = 2;
+        var ejecucion = await EncolarAsync();
+        _falso.ProgramarSecuencia(TareaAgente.ExtraerRegistro,
+            new RespuestaFalsa(Salida: Salida(1), Turnos: 2),
+            new RespuestaFalsa(Salida: Salida(2), Turnos: null));
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var final = await LeerAsync(ejecucion.Id);
+        Assert.Equal(EstadoEjecucion.Ok, final.Estado);
+        Assert.Null(final.Turnos);
+    }
+
+    [Fact]
+    public async Task UnaSolaPeticion_ElManejadorLaRecibeComoUnaParteSinNumero()
+    {
+        var ejecucion = await EncolarAsync();
+
+        await _procesador.ProcesarSiguienteAsync(CancellationToken.None);
+
+        var (peticion, respuesta) = Assert.Single(ManejadorDePrueba.PartesRecibidas!);
+        Assert.Null(peticion.Parte);
+        Assert.True(respuesta.Correcta);
+        Assert.Equal("Hecho por la tarea de prueba.", (await LeerAsync(ejecucion.Id)).Resumen);
+    }
+
+    /// <summary>
+    /// Envuelve al falso: cada llamada anuncia su propio pid (1000 más su número) y, si <see cref="Sustituir"/> da una
+    /// respuesta, la devuelve sin llamar al falso.
+    /// </summary>
+    private sealed class EjecutorContado(IEjecutorClaude interior) : IEjecutorClaude
+    {
+        public int Llamadas { get; private set; }
+
+        /// <summary>Se llama al empezar cada llamada, con su número (desde 1).</summary>
+        public Func<int, Task>? AlEmpezarLlamada { get; set; }
+
+        public Func<int, RespuestaClaude?>? Sustituir { get; init; }
+
+        public async Task<RespuestaClaude> EjecutarAsync(PeticionClaude peticion, Action<int, DateTime> alEmpezar, CancellationToken cancelacion)
+        {
+            var numero = ++Llamadas;
+            if (AlEmpezarLlamada is { } alEmpezarLlamada) await alEmpezarLlamada(numero);
+            if (Sustituir?.Invoke(numero) is { } sustituta) return sustituta;
+            return await interior.EjecutarAsync(peticion, (_, inicio) => alEmpezar(1000 + numero, inicio), cancelacion);
+        }
+
+        public Task<string?> VersionAsync(CancellationToken cancelacion) => interior.VersionAsync(cancelacion);
     }
 
     /// <summary>Envuelve al falso acortando el tiempo máximo de cada petición a 200 ms.</summary>

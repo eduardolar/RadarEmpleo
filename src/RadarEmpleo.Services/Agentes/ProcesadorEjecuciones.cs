@@ -13,7 +13,11 @@ namespace RadarEmpleo.Services.Agentes;
 /// Lanza las ejecuciones de una en una y por orden (la más antigua en cola primero). Para cada una: vuelve a mirar el
 /// tope, coge el bloqueo compartido (o espera, como mucho una hora), calcula los hashes del registro y del perfil,
 /// lanza Claude (o no, si el manejador la termina sin él), vuelve a calcular los hashes y deja la ejecución en Ok, Error
-/// o Cancelada. Al arrancar, nada de lo que se quedó a medias se relanza solo (<see cref="RecuperarAsync"/>). Si otra
+/// o Cancelada. Una tarea por partes lanza una consulta por parte, en serie, dentro de la misma ejecución: se para al
+/// cancelarla, al parar la API o si no encuentra Claude; con cualquier otro fallo sigue con la siguiente. Si no sale
+/// ninguna, Error con el mensaje de la primera; si sale alguna, el manejador decide con todas
+/// (<see cref="IManejadorTarea.AplicarPartesAsync"/>). El coste y los turnos son la suma. Al arrancar, nada de lo que se
+/// quedó a medias se relanza solo (<see cref="RecuperarAsync"/>). Si otra
 /// API ya procesa la cola de la misma base de datos (<see cref="ExclusionBaseDatos"/>), esta no recupera, no mata ni
 /// lanza nada: lo avisa en el log y lo vuelve a intentar en cada sondeo.
 /// </summary>
@@ -204,7 +208,7 @@ public sealed class ProcesadorEjecuciones : BackgroundService
                 await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, error.Message, 0m, hashRegistro, hashPerfil));
                 return;
             }
-            if (preparacion.Peticion is not { } peticion)
+            if (preparacion.Peticiones.Count == 0)
             {
                 // Terminada sin Claude: no ha gastado nada. Los hashes se vuelven a mirar igual que con Claude.
                 var sinClaude = preparacion.SinClaude!;
@@ -220,56 +224,91 @@ public sealed class ProcesadorEjecuciones : BackgroundService
                 });
                 return;
             }
-            Task? anotar = null;
-            // «Cancelar» desde otra copia de la API solo marca la BD: se vigila mientras corre.
+            var peticiones = preparacion.Peticiones;
+            if (!definicion.CabenLasPartes(peticiones))
+            {
+                // Es un fallo de código del manejador: no se lanza nada y no gasta.
+                _log.LogError("La ejecución {Id} trae {Numero} peticiones que no caben en su tarea.", id, peticiones.Count);
+                await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.PartesNoCaben, 0m, hashRegistro, hashPerfil));
+                return;
+            }
+            var partes = new List<(PeticionClaude Peticion, RespuestaClaude Respuesta)>(peticiones.Count);
+            var cortadaEntrePartes = false;
+            // «Cancelar» desde otra copia de la API solo marca la BD: se vigila mientras corren todas las partes.
             using var finVigilancia = new CancellationTokenSource();
             var vigilancia = VigilarCancelacionAsync(id, corte, finVigilancia.Token);
-            RespuestaClaude respuesta;
             try
             {
-                lanzado = true;
-                respuesta = await _ejecutor.EjecutarAsync(peticion,
-                    (pid, inicio) => anotar = CambiarAsync(id, e => e.AnotarProceso(pid, inicio)), corte.Token);
+                foreach (var peticion in peticiones)
+                {
+                    // Entre una parte y la siguiente: la cancelación (o la parada) que llega justo al acabar una no lanza otra.
+                    if (partes.Count > 0 && corte.IsCancellationRequested)
+                    {
+                        cortadaEntrePartes = true;
+                        break;
+                    }
+                    Task? anotar = null;
+                    lanzado = true;
+                    var respuesta = await _ejecutor.EjecutarAsync(peticion,
+                        (pid, inicio) => anotar = CambiarAsync(id, e => e.AnotarProceso(pid, inicio)), corte.Token);
+                    if (anotar is not null) await anotar;
+                    partes.Add((peticion, respuesta));
+                    if (respuesta.Fallo is FalloClaude.Cancelado or FalloClaude.NoInstalado || parada.IsCancellationRequested) break;
+                }
             }
             finally
             {
                 await finVigilancia.CancelAsync();
                 await vigilancia;
             }
-            if (anotar is not null) await anotar;
 
             var registroDespues = await HashAsync(ArchivoVigilado.Registro);
             var perfilDespues = await HashAsync(ArchivoVigilado.Perfil);
+            // Una parte cortada sin coste (por tiempo, por ejemplo) deja el total sin saber: null cuenta el presupuesto entero.
+            var coste = partes.Aggregate((decimal?)0m, (suma, p) => suma + p.Respuesta.CosteUsd);
             if (parada.IsCancellationRequested)
             {
-                await CambiarAsync(id, e => e.Interrumpir(_reloj.AhoraUtc));
+                await CambiarAsync(id, e => e.Interrumpir(_reloj.AhoraUtc, coste));
+                return;
+            }
+            if (cortadaEntrePartes || partes[^1].Respuesta.Fallo == FalloClaude.Cancelado)
+            {
+                await CambiarAsync(id, e =>
+                {
+                    if (e.CancelacionPedida) e.ConfirmarCancelacion(_reloj.AhoraUtc, coste, registroDespues, perfilDespues);
+                    else e.Fallar(_reloj.AhoraUtc, MensajesEjecucion.Inesperado, coste, registroDespues, perfilDespues);
+                });
                 return;
             }
 
-            if (respuesta.Fallo == FalloClaude.Cancelado)
+            foreach (var (peticion, respuesta) in partes.Where(p => !p.Respuesta.Correcta))
+                _log.LogInformation("La ejecución {Id}{Parte} no ha salido: {Fallo} ({Detalle}).", id,
+                    peticion.Parte is { } cual ? $" (parte {cual})" : "", respuesta.Fallo, respuesta.Detalle);
+            // Las que no se han llegado a lanzar porque no se encuentra Claude, para que el manejador reciba una por petición.
+            partes.AddRange(peticiones.Skip(partes.Count).Select(p => (p, RespuestaClaude.Fallida(FalloClaude.NoInstalado, "No se ha lanzado."))));
+
+            var buenas = partes.Where(p => p.Respuesta.Correcta).ToList();
+            if (buenas.Count == 0)
             {
-                await CambiarAsync(id, e => e.ConfirmarCancelacion(_reloj.AhoraUtc, respuesta.CosteUsd, registroDespues, perfilDespues));
-                return;
-            }
-            if (!respuesta.Correcta)
-            {
-                _log.LogInformation("La ejecución {Id} no ha salido: {Fallo} ({Detalle}).", id, respuesta.Fallo, respuesta.Detalle);
-                var mensaje = MensajesEjecucion.De(respuesta.Fallo ?? FalloClaude.ErrorDeClaude, definicion.TiempoMaximo);
-                await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, mensaje, respuesta.CosteUsd, registroDespues, perfilDespues));
+                var (primera, fallida) = partes[0];
+                var mensaje = MensajesEjecucion.De(fallida.Fallo ?? FalloClaude.ErrorDeClaude, primera.TiempoMaximo);
+                await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, mensaje, coste, registroDespues, perfilDespues));
                 return;
             }
 
             ResultadoTarea resultado;
             try
             {
-                resultado = await manejador.AplicarAsync(ejecucion, respuesta, CancellationToken.None);
+                resultado = await manejador.AplicarPartesAsync(ejecucion, partes, CancellationToken.None);
             }
             catch (ReglaNegocioException error)
             {
-                await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, error.Message, respuesta.CosteUsd, registroDespues, perfilDespues));
+                await CambiarAsync(id, e => e.Fallar(_reloj.AhoraUtc, error.Message, coste, registroDespues, perfilDespues));
                 return;
             }
-            await CambiarAsync(id, e => e.Terminar(_reloj.AhoraUtc, respuesta.CosteUsd, respuesta.Turnos, respuesta.SesionId,
+            // Como el coste: si alguna parte no los trae, no se sabe el total.
+            var turnos = partes.Aggregate((int?)0, (suma, p) => suma + p.Respuesta.Turnos);
+            await CambiarAsync(id, e => e.Terminar(_reloj.AhoraUtc, coste, turnos, buenas[^1].Respuesta.SesionId,
                 resultado.Resumen, resultado.ResultadoJson, registroDespues, perfilDespues));
         }
         catch (OperationCanceledException) when (corte.IsCancellationRequested && !parada.IsCancellationRequested)

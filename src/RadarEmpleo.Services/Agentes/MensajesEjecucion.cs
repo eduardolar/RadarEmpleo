@@ -28,6 +28,14 @@ public static class MensajesEjecucion
     /// <summary>Error cuando una ejecución se pasa del tope de uso de su tarea (<c>--max-budget-usd</c>).</summary>
     public const string TopeTarea = "Ha llegado al tope de uso de esta tarea y la he parado. Si la reintentas, puede volver a gastar lo mismo.";
 
+    /// <summary>Una tarea por partes que se ha preparado con más partes, más tiempo o más uso de los que tiene: no se lanza.</summary>
+    public const string PartesNoCaben =
+        "Esta tarea se ha preparado en partes que no caben en su tiempo o en su tope de uso, así que no la he lanzado. Es un fallo de la app: avísalo.";
+
+    /// <summary>El tope de uso de la tarea, repartido entre sus partes, no llega ni a un céntimo por parte.</summary>
+    public const string PresupuestoNoLlegaParaLasPartes =
+        "El tope de uso de esta tarea no da para repartirlo entre todas sus partes, así que no la he lanzado.";
+
     /// <summary>Error al encolar o al empezar cuando ya no cabe en el tope de uso de hoy.</summary>
     public const string TopeDiario = "Has llegado al tope de uso estimado de hoy. Mañana se puede volver a lanzar.";
 

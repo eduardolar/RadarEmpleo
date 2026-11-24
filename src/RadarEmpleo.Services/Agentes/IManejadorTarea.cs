@@ -12,7 +12,12 @@ public sealed record ContextoTarea(string CarpetaTrabajo, string RutaLog, string
 {
     /// <summary>La petición con lo fijo de la definición (tiempo máximo, salida privada) y lo que pone el manejador.</summary>
     public PeticionClaude Peticion(DefinicionTarea definicion, IReadOnlyList<string> argumentos, string entrada) =>
-        new(definicion.Tarea, argumentos, CarpetaTrabajo, entrada, definicion.TiempoMaximo, RutaLog, definicion.SalidaConDatosPersonales);
+        Peticion(definicion, argumentos, entrada, definicion.TiempoMaximo, null);
+
+    /// <summary>Una parte de una tarea por partes: con su tiempo máximo (<see cref="DefinicionTarea.TiempoParte"/>) y cuál es («2 de 4»).</summary>
+    public PeticionClaude Peticion(DefinicionTarea definicion, IReadOnlyList<string> argumentos, string entrada, TimeSpan tiempoMaximo,
+        string? parte) =>
+        new(definicion.Tarea, argumentos, CarpetaTrabajo, entrada, tiempoMaximo, RutaLog, definicion.SalidaConDatosPersonales, parte);
 }
 
 /// <summary>Lo que deja una tarea al terminar bien: la frase para enseñar y la salida ya validada.</summary>
@@ -24,23 +29,28 @@ public sealed record ResultadoTarea(string Resumen, string? ResultadoJson);
 /// </summary>
 public sealed record PreparacionTarea
 {
-    private PreparacionTarea(PeticionClaude? peticion, ResultadoTarea? sinClaude)
+    private PreparacionTarea(IReadOnlyList<PeticionClaude> peticiones, ResultadoTarea? sinClaude)
     {
-        Peticion = peticion;
+        Peticiones = peticiones;
         SinClaude = sinClaude;
     }
 
-    /// <summary>Lo que hay que mandar a Claude, o null si la tarea ya ha terminado sin él.</summary>
-    public PeticionClaude? Peticion { get; }
+    /// <summary>Lo que hay que mandar a Claude, en serie y en este orden (una por parte), o nada si la tarea ya ha terminado sin él.</summary>
+    public IReadOnlyList<PeticionClaude> Peticiones { get; }
 
     /// <summary>El resultado de la tarea si no hace falta Claude, o null si hay que lanzarlo.</summary>
     public ResultadoTarea? SinClaude { get; }
 
     /// <summary>Hay que lanzar Claude con esta petición.</summary>
-    public static PreparacionTarea ConClaude(PeticionClaude peticion) => new(peticion, null);
+    public static PreparacionTarea ConClaude(PeticionClaude peticion) => new([peticion], null);
+
+    /// <summary>Hay que lanzar Claude una vez por petición, una detrás de otra, dentro de la misma ejecución.</summary>
+    /// <exception cref="ArgumentException">No hay ninguna petición.</exception>
+    public static PreparacionTarea ConClaude(IReadOnlyList<PeticionClaude> peticiones) =>
+        peticiones.Count > 0 ? new([.. peticiones], null) : throw new ArgumentException("Hace falta al menos una petición.", nameof(peticiones));
 
     /// <summary>La tarea ya ha terminado: no se lanza Claude y no gasta nada.</summary>
-    public static PreparacionTarea Terminada(ResultadoTarea resultado) => new(null, resultado);
+    public static PreparacionTarea Terminada(ResultadoTarea resultado) => new([], resultado);
 }
 
 /// <summary>
@@ -70,4 +80,17 @@ public interface IManejadorTarea
     /// Eduardo si no se puede (por ejemplo, <see cref="MensajesEjecucion.SalidaNoValida"/>): la ejecución queda en Error.
     /// </summary>
     Task<ResultadoTarea> AplicarAsync(EjecucionAgente ejecucion, RespuestaClaude respuesta, CancellationToken cancelacion);
+
+    /// <summary>
+    /// Valida y aplica las respuestas de una tarea lanzada con <see cref="PreparacionTarea.ConClaude(IReadOnlyList{PeticionClaude})"/>:
+    /// una por petición y en su orden, al menos una correcta. Las que no lo son (por tiempo, por presupuesto, salida no
+    /// válida o un error de Claude; o sin lanzar, como <see cref="FalloClaude.NoInstalado"/>, si una anterior no encontró
+    /// Claude) las decide el manejador. Lanza <see cref="ReglaNegocioException"/> como <see cref="AplicarAsync"/>. Por
+    /// defecto solo admite una petición, y la aplica con <see cref="AplicarAsync"/>.
+    /// </summary>
+    Task<ResultadoTarea> AplicarPartesAsync(EjecucionAgente ejecucion,
+        IReadOnlyList<(PeticionClaude Peticion, RespuestaClaude Respuesta)> partes, CancellationToken cancelacion) =>
+        partes.Count == 1
+            ? AplicarAsync(ejecucion, partes[0].Respuesta, cancelacion)
+            : throw new InvalidOperationException("Esta tarea no se lanza por partes.");
 }

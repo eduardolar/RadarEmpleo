@@ -53,6 +53,24 @@ public class ConstructorArgumentosTests
     }
 
     [Fact]
+    public void ConOtroPresupuesto_SoloCambiaElDeMaxBudget()
+    {
+        // El de cada parte de una tarea por partes.
+        Assert.Equal(Con("0.33", "--tools", "", "--model", "sonnet"),
+            ConstructorArgumentos.Construir(DefinicionesTareas.ExtraerRegistro, Esquema, Valores(), presupuesto: 0.33m));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-0.5)]
+    [InlineData(1.01)]
+    public void UnPresupuestoQueNoEsPositivoOPasaDelDeLaTarea_Lanza(double presupuesto)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            ConstructorArgumentos.Construir(DefinicionesTareas.ExtraerRegistro, Esquema, Valores(), (decimal)presupuesto));
+    }
+
+    [Fact]
     public void Rastreo_ListaExacta()
     {
         Assert.Equal(
