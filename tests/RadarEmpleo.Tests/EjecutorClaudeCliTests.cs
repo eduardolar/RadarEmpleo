@@ -231,9 +231,37 @@ public sealed class EjecutorClaudeCliTests : IDisposable
         Assert.Equal(Centinela, respuesta.SalidaEstructurada!.Value.GetProperty("cita").GetString());
         var log = await File.ReadAllTextAsync(Ruta("logs/ejecucion-1.log"));
         Assert.DoesNotContain(Centinela, log);
-        Assert.Contains("subtype success, coste 0.42, turnos 3.", log);
+        Assert.Contains("subtype success, coste 0.42, turnos 3, tokens: entrada ?", log);
         Assert.Contains($"{Encoding.UTF8.GetByteCount(salida)} bytes, sha256 ", log);
     }
+
+    [Fact]
+    public async Task ConLaSalidaPrivada_ElLogApuntaLosTokensYElModeloDeVerdad()
+    {
+        const string Centinela = "EMPRESA-CENTINELA-DEL-REGISTRO";
+        var salida = """
+            {"type":"result","subtype":"error_max_budget_usd","is_error":true,"num_turns":1,"total_cost_usd":0.567,"result":"CENTINELA",
+             "usage":{"input_tokens":12,"cache_creation_input_tokens":30500,"cache_read_input_tokens":0,"output_tokens":32000},
+             "modelUsage":{"claude-sonnet-4-5-20250929":{"inputTokens":12,"outputTokens":32000,"costUSD":0.567}}}
+            """.Replace("CENTINELA", Centinela, StringComparison.Ordinal);
+        File.WriteAllText(Ruta("respuesta.json"), salida);
+
+        await Ejecutar(Ejecutor("--sim:modo=respuesta", $"--sim:respuesta={Ruta("respuesta.json")}"), Peticion() with { SalidaPrivada = true });
+
+        var log = await File.ReadAllTextAsync(Ruta("logs/ejecucion-1.log"));
+        Assert.DoesNotContain(Centinela, log);
+        Assert.Contains("turnos 1, tokens: entrada 12, caché escrita 30500, caché leída 0, salida 32000, modelo claude-sonnet-4-5-20250929.", log);
+    }
+
+    [Theory]
+    [InlineData("no es json", "tokens ?, modelo ?")]
+    [InlineData("[1]", "tokens ?, modelo ?")]
+    [InlineData("""{"usage":{"output_tokens":"mucho"}}""", "tokens: entrada ?, caché escrita ?, caché leída ?, salida ?, modelo ?")]
+    // Dos modelos, y un nombre con saltos y espacios que no puede ensuciar el log.
+    [InlineData("""{"usage":{"input_tokens":1,"output_tokens":2},"modelUsage":{"claude-haiku-4-5":{},"otro\nmodelo [1m]":{}}}""",
+        "tokens: entrada 1, caché escrita ?, caché leída ?, salida 2, modelo claude-haiku-4-5 y otromodelo[1m]")]
+    public void Consumo_SoloTokensYModelosLimpios(string salida, string esperado) =>
+        Assert.Equal(esperado, EjecutorClaudeCli.Consumo(salida));
 
     [Fact]
     public async Task Version_LaLeeYLaGuarda()
