@@ -16,6 +16,10 @@ namespace RadarEmpleo.Services;
 /// </summary>
 public class CandidaturasService
 {
+    /// <summary>El 409 de «otra pestaña»: también salta si un análisis de Claude la cambia mientras se edita la ficha.</summary>
+    public const string MensajeCambiadaEnOtraPestana =
+        "Esta candidatura acaba de cambiar en otra pestaña o con un análisis de Claude. Recarga la página para ver cómo ha quedado.";
+
     /// <summary>
     /// De uno en uno, como Detectar en los rastreos: el servicio es scoped, así que el cerrojo es estático.
     /// Deshacer es raro y rápido; no merece uno por candidatura.
@@ -113,7 +117,9 @@ public class CandidaturasService
 
     /// <summary>
     /// Edita los datos (no el estado). Si cambia el nombre de la empresa, se resuelve de nuevo
-    /// (reutilizar o crear). Devuelve null si no existe.
+    /// (reutilizar o crear). Devuelve null si no existe. Con <see cref="GuardarCandidaturaRequest.FechaUltimoCambioLeida"/>,
+    /// se compara con la de la BD antes de tocar nada: si ya no es la misma, lanza <see cref="ReglaNegocioException"/>
+    /// con <see cref="MensajeCambiadaEnOtraPestana"/> (409) y no se guarda nada, ni siquiera una empresa nueva.
     /// </summary>
     public async Task<CandidaturaDetalleDto?> EditarAsync(int id, GuardarCandidaturaRequest datos)
     {
@@ -123,6 +129,11 @@ public class CandidaturasService
 
         var candidatura = await CargarCompletaAsync(db, id, seguimiento: true);
         if (candidatura is null) return null;
+
+        // Cambiada desde que se abrió el formulario: no se sigue (tampoco se crea la empresa). Si cambia
+        // entre esta lectura y el guardado, ya lo para el token de concurrencia.
+        if (datos.FechaUltimoCambioLeida is { } leida && Fechas.AUtc(leida) != candidatura.FechaUltimoCambio)
+            throw new ReglaNegocioException(MensajeCambiadaEnOtraPestana);
 
         if (NombresEmpresa.Normalizar(datos.Empresa) != candidatura.Empresa.NombreNormalizado)
             candidatura.Empresa = await EmpresasService.ObtenerOCrearAsync(db, datos.Empresa);

@@ -625,6 +625,84 @@ public class CandidaturasServiceTests : ArnesSqliteTests
         Assert.Equal("Primera", (await _candidaturas.ObtenerAsync(creada.Id))!.Puesto);
     }
 
+    // ---------------------------------------------------------------- versión leída al editar
+
+    /// <summary>Una regla de negocio (no un choque de EF) con el texto de «otra pestaña».</summary>
+    private static async Task AssertOtraPestanaAsync(Func<Task> editar)
+    {
+        var error = await Assert.ThrowsAsync<ReglaNegocioException>(editar);
+        Assert.Equal(CandidaturasService.MensajeCambiadaEnOtraPestana, error.Message);
+    }
+
+    [Fact]
+    public async Task EditarAsync_ConLaVersionDeAntesDeUnAnalisis_ChocaSinTocarNada()
+    {
+        var creada = await CrearAsync();
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+        await _candidaturas.AplicarAnalisisAgenteAsync(creada.Id, Analisis());
+        var tras = (await _candidaturas.ObtenerAsync(creada.Id))!;
+        var llamadas = Exportador.Llamadas;
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+
+        await AssertOtraPestanaAsync(() => _candidaturas.EditarAsync(creada.Id,
+            new GuardarCandidaturaRequest("Empresa nueva", "Vieja", Pega: "La de antes", FechaUltimoCambioLeida: creada.FechaUltimoCambio)));
+
+        var ficha = (await _candidaturas.ObtenerAsync(creada.Id))!;
+        Assert.Equal(tras.Puesto, ficha.Puesto);
+        Assert.Equal(tras.Empresa, ficha.Empresa);
+        Assert.Equal("Piden inglés B2.", ficha.Pega);
+        Assert.Equal(Encaje.Medio, ficha.Encaje);
+        Assert.Equal(tras.FechaUltimoCambio, ficha.FechaUltimoCambio);
+        Assert.Equal(llamadas, Exportador.Llamadas);
+        await using var db = Factory.CreateDbContext();
+        Assert.False(await db.Empresas.AnyAsync(e => e.Nombre == "Empresa nueva"));
+    }
+
+    [Fact]
+    public async Task EditarAsync_ConLaVersionQueHayEnLaBd_Guarda()
+    {
+        var creada = await CrearAsync();
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+        await _candidaturas.AplicarAnalisisAgenteAsync(creada.Id, Analisis());
+        var tras = (await _candidaturas.ObtenerAsync(creada.Id))!;
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+
+        var editada = await _candidaturas.EditarAsync(creada.Id,
+            new GuardarCandidaturaRequest("Acme", "Backend senior", Encaje: tras.Encaje, Pega: tras.Pega, FechaUltimoCambioLeida: tras.FechaUltimoCambio));
+
+        Assert.Equal("Backend senior", editada!.Puesto);
+        Assert.Equal("Piden inglés B2.", editada.Pega);
+        Assert.Equal(Reloj.AhoraUtc, editada.FechaUltimoCambio);
+    }
+
+    [Fact]
+    public async Task EditarAsync_DosVecesConLaMismaVersion_LaSegundaChoca()
+    {
+        var creada = await CrearAsync();
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+        await _candidaturas.EditarAsync(creada.Id,
+            new GuardarCandidaturaRequest("Acme", "Primera", FechaUltimoCambioLeida: creada.FechaUltimoCambio));
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+
+        await AssertOtraPestanaAsync(() => _candidaturas.EditarAsync(creada.Id,
+            new GuardarCandidaturaRequest("Acme", "Segunda", FechaUltimoCambioLeida: creada.FechaUltimoCambio)));
+
+        Assert.Equal("Primera", (await _candidaturas.ObtenerAsync(creada.Id))!.Puesto);
+    }
+
+    [Fact]
+    public async Task EditarAsync_VersionEnHoraLocal_EsElMismoInstante()
+    {
+        // Una fecha del JSON con desfase («+01:00») llega como hora local: es el mismo instante
+        var creada = await CrearAsync();
+        Reloj.Avanzar(TimeSpan.FromMinutes(1));
+
+        var editada = await _candidaturas.EditarAsync(creada.Id,
+            new GuardarCandidaturaRequest("Acme", "Otra", FechaUltimoCambioLeida: creada.FechaUltimoCambio.ToLocalTime()));
+
+        Assert.Equal("Otra", editada!.Puesto);
+    }
+
     // ---------------------------------------------------------------- análisis de AnalizarEncaje
 
     private static ResultadoAnalisisEncaje Analisis(Encaje? encaje = Encaje.Medio, string pega = "Piden inglés B2.",

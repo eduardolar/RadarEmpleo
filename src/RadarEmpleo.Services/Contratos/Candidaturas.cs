@@ -91,6 +91,10 @@ public sealed record RecordatorioDto(int Id, int? CandidaturaId, TipoRecordatori
 /// legítimo y no cambia ningún estado. El origen no viaja en la petición: lo pone el servidor (un «origen» que
 /// llegue se ignora).
 /// </summary>
+/// <param name="FechaUltimoCambioLeida">Solo al editar: la <c>FechaUltimoCambio</c> de la ficha que se tenía
+/// abierta. Si la candidatura ha cambiado desde entonces (otra pestaña, un análisis de Claude), no se guarda
+/// nada y da 409. Si no llega (un cliente anterior a este campo), se guarda como antes, sin comprobarla.
+/// En el alta se ignora.</param>
 public sealed record GuardarCandidaturaRequest(
     [Required(ErrorMessage = "La empresa es obligatoria."), MaxLength(200, ErrorMessage = "La empresa no puede tener más de 200 caracteres.")] string Empresa,
     [Required(ErrorMessage = "El puesto es obligatorio."), MaxLength(300, ErrorMessage = "El puesto no puede tener más de 300 caracteres.")] string Puesto,
@@ -103,7 +107,8 @@ public sealed record GuardarCandidaturaRequest(
     [MaxLength(2000, ErrorMessage = "La pega no puede tener más de 2000 caracteres.")] string? Pega = null,
     string? Analisis = null,
     [MaxLength(200, ErrorMessage = "El salario no puede tener más de 200 caracteres.")] string? Salario = null,
-    DateTime? FechaDeteccion = null);
+    DateTime? FechaDeteccion = null,
+    DateTime? FechaUltimoCambioLeida = null);
 
 /// <summary>
 /// Petición de cambio de estado. <paramref name="Estado"/> es obligatorio (es nullable solo para que

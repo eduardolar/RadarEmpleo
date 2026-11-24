@@ -284,7 +284,13 @@ describe('CandidaturasService', () => {
       it('al editar se cancela la recarga en camino', () => {
         const antigua = fichaConRecargaEnCamino();
 
-        service.editar(1, { empresa: 'Acme', puesto: 'Nuevo' }).subscribe();
+        service
+          .editar(1, {
+            empresa: 'Acme',
+            puesto: 'Nuevo',
+            fechaUltimoCambioLeida: '2026-10-27T08:00:00Z',
+          })
+          .subscribe();
         http
           .expectOne((r) => r.method === 'PUT' && r.url === '/api/candidaturas/1')
           .flush(crearDetalle({ id: 1, puesto: 'Nuevo' }));
@@ -403,7 +409,13 @@ describe('CandidaturasService', () => {
       suscripcion.unsubscribe();
       expect(abandonada.cancelled).toBe(true);
 
-      service.editar(2, { empresa: 'Acme', puesto: 'Dev' }).subscribe();
+      service
+        .editar(2, {
+          empresa: 'Acme',
+          puesto: 'Dev',
+          fechaUltimoCambioLeida: '2026-10-27T08:00:00Z',
+        })
+        .subscribe();
       http.expectOne((r) => r.method === 'PUT').flush(crearDetalle({ id: 2 }));
       esperarLista().flush(LISTA);
     });

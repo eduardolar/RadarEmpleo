@@ -19,9 +19,8 @@ namespace RadarEmpleo.Api.Errores;
 /// </summary>
 public sealed class ManejadorExcepciones(IProblemDetailsService problemDetails) : IExceptionHandler
 {
-    // También salta si un análisis de Claude la cambia mientras se edita la ficha
-    public const string MensajeCambiadaEnOtraPestana =
-        "Esta candidatura acaba de cambiar en otra pestaña o con un análisis de Claude. Recarga la página para ver cómo ha quedado.";
+    /// <summary>El mismo texto que da <see cref="CandidaturasService.EditarAsync"/> con una versión vieja.</summary>
+    public const string MensajeCambiadaEnOtraPestana = CandidaturasService.MensajeCambiadaEnOtraPestana;
 
     public async ValueTask<bool> TryHandleAsync(HttpContext http, Exception exception, CancellationToken cancellationToken)
     {

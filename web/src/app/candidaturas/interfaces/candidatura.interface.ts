@@ -118,7 +118,7 @@ export interface Recordatorio {
   fechaHecho: string | null;
 }
 
-/** Cuerpo de POST /api/candidaturas y PUT /api/candidaturas/{id}. La empresa va por nombre */
+/** Cuerpo de POST /api/candidaturas (y base del PUT, {@link EditarCandidatura}). La empresa va por nombre */
 export interface GuardarCandidatura {
   empresa: string;
   puesto: string;
@@ -132,6 +132,15 @@ export interface GuardarCandidatura {
   analisis?: string | null;
   salario?: string | null;
 }
+
+/** Cuerpo de PUT /api/candidaturas/{id}: los mismos datos y la versión que se leyó, siempre */
+export type EditarCandidatura = GuardarCandidatura & {
+  /**
+   * La `fechaUltimoCambio` de la ficha que se abrió. Si la candidatura ha cambiado desde entonces
+   * (otra pestaña, un análisis de Claude), la API no guarda nada y responde 409
+   */
+  fechaUltimoCambioLeida: string;
+};
 
 /** Cuerpo de POST /api/candidaturas/{id}/estado (el motivo es obligatorio al descartar) */
 export interface CambiarEstado {

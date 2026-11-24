@@ -8,6 +8,7 @@ import {
   CambiarEstado,
   CandidaturaDetalle,
   CandidaturaResumen,
+  EditarCandidatura,
   FiltroCandidaturas,
   GuardarCandidatura,
   Nota,
@@ -150,7 +151,7 @@ export class CandidaturasService {
     );
   }
 
-  editar(id: number, datos: GuardarCandidatura): Observable<CandidaturaDetalle> {
+  editar(id: number, datos: EditarCandidatura): Observable<CandidaturaDetalle> {
     return this.http.put<CandidaturaDetalle>(`${URL_CANDIDATURAS}/${id}`, datos).pipe(
       tap((detalle) => this.guardarDetalle(detalle)),
       conErrorApi(),

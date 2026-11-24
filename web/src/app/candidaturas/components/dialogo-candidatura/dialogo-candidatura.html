@@ -1,5 +1,23 @@
 <h2 mat-dialog-title>{{ candidatura ? 'Editar candidatura' : 'Nueva candidatura' }}</h2>
 <mat-dialog-content>
+  @if (conflicto()) {
+    <!-- tabindex: recibe el foco para que se vea aunque el formulario estuviera desplazado -->
+    <div
+      #avisoConflicto
+      role="alert"
+      tabindex="-1"
+      class="mt-2 rounded-md border-2 border-error bg-error-container px-4 py-3 text-sm text-on-error-container"
+    >
+      <p>
+        Esta candidatura ha cambiado mientras la editabas (en otra pestaña o con un análisis de
+        Claude).
+      </p>
+      <p class="mt-1">Si recargas la ficha, lo que has escrito aquí no se guarda.</p>
+      <button mat-stroked-button type="button" class="mt-2 min-h-11" (click)="recargar()">
+        Recargar la ficha
+      </button>
+    </div>
+  }
   <!-- Margen arriba: si no, la etiqueta del primer campo outline queda cortada bajo el título -->
   <app-formulario-candidatura
     #formulario
@@ -24,7 +42,7 @@
     type="submit"
     disabledInteractive
     [attr.form]="formulario.idFormulario"
-    [disabled]="guardando()"
+    [disabled]="guardando() || conflicto()"
   >
     {{ guardando() ? 'Guardando...' : textoGuardar }}
   </button>
