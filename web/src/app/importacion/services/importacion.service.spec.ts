@@ -231,6 +231,64 @@ describe('ImportacionService', () => {
       expect([...service.elegidas()]).toEqual(['nueva', 'avanza']);
     });
 
+    it('mientras guarda, o con claves que no se aplican, elegir no cambia nada', () => {
+      cargarVista(VISTA);
+
+      service.elegir(['existe', 'revisar', 'inventada'], true);
+      expect([...service.elegidas()]).toEqual(['nueva', 'avanza']);
+
+      service.aplicar().subscribe();
+      service.elegir(['nueva'], false);
+      expect([...service.elegidas()]).toEqual(['nueva', 'avanza']);
+      http.expectOne(URL_APLICAR).flush(crearResultado());
+      previsualizacion().flush(crearVista());
+    });
+
+    describe('con una elección hecha', () => {
+      const CON_AVISO = crearVista([
+        crearFila({ clave: 'nueva' }),
+        crearFila({ clave: 'aviso', avisos: ['Revisa la empresa.'] }),
+      ]);
+
+      it('volver a leer con la misma clave deja otra vez sin marcar la que lleva aviso', () => {
+        cargarVista(CON_AVISO);
+        service.elegir(['aviso'], true);
+
+        service.volverALeer();
+        previsualizacion().flush(CON_AVISO);
+
+        expect(service.elegidas().has('aviso')).toBe(false);
+      });
+
+      it('tras un 409, la vista nueva vuelve a la de por defecto y el segundo intento no manda la de aviso', () => {
+        cargarVista(CON_AVISO);
+        service.elegir(['aviso'], true);
+
+        service.aplicar().subscribe({ error: () => undefined });
+        http
+          .expectOne(URL_APLICAR)
+          .flush({ detail: 'Cambiado.' }, { status: 409, statusText: 'Conflict' });
+        previsualizacion().flush({ ...CON_AVISO, hashRegistro: 'c'.repeat(64) });
+
+        expect(service.elegidas().has('aviso')).toBe(false);
+        service.aplicar().subscribe();
+        expect(http.expectOne(URL_APLICAR).request.body.claves).toEqual(['nueva']);
+      });
+
+      it.each([400, 500])('tras un %i se conserva lo marcado', (status) => {
+        cargarVista(CON_AVISO);
+        service.elegir(['aviso'], true);
+        service.elegir(['nueva'], false);
+
+        service.aplicar().subscribe({ error: () => undefined });
+        http.expectOne(URL_APLICAR).flush({ detail: 'Fallo.' }, { status, statusText: 'Error' });
+
+        expect([...service.elegidas()]).toEqual(['aviso']);
+        service.aplicar().subscribe();
+        expect(http.expectOne(URL_APLICAR).request.body.claves).toEqual(['aviso']);
+      });
+    });
+
     it('un 400 da el detail y deja la vista previa para reintentar', () => {
       const detail = 'El puesto no puede tener más de 300 caracteres.';
       cargarVista(VISTA);

@@ -104,11 +104,20 @@ export class ImportacionService {
     );
   }
 
-  /** Marca o desmarca esas claves para aplicar */
+  /**
+   * Marca o desmarca esas claves para aplicar. Solo valen las de filas aplicables de la vista actual, y
+   * mientras guarda no se cambia nada: el lote que se está guardando ya salió con las de antes
+   */
   elegir(claves: readonly string[], marcadas: boolean): void {
+    if (this._aplicando()) {
+      return;
+    }
+    const aplicables = new Set(
+      filasAplicables(this._vistaPrevia()?.filas ?? []).map((f) => f.clave),
+    );
     this._elegidas.update((actuales) => {
       const elegidas = new Set(actuales);
-      for (const clave of claves) {
+      for (const clave of claves.filter((c) => aplicables.has(c))) {
         if (marcadas) {
           elegidas.add(clave);
         } else {
