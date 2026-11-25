@@ -41,8 +41,6 @@ describe('AjustesPageComponent', () => {
     const fixture = pintar();
     http.expectOne('/api/sistema/info').flush(INFO_CON_AGENTES);
     fixture.detectChanges();
-    // En el documento, para poder comprobar a dónde va el foco
-    document.body.appendChild(fixture.nativeElement);
     const bloque = () =>
       (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
         'section[aria-labelledby="titulo-agentes"]',
@@ -149,7 +147,7 @@ describe('AjustesPageComponent', () => {
 
       const contenido = texto(bloque());
       expect(contenido).toContain('La cola la lleva la otra copia de la API.');
-      expect(contenido).toContain('Hoy aún no has gastado nada; Claude tiene trabajo en marcha');
+      expect(contenido).toContain('Hoy aún no has usado nada; Claude tiene trabajo en marcha');
       expect(contenido).toContain('hasta el 4 % del tope de hoy');
       expect(bloque().querySelector('dd:last-of-type .font-mono')!.textContent).toBe('2.1.190');
       expect(contenido).toContain(
@@ -206,6 +204,39 @@ describe('AjustesPageComponent', () => {
 
       expect(bloque().querySelector('p[role="alert"]')).not.toBeNull();
       expect(boton.textContent!.trim()).toBe('Reintentar');
+      expect(document.activeElement).toBe(boton);
+    });
+
+    it('si el reintento da 403, pasa a «No disponibles ahora» y el foco va al título, no a <body>', () => {
+      const { fixture, bloque } = pintarConAgentes();
+      http.expectOne(URL_ESTADO).flush({ title: 'Fallo' }, { status: 500, statusText: 'Error' });
+      fixture.detectChanges();
+
+      const boton = bloque().querySelector<HTMLButtonElement>('button')!;
+      boton.focus();
+      boton.click();
+      fixture.detectChanges();
+      http.expectOne(URL_ESTADO).flush(null, PROHIBIDO);
+      fixture.detectChanges();
+
+      expect(boton.isConnected).toBe(false);
+      expect(texto(bloque())).toContain('No disponibles ahora');
+      expect(bloque().querySelector('[role="alert"]')).toBeNull();
+      expect(document.activeElement).toBe(bloque().querySelector('h2'));
+    });
+
+    it('si «Volver a comprobar» vuelve a dar 403, el botón sigue ahí con el foco', () => {
+      const { fixture, bloque } = pintarConAgentes();
+      http.expectOne(URL_ESTADO).flush(null, PROHIBIDO);
+      fixture.detectChanges();
+
+      const boton = bloque().querySelector<HTMLButtonElement>('button')!;
+      boton.focus();
+      boton.click();
+      http.expectOne(URL_ESTADO).flush(null, PROHIBIDO);
+      fixture.detectChanges();
+
+      expect(boton.isConnected).toBe(true);
       expect(document.activeElement).toBe(boton);
     });
 

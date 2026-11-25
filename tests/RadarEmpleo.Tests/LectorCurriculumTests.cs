@@ -145,7 +145,10 @@ public sealed class LectorCurriculumTests : IDisposable
     {
         var ex = await Assert.ThrowsAsync<ReglaNegocioException>(() => _lector.LeerRegistroAsync());
 
-        Assert.Contains(RutasCurriculum.ArchivoRegistro, ex.Message);
+        // Dice qué falta, cómo se llama y qué hacer, sin la ruta
+        Assert.Equal(
+            "Falta tu registro de candidaturas (ofertas-enviadas.md) en la carpeta Curriculum. Ponlo ahí y vuelve a intentarlo.",
+            ex.Message);
         Assert.DoesNotContain(_carpeta, ex.Message);
     }
 

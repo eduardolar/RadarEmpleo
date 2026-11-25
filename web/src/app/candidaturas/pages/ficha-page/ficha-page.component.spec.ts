@@ -837,7 +837,7 @@ describe('FichaPageComponent', () => {
       const gasto = elemento().querySelector(
         `#${botonAnalizar()!.getAttribute('aria-describedby')}`,
       );
-      expect(gasto?.textContent?.trim()).toBe('Gasta un poco de tu tope diario de Claude.');
+      expect(gasto?.textContent?.trim()).toBe('Usa un poco de tu tope diario de Claude.');
       expect(elemento().querySelectorAll('[mat-flat-button]')).toHaveLength(1);
     });
 

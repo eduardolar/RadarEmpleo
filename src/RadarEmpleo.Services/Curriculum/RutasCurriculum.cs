@@ -17,6 +17,25 @@ public sealed class RutasCurriculum
     /// <summary>Nombre del perfil de búsqueda dentro de la carpeta.</summary>
     public const string ArchivoPerfil = "perfil-busqueda.md";
 
+    /// <summary>
+    /// Lo que se le dice a Eduardo cuando la carpeta está pero falta el registro: qué es, cómo se llama y qué
+    /// hacer. «Vuelve a intentarlo» y no «vuelve a lanzar…»: sale igual al importar que en una tarea de Claude.
+    /// </summary>
+    public const string MensajeSinRegistro =
+        $"Falta tu registro de candidaturas ({ArchivoRegistro}) en la carpeta Curriculum. Ponlo ahí y vuelve a intentarlo.";
+
+    /// <summary>Lo mismo cuando falta el perfil (sale en la pantalla del perfil y al analizar el encaje).</summary>
+    public const string MensajeSinPerfil =
+        $"Falta tu perfil de búsqueda ({ArchivoPerfil}) en la carpeta Curriculum. Ponlo ahí y vuelve a intentarlo.";
+
+    /// <summary>El mensaje de que falta un archivo de la carpeta, por su nombre.</summary>
+    public static string MensajeSinArchivo(string nombre) => nombre switch
+    {
+        ArchivoRegistro => MensajeSinRegistro,
+        ArchivoPerfil => MensajeSinPerfil,
+        _ => $"Falta {nombre} en la carpeta Curriculum. Ponlo ahí y vuelve a intentarlo.",
+    };
+
     /// <summary>Carpeta de los CV y cartas de cada semana («Candidaturas\Semana …»).</summary>
     public const string CarpetaCandidaturas = "Candidaturas";
 

@@ -22,7 +22,7 @@ public class MensajesEjecucionTests
     [Fact]
     public void De_PresupuestoAgotado_DiceElTopeDeUsoDeLaTareaYQueReintentarPuedeGastarLoMismo()
     {
-        Assert.Equal("Ha llegado al tope de uso de esta tarea y la he parado. Si la reintentas, puede volver a gastar lo mismo.",
+        Assert.Equal("Ha llegado al tope de uso de esta tarea y la he parado. Si la reintentas, puede volver a usar lo mismo.",
             MensajesEjecucion.De(FalloClaude.PresupuestoAgotado, TimeSpan.FromMinutes(5)));
     }
 
@@ -61,7 +61,7 @@ public class MensajesEjecucionTests
     [Fact]
     public void MensajeReiniciadaAntesDeEmpezar_HablaDeLaAppYDiceQueHacer()
     {
-        Assert.Equal("La app se cerró antes de empezar. Vuelve a lanzarla.", EjecucionAgente.MensajeReiniciadaAntesDeEmpezar);
+        Assert.Equal("La app se cerró antes de empezar. Reinténtala.", EjecucionAgente.MensajeReiniciadaAntesDeEmpezar);
     }
 
     public static TheoryData<string> Fijos =>

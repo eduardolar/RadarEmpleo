@@ -16,7 +16,7 @@ public static class MensajesEjecucion
 
     /// <summary>Otra copia de la API (otra ventana, otro arranque) tiene la cola de esta base de datos.</summary>
     public const string OtraCopiaLlevaLaCola =
-        "Otra copia de RadarEmpleo lleva los agentes de esta base de datos. Lánzalos desde esa o ciérrala y vuelve a intentarlo en un momento.";
+        "Otra copia de RadarEmpleo lleva los agentes de esta base de datos. Usa esa, o ciérrala y vuelve a intentarlo en un momento.";
 
     /// <summary>La cola todavía no ha arrancado (o se está cerrando).</summary>
     public const string ColaSinArrancar = "Los agentes todavía no están listos. Vuelve a intentarlo en un momento.";
@@ -26,7 +26,7 @@ public static class MensajesEjecucion
         $"No puedo usar los agentes: el archivo de control junto a la base de datos {detalle}.";
 
     /// <summary>Error cuando una ejecución se pasa del tope de uso de su tarea (<c>--max-budget-usd</c>).</summary>
-    public const string TopeTarea = "Ha llegado al tope de uso de esta tarea y la he parado. Si la reintentas, puede volver a gastar lo mismo.";
+    public const string TopeTarea = "Ha llegado al tope de uso de esta tarea y la he parado. Si la reintentas, puede volver a usar lo mismo.";
 
     /// <summary>Una tarea por partes que se ha preparado con más partes, más tiempo o más uso de los que tiene: no se lanza.</summary>
     public const string PartesNoCaben =

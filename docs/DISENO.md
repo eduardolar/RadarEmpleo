@@ -614,7 +614,7 @@ borde fino (`borde-fino`), fondo de tarjeta y sin sombra dura. De arriba abajo:
   | Se ha pedido cancelar     | «Cancelando… se parará en unos segundos.»                                           |
   | Hecha                     | «Hecha en 2 min 10 s · uso estimado: 1 % del tope de hoy»                           |
   | No ha salido              | «No ha salido. {el motivo que da la API, que dice qué hacer}»                       |
-  | Cancelada sin empezar     | «Cancelada antes de empezar. No ha gastado nada.»                                   |
+  | Cancelada sin empezar     | «Cancelada antes de empezar. No ha usado nada.»                                     |
   | Cancelada a medias        | «Cancelada antes de terminar · uso estimado: …»                                     |
   | La API ya no la encuentra | «Ya no se encuentra esta tarea de Claude. Si hace falta, vuelve a lanzarla.»        |
 
@@ -650,16 +650,16 @@ su unidad («3 %», «5 min») para que no se partan de línea:
 | ----------------------------------------- | -------------------------------------------------------------------- |
 | Con el coste                              | «uso estimado: 1 % del tope de hoy»                                  |
 | Ha gastado algo, pero no llega al 1 %     | «uso estimado: menos del 1 % del tope de hoy»                        |
-| No ha gastado (una oferta cerrada)        | «no ha gastado nada de tu tope de hoy»                               |
+| No ha gastado (una oferta cerrada)        | «no ha usado nada de tu tope de hoy»                                 |
 | En curso                                  | «uso estimado: como mucho el 3 % del tope de hoy»                    |
 | Terminada sin saber el coste              | «uso estimado: no se sabe, como mucho el 3 % del tope de hoy»        |
 | De otro día                               | lo mismo, con «del tope diario»                                      |
 | El día entero                             | «Uso estimado de tu suscripción hoy: 3 % del tope»                   |
 | El día, sin usar                          | «Hoy aún no has usado Claude»                                        |
-| El día, sin gasto pero con algo en marcha | «Hoy aún no has gastado nada; Claude tiene trabajo en marcha»        |
+| El día, sin gasto pero con algo en marcha | «Hoy aún no has usado nada; Claude tiene trabajo en marcha»          |
 | Lo reservado                              | «Reservado para lo que está en marcha: hasta el 4 % del tope de hoy» |
 
-Debajo de cada botón que lanza una tarea, en letra pequeña y gris: «Gasta un poco de tu tope
+Debajo de cada botón que lanza una tarea, en letra pequeña y gris: «Usa un poco de tu tope
 diario de Claude.».
 
 **Variante compacta** (`compacta`), para la lista de `/agentes`: sin marco y sin barra, la insignia
@@ -675,12 +675,22 @@ no.». Sin relleno lima.
 - **«Uso de hoy»**: tarjeta de borde fino con la frase del uso en grande (18 px, seminegrita) y en
   tinta, sin rojo ni ámbar: se lee de un vistazo sin parecer un aviso. Debajo, lo reservado si hay
   algo en marcha.
-- **«Últimas tareas»**: las 50 últimas en una sola tarjeta de borde fino, separadas por una línea
-  fina. Cada fila: el nombre de la tarea («Análisis del encaje», «Lectura del registro») con la
-  fecha en monoespaciada a la derecha, como un registro; el enlace a la candidatura («puesto en
+- **«Últimas tareas»**: las 50 últimas, agrupadas por día («Hoy», «Ayer» o la fecha, en
+  monoespaciada y mayúsculas); cada día, una tarjeta de borde fino con sus filas separadas por una
+  línea fina. Cada fila: el nombre de la tarea («Análisis del encaje», «Lectura del registro») con
+  la hora en monoespaciada a la derecha, como un registro; el enlace a la candidatura («puesto en
   empresa», subrayado y con 48 px de toque); y la tarjeta compacta. «Reintentar» solo sale en la
   última de cada tarea y candidatura. Al terminar, reintentar o perderse una tarea, la lista y el
   uso se refrescan sin vaciarse.
+  - **Recuento y filtro**, encima de la lista: «Hoy: 3 tareas · 1 no ha salido» (solo lo lanzado
+    hoy; sin fallos, «Hoy: 3 tareas») y tres chips con `aria-pressed`, como los del Tablero en el
+    móvil: «Todas», «No han salido» y «En marcha». El filtro vale para todos los días; si no deja
+    nada, lo dice en un `role="status"` («Ninguna tarea ha fallado.», «Ahora mismo no hay ninguna
+    tarea en marcha.»).
+  - **Errores ya resueltos**: si la misma tarea con la misma candidatura salió bien después, la
+    fila va atenuada (60 %) y debajo, sin atenuar, «Resuelto: salió bien después.».
+  - **«Ver en Importación»**: en la última lectura del registro, si terminó bien (Importación
+    enseña esa, no las anteriores).
 - **Estado vacío**: una terminal en un bloque de tinta con el cursor en lima, «Todavía no has
   lanzado ninguna tarea de Claude.», «Se lanzan desde la ficha de una candidatura o desde
   Importación.» en monoespaciada, e «Ir al Tablero» e «Ir a Importación», con borde. Sin marco: va
@@ -689,7 +699,11 @@ no.». Sin relleno lima.
   demo, «En la demo no se usa Claude: los agentes están apagados.»; desde el móvil, «Los agentes de
   Claude solo se pueden usar desde el PC donde está instalada la app.»; apagados, dónde se
   encienden. Si la API los rechaza estando en el PC, «Ahora mismo no se puede usar Claude desde
-  aquí. Vuelve a comprobarlo en un momento.» con «Volver a comprobar» (de texto).
+  aquí. Vuelve a comprobarlo en un momento.» con «Volver a comprobar» (de texto). Mientras espera,
+  el botón dice «Comprobando…»; si no sirve, debajo sale «Sigue sin poder usarse Claude desde
+  aquí. Prueba otra vez dentro de un momento.» (o el fallo que dé la API) en un `role="status"`; si
+  contesta bien, el foco va al título de «Uso de hoy». Si es un reintento del uso el que da 403,
+  el foco va a la explicación, nunca a `<body>`.
 
 **Bloque «Agentes de Claude» de Ajustes.** Un `dl` como el de «Esta app»:
 
@@ -727,7 +741,7 @@ momento.» con «Reintentar».
 
 - El aviso «Hay unos N envíos escritos como texto, fuera de la tabla: Claude puede leerlos.» y el
   botón con borde **«Extraer el texto libre con Claude»**. Debajo: «Claude solo lee: verás lo que
-  encuentre antes de añadir nada. Gasta un poco de tu tope diario de Claude.».
+  encuentre antes de añadir nada. Usa un poco de tu tope diario de Claude.».
 - Mientras trabaja, la tarjeta (con la pausa contra el doble toque) y «Puede tardar un rato si el
   texto es largo. Puedes salir: la tarea sigue y la verás aquí al volver.».
 - **Vista combinada.** Al terminar, la misma lista enseña la tabla y lo leído juntos. Lo primero es

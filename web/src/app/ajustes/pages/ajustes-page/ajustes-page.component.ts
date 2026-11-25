@@ -87,13 +87,15 @@ export default class AjustesPageComponent {
       }
     });
     // Al acabar de volver a pedirlo: si ha salido bien, el botón pulsado desaparece y el foco va al
-    // título del bloque y no a <body>
+    // título del bloque y no a <body>. Lo mismo si «Reintentar» da 403: su botón se va con el aviso
+    // («Volver a comprobar» sí sigue ahí tras otro 403, y conserva el foco)
     effect(() => {
       if (this.recuperando() && !this.cargandoEstado()) {
         untracked(() => {
+          const eraReintento = this.reintentando();
           this.recuperando.set(false);
           this.reintentando.set(false);
-          if (this.disponibles() && this.agentes.errorEstado() === null) {
+          if ((this.disponibles() || eraReintento) && this.agentes.errorEstado() === null) {
             this.titulo()?.nativeElement.focus();
           }
         });

@@ -15,13 +15,22 @@ import { RouterLink } from '@angular/router';
 import { SistemaService } from '../../../core/services/sistema.service';
 import { CabeceraPagina } from '../../../shared/components/cabecera-pagina/cabecera-pagina';
 import { EnlaceVolver } from '../../../shared/components/enlace-volver/enlace-volver';
-import { FechaMadridPipe } from '../../../shared/pipes/fecha-madrid.pipe';
+import { diaMadrid, horaMadrid } from '../../../shared/utils/fechas-madrid';
 import { EstadoEjecucion } from '../../components/estado-ejecucion/estado-ejecucion';
 import { AgentesService } from '../../services/agentes.service';
+import {
+  agruparPorDia,
+  erroresResueltos,
+  FILTROS_TAREAS,
+  FiltroTareas,
+  pasaElFiltro,
+  recuentoDeHoy,
+} from '../../utils/tareas-por-dia';
 import {
   motivoSinAgentes,
   NOMBRE_TAREA,
   reservaDelDia,
+  TEXTO_SIGUE_RECHAZADO,
   usoDelDia,
 } from '../../utils/textos-ejecucion';
 import { ultimasDeCadaTarea } from '../../utils/ultimas-ejecuciones';
@@ -36,7 +45,6 @@ import { ultimasDeCadaTarea } from '../../utils/ultimas-ejecuciones';
     CabeceraPagina,
     EnlaceVolver,
     EstadoEjecucion,
-    FechaMadridPipe,
     MatButtonModule,
     MatProgressBarModule,
     RouterLink,
@@ -61,6 +69,16 @@ export default class AgentesPageComponent {
       (this.reintentandoUso() && this.cargandoEstado() ? this.ultimoErrorUso() : null),
   );
   private readonly tituloUso = viewChild<ElementRef<HTMLElement>>('tituloUso');
+  private readonly textoMotivo = viewChild<ElementRef<HTMLElement>>('textoMotivo');
+  /** Adónde va el foco cuando el botón pulsado desaparece con su panel; se lleva al pintarse el destino */
+  private readonly focoPendiente = signal<'uso' | 'motivo' | null>(null);
+  /** «Volver a comprobar» pulsado y sin respuesta todavía */
+  private readonly comprobando = signal(false);
+  protected readonly esperandoComprobacion = computed(
+    () => this.comprobando() && this.cargandoEstado(),
+  );
+  /** Lo que dio la última comprobación a mano, si no sirvió: sin esto, el botón no parece hacer nada */
+  protected readonly resultadoComprobacion = signal<string | null>(null);
   protected readonly historial = this.agentes.historial;
   protected readonly cargando = this.agentes.cargandoHistorial;
   protected readonly errorHistorial = this.agentes.errorHistorial;
@@ -87,6 +105,21 @@ export default class AgentesPageComponent {
   });
 
   protected readonly ultimas = computed(() => ultimasDeCadaTarea(this.historial() ?? []));
+  protected readonly resueltos = computed(() => erroresResueltos(this.historial() ?? []));
+
+  protected readonly filtros = FILTROS_TAREAS;
+  protected readonly filtro = signal<FiltroTareas>('todas');
+  /** El día de Madrid que da la API con el uso; mientras no llega, el de este reloj */
+  private readonly hoy = computed(() => this.gasto()?.hoy ?? diaMadrid(new Date()));
+  protected readonly recuento = computed(() => recuentoDeHoy(this.historial() ?? [], this.hoy()));
+  protected readonly dias = computed(() => {
+    const filtro = this.filtro();
+    return agruparPorDia(
+      (this.historial() ?? []).filter((e) => pasaElFiltro(e, filtro)),
+      this.hoy(),
+    );
+  });
+  protected readonly hora = horaMadrid;
 
   private refrescoPendiente = false;
   private destruida = false;
@@ -102,9 +135,33 @@ export default class AgentesPageComponent {
         untracked(() => {
           this.reintentandoUso.set(false);
           if (this.agentes.errorEstado() === null) {
-            this.tituloUso()?.nativeElement.focus();
+            // Con un 403 desaparece el bloque entero: el foco va a la explicación que lo sustituye
+            this.focoPendiente.set(this.disponibles() ? 'uso' : 'motivo');
           }
         });
+      }
+    });
+    // Al contestar «Volver a comprobar»: si ha salido bien, el panel desaparece con su botón y el foco
+    // va al título de «Uso de hoy»; si no, se dice debajo del botón, que sigue ahí
+    effect(() => {
+      if (this.comprobando() && !this.cargandoEstado()) {
+        untracked(() => {
+          this.comprobando.set(false);
+          if (this.disponibles()) {
+            this.focoPendiente.set('uso');
+          } else {
+            this.resultadoComprobacion.set(this.agentes.errorEstado() ?? TEXTO_SIGUE_RECHAZADO);
+          }
+        });
+      }
+    });
+    // El destino no existe hasta que se pinta el bloque nuevo: se espera a que aparezca
+    effect(() => {
+      const destino = this.focoPendiente();
+      const elemento = destino === 'uso' ? this.tituloUso() : this.textoMotivo();
+      if (destino !== null && elemento) {
+        elemento.nativeElement.focus();
+        untracked(() => this.focoPendiente.set(null));
       }
     });
     inject(DestroyRef).onDestroy(() => (this.destruida = true));
@@ -161,9 +218,23 @@ export default class AgentesPageComponent {
   }
 
   /** Tras un 403: si ahora contesta bien, el efecto pide la lista; si vuelve a dar 403, se queda así */
-  protected volverAComprobar(): void {
+  private volverAComprobar(): void {
     this.estadoRecienPedido = true;
     this.agentes.cargarEstado();
+  }
+
+  /** El botón «Volver a comprobar»: como `volverAComprobar`, pero diciendo qué pasa mientras y después */
+  protected comprobarAMano(): void {
+    if (this.esperandoComprobacion()) {
+      return;
+    }
+    this.resultadoComprobacion.set(null);
+    this.comprobando.set(true);
+    this.volverAComprobar();
+  }
+
+  protected filtrar(filtro: FiltroTareas): void {
+    this.filtro.set(filtro);
   }
 
   protected reintentarConexion(): void {

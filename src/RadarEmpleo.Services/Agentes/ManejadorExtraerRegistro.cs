@@ -21,12 +21,12 @@ namespace RadarEmpleo.Services.Agentes;
 /// </summary>
 public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurriculum rutas, OpcionesEjecutor opciones) : IManejadorTarea
 {
-    public const string MensajeSinRegistro = $"No se encuentra {RutasCurriculum.ArchivoRegistro} en la carpeta Curriculum.";
+    public const string MensajeSinRegistro = RutasCurriculum.MensajeSinRegistro;
     public const string MensajeSinTextoLibre = "El registro no tiene texto libre fuera de la tabla y los rastreos: no hay nada que extraer.";
     public const string MensajeDemasiadoLargo =
         "El texto libre del registro es demasiado largo para leerlo con Claude: haría falta leerlo en más de 6 partes.";
-    public const string MensajeRegistroCambiandoAlEmpezar = "El registro ha cambiado justo al empezar la extracción. Vuelve a lanzarla.";
-    public const string MensajeRegistroSinHashAlEmpezar = "No se ha podido leer el registro al empezar. Vuelve a lanzarla.";
+    public const string MensajeRegistroCambiandoAlEmpezar = "El registro ha cambiado justo al empezar la extracción. Reinténtala.";
+    public const string MensajeRegistroSinHashAlEmpezar = "No se ha podido leer el registro al empezar. Reinténtala.";
 
     /// <summary>
     /// Recorte de seguridad del texto libre (unos 100.000 tokens): si se pasa, no se lanza. Lo normal es que antes se pase de

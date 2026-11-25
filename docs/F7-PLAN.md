@@ -1249,6 +1249,8 @@ Lista única, sacada de los «Pendientes menores» de los PR 4 a 8, de lo que la
 
 **PR 12b: pulir las pantallas de Claude** (front y sus textos)
 
+*(Hecho en `f7b-22-agentes-12b`, salvo el último punto, que se queda como está. Lo de Importación ya salió en los PR #40 y #43. De paso, los textos de la UX de cierre: «usar» por «gastar», «Reinténtala» y la otra copia de la app sin «Lánzalos».)*
+
 - `/agentes`: el recuento de fallos arriba con un filtro, los errores ya resueltos atenuados y la lista agrupada por día (propuesta de experto-ux en el PR 12).
 - El mensaje técnico que da la API cuando falta un archivo: decirlo en claro (PR 12).
 - Ajustes: adónde va el foco si un reintento da 403, y la limpieza de un spec (PR 13).
