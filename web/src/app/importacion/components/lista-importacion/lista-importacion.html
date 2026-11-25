@@ -1,6 +1,6 @@
 <ul class="flex flex-col gap-2">
   <!-- Por posición: una fila repetida en el registro trae la misma clave que la primera -->
-  @for (fila of filas(); track $index) {
+  @for (fila of filas(); track $index; let i = $index) {
     <!-- data-estado: la franja y el chip toman el color del estado que dice el chip (styles.css) -->
     <li
       [attr.data-estado]="
@@ -12,10 +12,28 @@
     >
       <span aria-hidden="true" class="absolute inset-y-0 left-0 w-1 bg-estado"></span>
 
-      <p class="text-xs font-medium text-on-surface-variant">{{ fila.empresa }}</p>
-      <p class="mt-0.5 text-[0.9375rem] leading-snug font-semibold text-on-surface">
-        {{ fila.puesto }}
-      </p>
+      <div class="flex items-start gap-2">
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-medium text-on-surface-variant">{{ fila.empresa }}</p>
+          <p class="mt-0.5 text-[0.9375rem] leading-snug font-semibold text-on-surface">
+            {{ fila.puesto }}
+          </p>
+        </div>
+        <!-- A la derecha: así el resto de la fila queda alineado con la empresa. Los márgenes negativos
+             compensan el hueco táctil de 40 px de la casilla. $any: mat-checkbox tipa aria-describedby como
+             string, pero lo pinta con [attr.]: con null no sale el atributo vacío -->
+        @if (elegidas(); as elegidas) {
+          <mat-checkbox
+            class="-my-2 -mr-2 shrink-0"
+            [checked]="elegidas.has(fila.clave)"
+            [disabled]="bloqueada()"
+            [disabledInteractive]="true"
+            [aria-label]="etiquetaCasilla(fila)"
+            [aria-describedby]="$any(idsAvisos(i, fila))"
+            (change)="elegir.emit({ clave: fila.clave, marcada: $event.checked })"
+          />
+        }
+      </div>
 
       <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         <span class="insignia bg-estado-suave text-on-estado">
@@ -48,8 +66,11 @@
           {{ fila.motivo }}
         </p>
       }
-      @for (aviso of fila.avisos; track $index) {
-        <p class="mt-2 flex items-start gap-1.5 text-sm text-on-surface-variant">
+      @for (aviso of fila.avisos; track $index; let j = $index) {
+        <p
+          [id]="idAviso(i, j)"
+          class="mt-2 flex items-start gap-1.5 text-sm text-on-surface-variant"
+        >
           <svg
             aria-hidden="true"
             viewBox="0 0 20 20"

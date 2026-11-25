@@ -13,6 +13,7 @@ import {
   AVISO_RADAR,
   EXPLICACION_PARA_REVISAR,
   EXPLICACION_SIN_LEER,
+  EXPLICACION_SIN_MARCAR,
   EXPLICACION_YA_EXISTEN,
 } from '../../utils/resumen-importacion';
 import { ImportacionService } from '../../services/importacion.service';
@@ -80,7 +81,7 @@ describe('ImportacionPageComponent', () => {
 
   function botonesAplicar(): HTMLButtonElement[] {
     return [...elemento().querySelectorAll('button')].filter((b) =>
-      /Añadir|Actualizar|Guardando/.test(b.textContent ?? ''),
+      /Añadir|Actualizar|Guardando|Marca al menos/.test(b.textContent ?? ''),
     );
   }
 
@@ -110,6 +111,19 @@ describe('ImportacionPageComponent', () => {
     return [...elemento().querySelectorAll('details')].find((d) =>
       d.querySelector('summary')?.textContent?.includes(titulo),
     );
+  }
+
+  function casillas(dentro: ParentNode = elemento()): HTMLInputElement[] {
+    return [...dentro.querySelectorAll<HTMLInputElement>('mat-checkbox input[type="checkbox"]')];
+  }
+
+  function casilla(etiqueta: string): HTMLInputElement | undefined {
+    return casillas().find((c) => c.getAttribute('aria-label') === etiqueta);
+  }
+
+  async function pulsar(control: HTMLElement): Promise<void> {
+    control.click();
+    await fixture.whenStable();
   }
 
   async function pulsarAplicar(): Promise<void> {
@@ -213,6 +227,185 @@ describe('ImportacionPageComponent', () => {
       await pulsarAplicar();
 
       http.expectOne(URL_APLICAR).flush(crearResultado());
+      await responderVista(AL_DIA);
+    });
+  });
+
+  describe('elegir fila a fila', () => {
+    const CON_AVISO = crearFila({
+      clave: 'aviso',
+      empresa: 'Gamma',
+      puesto: 'Backend',
+      avisos: ['Revisa la empresa: no aparece en la línea.'],
+    });
+
+    it('cada fila que se añade o actualiza lleva su casilla, con empresa y puesto; las demás no', async () => {
+      await abrirCon([
+        NUEVA,
+        AVANZA,
+        crearFila({ clave: 'existe', resultado: 'YaExiste' }),
+        crearFila({ clave: 'c', resultado: 'Conflicto' }),
+      ]);
+
+      expect(casillas().map((c) => c.getAttribute('aria-label'))).toEqual([
+        'Añadir: Desarrollador Angular en Acme',
+        'Actualizar: Desarrollador Angular en Acme',
+      ]);
+      expect(casillas(grupo('Ya las tienes')!)).toHaveLength(0);
+      expect(casillas(grupo('Para revisar')!)).toHaveLength(0);
+    });
+
+    it('por defecto van marcadas las que no llevan aviso, y se explica por qué las otras no', async () => {
+      await abrirCon([NUEVA, CON_AVISO]);
+
+      expect(casilla('Añadir: Desarrollador Angular en Acme')?.checked).toBe(true);
+      expect(casilla('Añadir: Backend en Gamma')?.checked).toBe(false);
+      expect(seccion('Se van a añadir (1 de 2)')?.textContent).toContain(EXPLICACION_SIN_MARCAR);
+      expect(botonAplicar()?.textContent).toContain('Añadir 1 candidatura');
+
+      await pulsarAplicar();
+      expect(http.expectOne(URL_APLICAR).request.body.claves).toEqual(['nueva']);
+    });
+
+    it('sin avisos no dice nada de las que salen sin marcar', async () => {
+      await abrirCon([NUEVA, AVANZA]);
+
+      expect(elemento().textContent).not.toContain(EXPLICACION_SIN_MARCAR);
+    });
+
+    it('el botón cuenta solo las marcadas y manda solo esas', async () => {
+      await abrirCon([NUEVA, CON_AVISO, AVANZA]);
+
+      await pulsar(casilla('Añadir: Backend en Gamma')!);
+      expect(botonAplicar()?.textContent).toContain('Añadir 2 candidaturas y actualizar 1');
+
+      await pulsar(casilla('Actualizar: Desarrollador Angular en Acme')!);
+      expect(botonAplicar()?.textContent).toContain('Añadir 2 candidaturas');
+      expect(botonAplicar()?.textContent).not.toContain('actualizar');
+
+      await pulsarAplicar();
+      expect(http.expectOne(URL_APLICAR).request.body.claves).toEqual(['nueva', 'aviso']);
+    });
+
+    it('con ninguna marcada el botón dice qué falta, se desactiva y no manda nada', async () => {
+      await abrirCon([NUEVA]);
+
+      await pulsar(casilla('Añadir: Desarrollador Angular en Acme')!);
+
+      expect(botonAplicar()?.textContent).toContain('Marca al menos una candidatura');
+      expect(botonAplicar()?.getAttribute('aria-disabled')).toBe('true');
+      await pulsarAplicar();
+      http.expectNone(URL_APLICAR);
+    });
+
+    it('«Marcar todas» y «Desmarcar todas» van por grupo y sin volver a leer nada', async () => {
+      await abrirCon([NUEVA, AVANZA, { ...AVANZA, clave: 'avanza2' }, { ...NUEVA, clave: 'otra' }]);
+      const nuevas = seccion('Se van a añadir')!;
+      const avanzan = seccion('Cambian de estado')!;
+
+      expect(boton('Desmarcar todas', avanzan)?.getAttribute('aria-describedby')).toBe(
+        'titulo-avanzan',
+      );
+      await pulsar(boton('Desmarcar todas', avanzan)!);
+      expect(casillas(avanzan).some((c) => c.checked)).toBe(false);
+      expect(casillas(nuevas).every((c) => c.checked)).toBe(true);
+      expect(botonAplicar()?.textContent).toContain('Añadir 2 candidaturas');
+
+      await pulsar(boton('Marcar todas', avanzan)!);
+      expect(casillas(avanzan).every((c) => c.checked)).toBe(true);
+      expect(boton('Desmarcar todas', avanzan)).toBeDefined();
+      http.expectNone(URL_PREVISUALIZAR);
+    });
+
+    it('con avisos en el grupo, marcar de golpe deja sin marcar las de aviso: esas, una a una', async () => {
+      await abrirCon([NUEVA, CON_AVISO]);
+      const nuevas = seccion('Se van a añadir')!;
+
+      // Las sin aviso ya están marcadas: el botón desmarca las marcadas (la de aviso no lo está)
+      await pulsar(boton('Desmarcar las marcadas', nuevas)!);
+      expect(casillas(nuevas).some((c) => c.checked)).toBe(false);
+      expect(boton('Marcar todas', nuevas)).toBeUndefined();
+
+      await pulsar(boton('Marcar las que no llevan aviso', nuevas)!);
+      expect(casilla('Añadir: Desarrollador Angular en Acme')?.checked).toBe(true);
+      expect(casilla('Añadir: Backend en Gamma')?.checked).toBe(false);
+
+      await pulsar(casilla('Añadir: Backend en Gamma')!);
+      await pulsar(boton('Desmarcar todas', nuevas)!);
+      expect(casillas(nuevas).some((c) => c.checked)).toBe(false);
+    });
+
+    it('si todas llevan aviso y ninguna está marcada, el botón sigue pero desactivado y no se pierde el foco', async () => {
+      await abrirCon([CON_AVISO, { ...CON_AVISO, clave: 'aviso2', puesto: 'Frontend' }]);
+      const desactivado = boton('Marcar las que no llevan aviso')!;
+      expect(desactivado.getAttribute('aria-disabled')).toBe('true');
+      await pulsar(desactivado);
+      expect(casillas().some((c) => c.checked)).toBe(false);
+
+      await pulsar(casilla('Añadir: Backend en Gamma')!);
+      const desmarcar = boton('Desmarcar las marcadas')!;
+      desmarcar.focus();
+      await pulsar(desmarcar);
+
+      expect(casillas().some((c) => c.checked)).toBe(false);
+      expect(document.activeElement).toBe(desmarcar);
+      expect(desmarcar.textContent).toContain('Marcar las que no llevan aviso');
+      expect(desmarcar.getAttribute('aria-disabled')).toBe('true');
+    });
+
+    it('la casilla de una fila con aviso lo lee al enfocarla', async () => {
+      await abrirCon([NUEVA, CON_AVISO]);
+
+      const ids = casilla('Añadir: Backend en Gamma')!.getAttribute('aria-describedby')!;
+      expect(elemento().querySelector(`[id="${ids}"]`)?.textContent).toContain(
+        'Revisa la empresa: no aparece en la línea.',
+      );
+      expect(
+        casilla('Añadir: Desarrollador Angular en Acme')?.hasAttribute('aria-describedby'),
+      ).toBe(false);
+    });
+
+    it('al marcar o desmarcar, anuncia cómo queda el botón', async () => {
+      await abrirCon([NUEVA, CON_AVISO]);
+      const anuncio = () =>
+        elemento().querySelector('.sr-only[aria-live="polite"]')?.textContent?.trim();
+
+      expect(anuncio()).toBe('');
+      await pulsar(casilla('Añadir: Backend en Gamma')!);
+      expect(anuncio()).toBe('Añadir 2 candidaturas');
+      await pulsar(boton('Desmarcar todas')!);
+      expect(anuncio()).toBe('Marca al menos una candidatura');
+    });
+
+    it('con una sola fila en el grupo no hace falta «Marcar todas»', async () => {
+      await abrirCon([NUEVA]);
+
+      expect(boton('Marcar todas')).toBeUndefined();
+      expect(boton('Desmarcar todas')).toBeUndefined();
+    });
+
+    it('al volver a leer el archivo, la elección vuelve a la de por defecto', async () => {
+      await abrirCon([NUEVA, CON_AVISO]);
+      await pulsar(casilla('Añadir: Desarrollador Angular en Acme')!);
+      await pulsar(casilla('Añadir: Backend en Gamma')!);
+
+      await pulsar(boton('Leer el archivo otra vez')!);
+      await responderVista(crearVista([NUEVA, CON_AVISO], { hashRegistro: 'b'.repeat(64) }));
+
+      expect(casilla('Añadir: Desarrollador Angular en Acme')?.checked).toBe(true);
+      expect(casilla('Añadir: Backend en Gamma')?.checked).toBe(false);
+    });
+
+    it('mientras guarda no se puede cambiar lo elegido', async () => {
+      await abrirCon([NUEVA, { ...NUEVA, clave: 'otra' }]);
+
+      await pulsarAplicar();
+
+      casillas().forEach((c) => expect(c.getAttribute('aria-disabled')).toBe('true'));
+      await pulsar(casillas()[0]);
+      await pulsar(boton('Desmarcar todas')!);
+      expect(casillas().every((c) => c.checked)).toBe(true);
+      http.expectOne(URL_APLICAR).flush(crearResultado({ creadas: 2 }));
       await responderVista(AL_DIA);
     });
   });
@@ -893,7 +1086,7 @@ describe('ImportacionPageComponent', () => {
       await abrirCombinada();
 
       expect(boton('Ver solo la tabla')).toBeDefined();
-      const filas = seccion('Se van a añadir (2)')!.querySelectorAll('li');
+      const filas = seccion('Se van a añadir (1 de 2)')!.querySelectorAll('li');
       expect(filas[0].textContent).not.toContain('Leída con Claude');
       expect(filas[1].textContent).toContain('Leída con Claude');
       expect(filas[1].textContent).toContain(REVISA);
@@ -915,6 +1108,9 @@ describe('ImportacionPageComponent', () => {
     it('«Aplicar» manda el origen, la ejecución, el hash y las claves, y vuelve a leer la combinada', async () => {
       await abrirCombinada();
 
+      // La de Gamma lleva aviso: sale sin marcar hasta que se marca
+      casilla('Añadir: Desarrollador Angular en Gamma')!.click();
+      await pasan(MARGEN_PINTADO_MS);
       botonAplicar()!.click();
       const peticion = http.expectOne(URL_APLICAR);
       expect(peticion.request.body).toEqual({

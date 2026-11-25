@@ -1,6 +1,7 @@
 import { ResumenImportacion } from '../interfaces/importacion.interface';
 import { crearFila, crearResultado } from './importacion-de-prueba';
 import {
+  clavesPorDefecto,
   filasAplicables,
   filasConResultado,
   lineasResumen,
@@ -48,6 +49,20 @@ describe('filasAplicables', () => {
     ];
 
     expect(filasAplicables(filas).map((f) => f.clave)).toEqual(['a']);
+  });
+});
+
+describe('clavesPorDefecto', () => {
+  it('marca las aplicables sin aviso: las que llevan aviso y las que no se aplican, no', () => {
+    const filas = [
+      crearFila({ clave: 'a', resultado: 'Nueva' }),
+      crearFila({ clave: 'b', resultado: 'AvanzaEstado' }),
+      crearFila({ clave: 'c', resultado: 'Nueva', avisos: ['Revisa la empresa.'] }),
+      crearFila({ clave: 'd', resultado: 'YaExiste' }),
+      crearFila({ clave: 'e', resultado: 'Conflicto' }),
+    ];
+
+    expect([...clavesPorDefecto(filas)]).toEqual(['a', 'b']);
   });
 });
 
@@ -110,6 +125,11 @@ describe('textoBotonAplicar', () => {
     expect(textoBotonAplicar(resumen({ nuevas: 3, avanzan: 2 }))).toBe(
       'Añadir 3 candidaturas y actualizar 2',
     );
+  });
+
+  it('con nada elegido no dice «0 candidaturas»: dice qué falta', () => {
+    expect(textoBotonAplicar({ nuevas: 0, avanzan: 0 })).toBe('Marca al menos una candidatura');
+    expect(textoBotonAplicar({ nuevas: 0, avanzan: 1 })).toBe('Actualizar 1 candidatura');
   });
 });
 

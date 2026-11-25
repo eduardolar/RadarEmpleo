@@ -10,6 +10,7 @@ import {
   ElementRef,
   inject,
   Injector,
+  linkedSignal,
   signal,
   untracked,
   viewChild,
@@ -31,7 +32,7 @@ import { EnlaceVolver } from '../../../shared/components/enlace-volver/enlace-vo
 import { SeccionPlegable } from '../../../shared/components/seccion-plegable/seccion-plegable';
 import { AvisosService } from '../../../shared/services/avisos.service';
 import { ListaImportacion } from '../../components/lista-importacion/lista-importacion';
-import { ResultadoAplicacion } from '../../interfaces/importacion.interface';
+import { FilaVistaPrevia, ResultadoAplicacion } from '../../interfaces/importacion.interface';
 import { AlNoValerExtraccion, ImportacionService } from '../../services/importacion.service';
 import {
   AVISO_PUEDE_TARDAR,
@@ -41,6 +42,7 @@ import {
   EXPLICACION_FUERA,
   EXPLICACION_PARA_REVISAR,
   EXPLICACION_SIN_LEER,
+  EXPLICACION_SIN_MARCAR,
   EXPLICACION_YA_EXISTEN,
   filasAplicables,
   filasConResultado,
@@ -55,6 +57,28 @@ import {
   textoVistaCombinada,
   tituloNadaQueAplicar,
 } from '../../utils/resumen-importacion';
+
+/** La cuenta del título de un grupo: «(3)» con todas marcadas y «(2 de 3)» si no */
+function cuenta(marcadas: number, total: number): string {
+  return marcadas === total ? `(${total})` : `(${marcadas} de ${total})`;
+}
+
+/** Lo que necesita la plantilla de cada grupo que se puede elegir (las que se añaden, las que cambian) */
+interface GrupoElegible {
+  filas: FilaVistaPrevia[];
+  /** id de su título, para el botón de marcar */
+  titulo: string;
+  hayAvisos: boolean;
+  /** Ya están marcadas todas las que no llevan aviso: el botón desmarca */
+  desmarcar: boolean;
+  /** El texto del botón; null con una sola fila, que ya tiene su casilla */
+  textoBoton: string | null;
+  /**
+   * Todas llevan aviso y ninguna está marcada: no hay nada que marcar de golpe. El botón sigue (desactivado)
+   * para que el foco no caiga en <body> al desmarcar la última
+   */
+  sinNadaQueMarcar: boolean;
+}
 
 @Component({
   imports: [
@@ -94,6 +118,7 @@ export default class ImportacionPageComponent {
   protected readonly textoResultado = textoResultado;
   protected readonly avisoRadar = AVISO_RADAR;
   protected readonly explicacionSinLeer = EXPLICACION_SIN_LEER;
+  protected readonly explicacionSinMarcar = EXPLICACION_SIN_MARCAR;
   protected readonly explicacionFuera = EXPLICACION_FUERA;
   protected readonly explicacionDudas = EXPLICACION_DUDAS;
   protected readonly textoFilaFuera = textoFilaFuera;
@@ -138,10 +163,28 @@ export default class ImportacionPageComponent {
     const vista = this.vista();
     return vista ? lineasResumen(vista.resumen) : [];
   });
-  protected readonly textoBoton = computed(() => {
-    const vista = this.vista();
-    return vista ? textoBotonAplicar(vista.resumen) : '';
-  });
+  protected readonly elegidas = this.importacion.elegidas;
+  private readonly nuevasElegidas = computed(() => this.contarElegidas(this.nuevas()));
+  private readonly avanzanElegidas = computed(() => this.contarElegidas(this.avanzan()));
+  protected readonly totalElegidas = computed(() => this.nuevasElegidas() + this.avanzanElegidas());
+  protected readonly textoBoton = computed(() =>
+    textoBotonAplicar({ nuevas: this.nuevasElegidas(), avanzan: this.avanzanElegidas() }),
+  );
+  /** «(3)» o, si alguna está sin marcar, «(2 de 3)»: el título no promete lo que no se va a guardar */
+  protected readonly cuentaNuevas = computed(() =>
+    cuenta(this.nuevasElegidas(), this.nuevas().length),
+  );
+  protected readonly cuentaAvanzan = computed(() =>
+    cuenta(this.avanzanElegidas(), this.avanzan().length),
+  );
+  protected readonly grupoNuevas = computed(() =>
+    this.grupoElegible(this.nuevas(), 'titulo-nuevas'),
+  );
+  protected readonly grupoAvanzan = computed(() =>
+    this.grupoElegible(this.avanzan(), 'titulo-avanzan'),
+  );
+  /** Lo que dice el botón tras marcar o desmarcar, para el lector de pantalla; vacío con cada vista nueva */
+  protected readonly anuncioEleccion = linkedSignal({ source: this.vista, computation: () => '' });
   protected readonly tituloAlDia = computed(() => {
     const vista = this.vista();
     return vista ? tituloNadaQueAplicar(vista.resumen, this.resultado() !== null) : '';
@@ -296,8 +339,8 @@ export default class ImportacionPageComponent {
   }
 
   protected aplicar(): void {
-    // El botón sigue recibiendo clics mientras guarda (disabledInteractive, para no perder el foco)
-    if (this.aplicando()) {
+    // El botón sigue recibiendo clics mientras guarda o sin nada marcado (disabledInteractive, para no perder el foco)
+    if (this.aplicando() || this.totalElegidas() === 0) {
       return;
     }
     this.resultado.set(null);
@@ -306,6 +349,27 @@ export default class ImportacionPageComponent {
       next: (resultado) => this.terminarAplicar(resultado),
       error: (error: ErrorApi) => this.avisos.error(error.mensaje),
     });
+  }
+
+  protected elegir({ clave, marcada }: { clave: string; marcada: boolean }): void {
+    this.importacion.elegir([clave], marcada);
+    this.anunciarEleccion();
+  }
+
+  /**
+   * «Desmarcar todas» desmarca el grupo entero; marcar, solo las que no llevan aviso: las de aviso se
+   * marcan una a una, tras mirarlas (que no se cuelen de golpe es lo que pide el H1)
+   */
+  protected alternarTodas(grupo: GrupoElegible): void {
+    if (this.aplicando() || grupo.sinNadaQueMarcar) {
+      return;
+    }
+    const filas = grupo.desmarcar ? grupo.filas : grupo.filas.filter((f) => f.avisos.length === 0);
+    this.importacion.elegir(
+      filas.map((f) => f.clave),
+      !grupo.desmarcar,
+    );
+    this.anunciarEleccion();
   }
 
   protected reintentar(): void {
@@ -448,6 +512,34 @@ export default class ImportacionPageComponent {
           this.ofrecer(e);
         }
       });
+  }
+
+  private grupoElegible(filas: FilaVistaPrevia[], titulo: string): GrupoElegible {
+    const elegidas = this.elegidas();
+    const hayAvisos = filas.some((f) => f.avisos.length > 0);
+    const sinAviso = filas.filter((f) => f.avisos.length === 0);
+    const desmarcar =
+      filas.some((f) => elegidas.has(f.clave)) && sinAviso.every((f) => elegidas.has(f.clave));
+    const quedanConAviso = filas.some((f) => f.avisos.length > 0 && !elegidas.has(f.clave));
+    let textoBoton: string | null = null;
+    if (filas.length > 1) {
+      if (desmarcar) {
+        textoBoton = quedanConAviso ? 'Desmarcar las marcadas' : 'Desmarcar todas';
+      } else {
+        textoBoton = hayAvisos ? 'Marcar las que no llevan aviso' : 'Marcar todas';
+      }
+    }
+    const sinNadaQueMarcar = !desmarcar && sinAviso.length === 0;
+    return { filas, titulo, hayAvisos, desmarcar, textoBoton, sinNadaQueMarcar };
+  }
+
+  private anunciarEleccion(): void {
+    this.anuncioEleccion.set(this.textoBoton());
+  }
+
+  private contarElegidas(filas: FilaVistaPrevia[]): number {
+    const elegidas = this.elegidas();
+    return filas.filter((f) => elegidas.has(f.clave)).length;
   }
 
   private focoSinSitio(): boolean {

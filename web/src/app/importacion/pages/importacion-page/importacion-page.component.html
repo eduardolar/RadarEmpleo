@@ -142,12 +142,38 @@
       type="button"
       class="w-full shrink-0 text-balance [--mat-button-filled-container-height:48px] sm:w-auto"
       disabledInteractive
-      [disabled]="aplicando()"
+      [disabled]="aplicando() || totalElegidas() === 0"
       (click)="aplicar()"
     >
       {{ aplicando() ? 'Guardando...' : textoBoton() }}
     </button>
   </ng-template>
+
+  <!-- Bajo el título de las que se añaden o actualizan: por qué alguna sale sin marcar y marcarlas
+       o desmarcarlas todas de una vez -->
+  <ng-template #elegirGrupo let-grupo>
+    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 empty:hidden">
+      @if (grupo.hayAvisos) {
+        <p class="min-w-0 text-sm text-on-surface-variant">{{ explicacionSinMarcar }}</p>
+      }
+      @if (grupo.textoBoton; as texto) {
+        <button
+          mat-button
+          type="button"
+          class="-ml-3 [--mat-button-text-container-height:48px]"
+          disabledInteractive
+          [disabled]="aplicando() || grupo.sinNadaQueMarcar"
+          [attr.aria-describedby]="grupo.titulo"
+          (click)="alternarTodas(grupo)"
+        >
+          {{ texto }}
+        </button>
+      }
+    </div>
+  </ng-template>
+
+  <!-- Al marcar o desmarcar, el lector de pantalla dice cómo queda el botón de guardar -->
+  <span class="sr-only" aria-live="polite">{{ anuncioEleccion() }}</span>
 
   @if (vista(); as previa) {
     <!-- Lo primero de la vista combinada: qué se está viendo y cómo volver a la de la tabla. Marco fino
@@ -308,9 +334,18 @@
     @if (nuevas().length > 0) {
       <section aria-labelledby="titulo-nuevas" class="flex flex-col gap-3">
         <h2 id="titulo-nuevas" class="text-xl font-extrabold text-on-surface">
-          Se van a añadir ({{ nuevas().length }})
+          Se van a añadir {{ cuentaNuevas() }}
         </h2>
-        <app-lista-importacion [filas]="nuevas()" />
+        <ng-container
+          [ngTemplateOutlet]="elegirGrupo"
+          [ngTemplateOutletContext]="{ $implicit: grupoNuevas() }"
+        />
+        <app-lista-importacion
+          [filas]="nuevas()"
+          [elegidas]="elegidas()"
+          [bloqueada]="aplicando()"
+          (elegir)="elegir($event)"
+        />
       </section>
     }
 
@@ -318,13 +353,22 @@
       <section aria-labelledby="titulo-avanzan" class="flex flex-col gap-3">
         <div class="space-y-1">
           <h2 id="titulo-avanzan" class="text-xl font-extrabold text-on-surface">
-            Cambian de estado ({{ avanzan().length }})
+            Cambian de estado {{ cuentaAvanzan() }}
           </h2>
           <p class="text-sm text-on-surface-variant">
             Ya están en la app: solo se les pone el estado de tu archivo. No se borra nada.
           </p>
         </div>
-        <app-lista-importacion [filas]="avanzan()" />
+        <ng-container
+          [ngTemplateOutlet]="elegirGrupo"
+          [ngTemplateOutletContext]="{ $implicit: grupoAvanzan() }"
+        />
+        <app-lista-importacion
+          [filas]="avanzan()"
+          [elegidas]="elegidas()"
+          [bloqueada]="aplicando()"
+          (elegir)="elegir($event)"
+        />
       </section>
     }
 
