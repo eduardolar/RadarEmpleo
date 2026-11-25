@@ -1262,15 +1262,15 @@ Lista única, sacada de los «Pendientes menores» de los PR 4 a 8, de lo que la
 - AnalizarEncaje (PR 4): el borde exacto de los largos, que el manejador regenera el radar, la inyección en el perfil y el aviso de «no se sabe» pasando por el manejador.
 - ~~API de analizar (PR 5): los otros 409 (sin carpeta Curriculum y tope del día) y el comentario de `Analizar_Da202ConLocation_…`.~~ Hecho en `f7b-23-tests-pr6`: los dos 409 por la API y el comentario corregido (la ejecución no guarda origen).
 - ~~`extraer-registro` en `CanalKestrelTests` (PR 7).~~ Hecho en `f7b-23-tests-pr6`.
-- El evaluador del encaje (PR 6), **antes de la prueba A**:
-  - reservar margen en el tope (Claude se pasa de `--max-budget-usd` en un turno) o avisarlo en el resumen;
-  - validar `esperado.json` antes del bucle y escribir `resumen.md` en un `finally`, para no perder lo ya gastado si algo falla a mitad;
-  - calcular el hash del prompt con los finales de línea normalizados;
-  - `--salida` siempre en una subcarpeta con la fecha;
-  - compartir con la API la ruta por defecto de `claude.exe`, hoy copiada;
-  - el id de oferta con `[0-9]{2}` en vez de `\d{2}`;
-  - sacar las opciones de la consola a una función pura y probarlas;
-  - revisar los encajes esperados que dependen de cosas que el perfil de ejemplo no dice, si la prueba A falla justo ahí.
+- El evaluador del encaje (PR 6), **antes de la prueba A**. Hecho en `f7b-24-evaluador-encaje` (reglas puras en `tests/EvaluacionEncaje/ConsolaEvaluacion.cs`, con `ConsolaEvaluacionTests`):
+  - ~~reservar margen en el tope (Claude se pasa de `--max-budget-usd` en un turno) o avisarlo en el resumen;~~ cada oferta reserva su presupuesto y 0,25 USD de margen (el tope mínimo pasa a 0,75), y el resumen avisa si aun así se pasa;
+  - ~~validar `esperado.json` antes del bucle y escribir `resumen.md` en un `finally`, para no perder lo ya gastado si algo falla a mitad;~~
+  - ~~calcular el hash del prompt con los finales de línea normalizados;~~
+  - ~~`--salida` siempre en una subcarpeta con la fecha;~~
+  - ~~compartir con la API la ruta por defecto de `claude.exe`, hoy copiada;~~ en `RutasClaude` (Services);
+  - ~~el id de oferta con `[0-9]{2}` en vez de `\d{2}`;~~
+  - ~~sacar las opciones de la consola a una función pura y probarlas;~~
+  - queda: revisar los encajes esperados que dependen de cosas que el perfil de ejemplo no dice, si la prueba A falla justo ahí.
 
 **F7c: lanzar rastreo**
 
