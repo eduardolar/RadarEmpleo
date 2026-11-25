@@ -1,60 +1,61 @@
-using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using RadarEmpleo.Domain;
+using RadarEmpleo.EvaluacionEncaje;
 using RadarEmpleo.Services;
 using RadarEmpleo.Services.Agentes;
 
 // EvaluacionEncaje: mide cuánto acierta AnalizarEncaje con las 20 ofertas inventadas de datos-ejemplo/encaje contra
 // perfil-ejemplo.md (decisiones 5 y 8 de la F7b). Usa el prompt real (PromptAnalizarEncaje.Montar), los argumentos reales
 // (ConstructorArgumentos) y el EjecutorClaudeCli: gasta del cupo. Por eso solo arranca con «--confirmo-gasto» y
-// «--tope-usd <n>», y no lanza una oferta más si con su presupuesto (0,50) pasaría del tope.
+// «--tope-usd <n>», y no lanza una oferta más si con su presupuesto (0,50) y un margen (0,25) pasaría del tope. Las reglas
+// puras (opciones, tope, carpeta, hash y validación del conjunto) están en ConsolaEvaluacion, con sus tests.
 
 const string Uso = """
     Evaluación del encaje: lanza claude de verdad con 20 ofertas inventadas y gasta del cupo.
     No hago nada sin las dos opciones obligatorias:
       --confirmo-gasto       confirmas que sabes que gasta (cada oferta, hasta 0,50 USD)
-      --tope-usd <n>         gasto máximo de toda la evaluación, entre 0,50 y 10 (por ejemplo, 5)
+      --tope-usd <n>         gasto máximo de toda la evaluación, entre 0,75 y 10 (por ejemplo, 5);
+                             cada oferta reserva 0,75: su presupuesto y un margen por si Claude se pasa
     Opcionales:
-      --salida <carpeta>     dónde escribir el resumen (por defecto, una carpeta nueva bajo %TEMP%)
+      --salida <carpeta>     dónde escribir el resumen: siempre en una subcarpeta nueva con la fecha
+                             (por defecto, bajo %TEMP%)
       --ruta-claude <ruta>   claude.exe (por defecto, el que instala npm)
       --falso                sin claude: el ejecutor falso responde «Medio» y 0,20 USD (para probar la consola)
     """;
 
 Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 var definicion = DefinicionesTareas.AnalizarEncaje;
-var opciones = new Dictionary<string, string?>(StringComparer.Ordinal);
-for (var i = 0; i < args.Length; i++)
-{
-    if (args[i] is "--confirmo-gasto" or "--falso") opciones[args[i]] = "";
-    else if (args[i] is "--tope-usd" or "--salida" or "--ruta-claude" && i + 1 < args.Length) opciones[args[i]] = args[++i];
-    else return Salir($"No entiendo «{args[i]}».", 2);
-}
-if (!opciones.ContainsKey("--confirmo-gasto") || !opciones.TryGetValue("--tope-usd", out var textoTope))
-    return Salir("Falta --confirmo-gasto o --tope-usd: no he lanzado nada.", 1);
-if (!decimal.TryParse(textoTope?.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var tope)
-    || tope < definicion.PresupuestoUsd || tope > 10m)
-    return Salir("El tope tiene que ser un número entre 0,50 y 10: no he lanzado nada.", 2);
+var leidas = ConsolaEvaluacion.LeerOpciones(args, definicion.PresupuestoUsd);
+if (leidas.Opciones is not { } opciones) return Salir(leidas.Error!, leidas.Codigo);
+var tope = opciones.Tope;
 
+// Todo lo que puede estar mal en el conjunto se mira aquí, antes de gastar nada.
 var conjunto = Path.Combine(AppContext.BaseDirectory, "datos-ejemplo", "encaje");
-var perfil = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "datos-ejemplo", "perfil-ejemplo.md"));
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter(allowIntegerValues: false) } };
-var casos = JsonSerializer.Deserialize<Conjunto>(File.ReadAllText(Path.Combine(conjunto, "esperado.json")), json)!.Ofertas;
-// El id forma la ruta del archivo de la oferta: solo «oferta-NN».
-if (casos.FirstOrDefault(c => !Regex.IsMatch(c.Id, @"\Aoferta-\d{2}\z")) is { } raro)
-    return Salir($"Id de oferta no válido: «{raro.Id}».", 2);
+string perfil;
+List<CasoConjunto> casos;
+try
+{
+    perfil = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "datos-ejemplo", "perfil-ejemplo.md"));
+    var leido = JsonSerializer.Deserialize<Conjunto>(File.ReadAllText(Path.Combine(conjunto, "esperado.json")), json);
+    if (ConsolaEvaluacion.ErrorDelConjunto(leido, id => File.Exists(Path.Combine(conjunto, id + ".md"))) is { } error)
+        return Salir(error + " No he lanzado nada.", 2);
+    casos = leido!.Ofertas;
+}
+catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+{
+    return Salir($"No puedo leer el conjunto de datos-ejemplo ({e.Message}). No he lanzado nada.", 2);
+}
 
-var salida = opciones.GetValueOrDefault("--salida") is { Length: > 0 } elegida ? Path.GetFullPath(elegida)
-    : Path.Combine(Path.GetTempPath(), "RadarEmpleo-evaluacion-encaje", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
+var salida = ConsolaEvaluacion.CarpetaSalida(opciones.Salida, Path.Combine(Path.GetTempPath(), "RadarEmpleo-evaluacion-encaje"), DateTime.UtcNow);
 Directory.CreateDirectory(salida);
 
 var reloj = new RelojSistema();
 IEjecutorClaude ejecutor;
-if (opciones.ContainsKey("--falso"))
+if (opciones.Falso)
 {
     var falso = new EjecutorClaudeFalso(reloj);
     falso.Programar(definicion.Tarea, new RespuestaFalsa(CosteUsd: 0.20m,
@@ -63,50 +64,70 @@ if (opciones.ContainsKey("--falso"))
 }
 else
 {
-    // Como OpcionesAgentes.RutaClaudeEfectiva de la API (esta consola no la referencia).
-    var rutaClaude = opciones.GetValueOrDefault("--ruta-claude") is { Length: > 0 } ruta ? Path.GetFullPath(Environment.ExpandEnvironmentVariables(ruta))
-        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm", "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe");
-    ejecutor = new EjecutorClaudeCli(new OpcionesEjecutor(rutaClaude, [], salida, tope, ""), reloj, NullLogger<EjecutorClaudeCli>.Instance);
+    // La misma ruta por defecto que la API (RutasClaude).
+    ejecutor = new EjecutorClaudeCli(new OpcionesEjecutor(RutasClaude.Efectiva(opciones.RutaClaude), [], salida, tope, ""), reloj, NullLogger<EjecutorClaudeCli>.Instance);
 }
 
 // Ctrl+C corta la oferta en curso (el ejecutor mata el árbol de procesos) y escribe el resumen de lo hecho.
 using var corte = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; corte.Cancel(); };
 
-var hashPrompt = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Prompts.Plantilla(definicion))));
-var version = await ejecutor.VersionAsync(corte.Token);
-var argumentos = ConstructorArgumentos.Construir(definicion, Prompts.Esquema(definicion), new ValoresArgumentos(salida));
+var hashPrompt = ConsolaEvaluacion.HashPrompt(Prompts.Plantilla(definicion));
 var resultados = new List<ResultadoOferta>();
 var gastado = 0m;
+string? version = null;
 string? parada = null;
+var codigo = 0;
 Console.WriteLine($"Evaluando {casos.Count} ofertas con tope {tope:0.00} USD. Salida: {salida}");
 
-foreach (var caso in casos)
+// Pase lo que pase a mitad, el «finally» escribe el resumen de lo ya gastado.
+try
 {
-    if (corte.IsCancellationRequested) { parada = "Cortada a mano (Ctrl+C)."; break; }
-    if (!ReglasGasto.CabeEnElTope(gastado, 0m, definicion.PresupuestoUsd, tope)) { parada = "Cortada por el tope de gasto."; break; }
+    version = await ejecutor.VersionAsync(corte.Token);
+    var argumentos = ConstructorArgumentos.Construir(definicion, Prompts.Esquema(definicion), new ValoresArgumentos(salida));
+    foreach (var caso in casos)
+    {
+        if (corte.IsCancellationRequested) { parada = "Cortada a mano (Ctrl+C)."; break; }
+        if (!ConsolaEvaluacion.CabeOtraOferta(gastado, definicion.PresupuestoUsd, tope))
+        {
+            parada = $"Cortada por el tope de gasto (cada oferta reserva su presupuesto, {definicion.PresupuestoUsd:0.00}, y un margen de {ConsolaEvaluacion.MargenPorOfertaUsd:0.00} USD).";
+            break;
+        }
 
-    var prompt = PromptAnalizarEncaje.Montar(new DatosAnalisisEncaje(caso.Empresa, caso.Puesto, null, caso.Ubicacion, caso.Modalidad,
-        File.ReadAllText(Path.Combine(conjunto, caso.Id + ".md")), perfil));
-    var carpeta = Directory.CreateDirectory(Path.Combine(salida, "ejecuciones", caso.Id)).FullName;
-    var peticion = new PeticionClaude(definicion.Tarea, argumentos, carpeta, prompt, definicion.TiempoMaximo, Path.Combine(salida, "logs", caso.Id + ".log"));
-    var respuesta = await ejecutor.EjecutarAsync(peticion, (_, _) => { }, corte.Token);
-    if (respuesta.Fallo == FalloClaude.NoInstalado) { parada = "No encuentro claude.exe (usa --ruta-claude)."; break; }
+        var prompt = PromptAnalizarEncaje.Montar(new DatosAnalisisEncaje(caso.Empresa, caso.Puesto, null, caso.Ubicacion, caso.Modalidad,
+            File.ReadAllText(Path.Combine(conjunto, caso.Id + ".md")), perfil));
+        var carpeta = Directory.CreateDirectory(Path.Combine(salida, "ejecuciones", caso.Id)).FullName;
+        var peticion = new PeticionClaude(definicion.Tarea, argumentos, carpeta, prompt, definicion.TiempoMaximo, Path.Combine(salida, "logs", caso.Id + ".log"));
+        var respuesta = await ejecutor.EjecutarAsync(peticion, (_, _) => { }, corte.Token);
+        if (respuesta.Fallo == FalloClaude.NoInstalado) { parada = "No encuentro claude.exe (usa --ruta-claude)."; break; }
 
-    // Sin coste conocido cuenta el presupuesto entero, como ReglasGasto.GastoComputable.
-    var coste = respuesta.CosteUsd ?? definicion.PresupuestoUsd;
-    gastado += coste;
-    var (encaje, pega) = Leer(respuesta.SalidaEstructurada);
-    resultados.Add(new ResultadoOferta(caso.Id, caso.Encaje, encaje, coste, pega, respuesta.Fallo?.ToString()));
-    Console.WriteLine($"{caso.Id}: esperado {caso.Encaje}, obtenido {encaje?.ToString() ?? "sin respuesta"} ({coste:0.00} USD, acumulado {gastado:0.00})");
+        // Sin coste conocido cuenta el presupuesto entero, como ReglasGasto.GastoComputable.
+        var coste = respuesta.CosteUsd ?? definicion.PresupuestoUsd;
+        gastado += coste;
+        var (encaje, pega) = Leer(respuesta.SalidaEstructurada);
+        resultados.Add(new ResultadoOferta(caso.Id, caso.Encaje, encaje, coste, pega, respuesta.Fallo?.ToString()));
+        Console.WriteLine($"{caso.Id}: esperado {caso.Encaje}, obtenido {encaje?.ToString() ?? "sin respuesta"} ({coste:0.00} USD, acumulado {gastado:0.00})");
+    }
 }
-
-var puntuacion = PuntuacionEncaje.Calcular(resultados.Select(r => new CasoPuntuado(r.Esperado, r.Obtenido)));
-var resumen = Resumen(puntuacion, resultados, casos.Count, gastado, tope, hashPrompt, version, parada);
-await File.WriteAllTextAsync(Path.Combine(salida, "resumen.md"), resumen);
-await File.WriteAllTextAsync(Path.Combine(salida, "resultados.json"), JsonSerializer.Serialize(resultados, new JsonSerializerOptions(json) { WriteIndented = true }));
-Console.WriteLine(resumen);
-return 0;
+catch (OperationCanceledException) when (corte.IsCancellationRequested)
+{
+    parada = "Cortada a mano (Ctrl+C).";
+}
+catch (Exception e)
+{
+    // La oferta que estaba en curso puede haber gastado sin que conste: se dice en el resumen.
+    parada = $"Cortada por un error ({e.Message}). La oferta en curso puede haber gastado hasta su presupuesto sin que conste aquí.";
+    codigo = 3;
+}
+finally
+{
+    var puntuacion = PuntuacionEncaje.Calcular(resultados.Select(r => new CasoPuntuado(r.Esperado, r.Obtenido)));
+    var resumen = Resumen(puntuacion, resultados, casos.Count, gastado, tope, hashPrompt, version, parada);
+    File.WriteAllText(Path.Combine(salida, "resumen.md"), resumen);
+    File.WriteAllText(Path.Combine(salida, "resultados.json"), JsonSerializer.Serialize(resultados, new JsonSerializerOptions(json) { WriteIndented = true }));
+    Console.WriteLine(resumen);
+}
+return codigo;
 
 static int Salir(string mensaje, int codigo)
 {
@@ -135,7 +156,9 @@ static string Resumen(ResultadoPuntuacion p, List<ResultadoOferta> resultados, i
     r.AppendLine($"- Claude Code: {version ?? "versión desconocida"}");
     r.AppendLine($"- Evaluadas: {p.Total} de {total}. {parada ?? "Completa."}");
     r.AppendLine($"- Exactos: {p.Exactos}; a un nivel: {p.AUnNivel}; exactos o a un nivel: {p.Exactos + p.AUnNivel}; lejos: {p.Lejos}; sin respuesta: {p.SinRespuesta}");
-    r.AppendLine($"- Coste total: {gastado:0.00} USD (tope {tope:0.00})").AppendLine();
+    r.AppendLine($"- Coste total: {gastado:0.00} USD (tope {tope:0.00})");
+    if (ConsolaEvaluacion.AvisoTope(gastado, tope) is { } aviso) r.AppendLine($"- **{aviso}**");
+    r.AppendLine();
     r.AppendLine("## Matriz de confusión (filas: esperado; columnas: obtenido)").AppendLine();
     r.AppendLine("| | " + string.Join(" | ", PuntuacionEncaje.Niveles) + " |");
     r.AppendLine("|---|" + string.Concat(PuntuacionEncaje.Niveles.Select(_ => "---|")));
@@ -147,11 +170,6 @@ static string Resumen(ResultadoPuntuacion p, List<ResultadoOferta> resultados, i
         r.AppendLine($"| {o.Id} | {o.Esperado} | {o.Obtenido?.ToString() ?? $"sin respuesta ({o.Fallo ?? "no se entiende"})"} | {o.CosteUsd:0.00} | {Celda(o.Pega)} |");
     return r.ToString();
 }
-
-/// <summary>Una oferta de <c>esperado.json</c>: la ficha y el encaje que se espera.</summary>
-internal sealed record CasoConjunto(string Id, string Empresa, string Puesto, string? Ubicacion, string? Modalidad, Encaje Encaje, string Porque);
-
-internal sealed record Conjunto(List<CasoConjunto> Ofertas);
 
 /// <summary>Lo que ha salido con una oferta.</summary>
 internal sealed record ResultadoOferta(string Id, Encaje Esperado, Encaje? Obtenido, decimal CosteUsd, string? Pega, string? Fallo);

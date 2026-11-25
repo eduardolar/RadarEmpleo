@@ -104,11 +104,5 @@ public sealed class OpcionesAgentes
     public string? ModeloExtraerRegistro { get; set; }
 
     /// <summary>Ruta final de <c>claude.exe</c>, con las variables de entorno expandidas.</summary>
-    public string RutaClaudeEfectiva()
-    {
-        if (!string.IsNullOrWhiteSpace(RutaClaude))
-            return Path.GetFullPath(Environment.ExpandEnvironmentVariables(RutaClaude));
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "npm", "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe");
-    }
+    public string RutaClaudeEfectiva() => RadarEmpleo.Services.Agentes.RutasClaude.Efectiva(RutaClaude);
 }
