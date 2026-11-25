@@ -1,5 +1,7 @@
 import {
   diaCorto,
+  diaDeLaSemana,
+  diaEncabezado,
   diaLargo,
   diaMadrid,
   diasNaturalesEntre,
@@ -179,5 +181,81 @@ describe('msHastaMedianocheMadrid', () => {
 
   it('el día que se adelanta el reloj tiene 23 horas', () => {
     expect(msHastaMedianocheMadrid(new Date('2027-03-27T23:00:00Z'))).toBe(23 * 60 * 60 * 1000);
+  });
+});
+
+// Madrid cambia la hora el último domingo de marzo y el último de octubre, siempre a la 01:00 UTC:
+// en octubre el reloj vuelve de las 03:00 a las 02:00 y en marzo salta de las 02:00 a las 03:00
+describe('el cambio de hora de octubre (25/10/2026, de las 03:00 a las 02:00)', () => {
+  it('de 02:00 a 02:59 pasa dos veces, y las dos son el mismo día', () => {
+    // Primera vez, todavía en horario de verano (UTC+2)
+    expect(formatearFecha('2026-10-25T00:00:00Z', 'dia-hora')).toBe('25 oct 2026, 02:00');
+    expect(formatearFecha('2026-10-25T00:59:59Z', 'dia-hora')).toBe('25 oct 2026, 02:59');
+    // Segunda vez, ya en el de invierno (UTC+1)
+    expect(formatearFecha('2026-10-25T01:00:00Z', 'dia-hora')).toBe('25 oct 2026, 02:00');
+    expect(formatearFecha('2026-10-25T01:59:59Z', 'dia-hora')).toBe('25 oct 2026, 02:59');
+    expect(formatearFecha('2026-10-25T02:00:00Z', 'dia-hora')).toBe('25 oct 2026, 03:00');
+    expect(diaMadrid('2026-10-25T00:30:00Z')).toBe('2026-10-25');
+    expect(diaMadrid('2026-10-25T01:30:00Z')).toBe('2026-10-25');
+  });
+
+  it('el día empieza con el horario de verano y acaba con el de invierno: dura 25 horas', () => {
+    expect(diaMadrid('2026-10-24T21:59:59Z')).toBe('2026-10-24');
+    expect(diaMadrid('2026-10-24T22:00:00Z')).toBe('2026-10-25');
+    expect(diaMadrid('2026-10-25T22:59:59Z')).toBe('2026-10-25');
+    expect(diaMadrid('2026-10-25T23:00:00Z')).toBe('2026-10-26');
+    expect(msHastaMedianocheMadrid(new Date('2026-10-24T22:00:00Z'))).toBe(25 * 60 * 60 * 1000);
+  });
+
+  it('instanteMadrid: antes de las 02:00 es verano; la hora repetida y lo de después, invierno', () => {
+    expect(instanteMadrid('2026-10-25', '00:00')?.toISOString()).toBe('2026-10-24T22:00:00.000Z');
+    expect(instanteMadrid('2026-10-25', '01:59')?.toISOString()).toBe('2026-10-24T23:59:00.000Z');
+    expect(instanteMadrid('2026-10-25', '02:00')?.toISOString()).toBe('2026-10-25T01:00:00.000Z');
+    expect(instanteMadrid('2026-10-25', '02:59')?.toISOString()).toBe('2026-10-25T01:59:00.000Z');
+    expect(instanteMadrid('2026-10-25', '03:00')?.toISOString()).toBe('2026-10-25T02:00:00.000Z');
+    expect(instanteMadrid('2026-10-26', '00:00')?.toISOString()).toBe('2026-10-25T23:00:00.000Z');
+  });
+
+  it('los nombres del día no se mueven: es domingo de principio a fin', () => {
+    expect(diaCorto('2026-10-24T22:00:00Z')).toBe('dom 25 oct');
+    expect(diaCorto('2026-10-25T22:59:59Z')).toBe('dom 25 oct');
+    expect(diaLargo('2026-10-25')).toBe('domingo 25 de octubre');
+    expect(diaEncabezado('2026-10-25')).toBe('Domingo, 25 oct');
+    expect(diaDeLaSemana('2026-10-25')).toBe(0);
+  });
+});
+
+describe('el cambio de hora de marzo (29/03/2026, de las 02:00 a las 03:00)', () => {
+  it('de la 01:59 se pasa a las 03:00 sin cambiar de día', () => {
+    expect(formatearFecha('2026-03-29T00:59:59Z', 'dia-hora')).toBe('29 mar 2026, 01:59');
+    expect(formatearFecha('2026-03-29T01:00:00Z', 'dia-hora')).toBe('29 mar 2026, 03:00');
+    expect(horaMadrid('2026-03-29T00:59:00Z')).toBe('01:59');
+    expect(horaMadrid('2026-03-29T01:00:00Z')).toBe('03:00');
+    expect(diaMadrid('2026-03-29T01:00:00Z')).toBe('2026-03-29');
+  });
+
+  it('el día empieza con el horario de invierno y acaba con el de verano: dura 23 horas', () => {
+    expect(diaMadrid('2026-03-28T22:59:59Z')).toBe('2026-03-28');
+    expect(diaMadrid('2026-03-28T23:00:00Z')).toBe('2026-03-29');
+    expect(diaMadrid('2026-03-29T21:59:59Z')).toBe('2026-03-29');
+    expect(diaMadrid('2026-03-29T22:00:00Z')).toBe('2026-03-30');
+    expect(msHastaMedianocheMadrid(new Date('2026-03-28T23:00:00Z'))).toBe(23 * 60 * 60 * 1000);
+  });
+
+  it('instanteMadrid: hasta la 01:59 es invierno, las 02 no existen y desde las 03:00 es verano', () => {
+    expect(instanteMadrid('2026-03-29', '00:00')?.toISOString()).toBe('2026-03-28T23:00:00.000Z');
+    expect(instanteMadrid('2026-03-29', '01:59')?.toISOString()).toBe('2026-03-29T00:59:00.000Z');
+    expect(instanteMadrid('2026-03-29', '02:00')).toBeNull();
+    expect(instanteMadrid('2026-03-29', '02:59')).toBeNull();
+    expect(instanteMadrid('2026-03-29', '03:00')?.toISOString()).toBe('2026-03-29T01:00:00.000Z');
+    expect(instanteMadrid('2026-03-30', '00:00')?.toISOString()).toBe('2026-03-29T22:00:00.000Z');
+  });
+
+  it('los nombres del día no se mueven: es domingo de principio a fin', () => {
+    expect(diaCorto('2026-03-28T23:00:00Z')).toBe('dom 29 mar');
+    expect(diaCorto('2026-03-29T21:59:59Z')).toBe('dom 29 mar');
+    expect(diaLargo('2026-03-29')).toBe('domingo 29 de marzo');
+    expect(diaEncabezado('2026-03-29')).toBe('Domingo, 29 mar');
+    expect(diaDeLaSemana('2026-03-29')).toBe(0);
   });
 });

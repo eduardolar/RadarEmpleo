@@ -93,22 +93,52 @@ public class HtmlATextoTests
         Assert.True(reloj.Elapsed < TimeSpan.FromSeconds(10), $"Ha tardado {reloj.Elapsed}.");
     }
 
+    /// <summary>
+    /// El tiempo crece en proporción al tamaño, no al cuadrado. Se compara el mejor tiempo de dos tamaños (el grande, 16 veces el pequeño)
+    /// en vez de poner un tope fijo de reloj, que con la cobertura puesta o el equipo cargado fallaba sin motivo: lo que
+    /// frena al uno frena al otro. Lineal sale unas 16 veces más; cuadrático, unas 256. El tope absoluto, muy holgado,
+    /// solo está para que un atasco de verdad no pase por bueno.
+    /// </summary>
     [Theory]
     [InlineData(" ")]
     [InlineData("\n")]
     [InlineData("\r\n")]
     [InlineData(" \t\n")]
-    public void Convertir_DosMegasDeEspaciosOSaltos_EnMenosDeUnSegundo(string relleno)
+    public void Convertir_DosMegasDeEspaciosOSaltos_TardaEnProporcionAlTamano(string relleno)
     {
-        var html = "<p>a</p>" + string.Concat(Enumerable.Repeat(relleno, 2 * 1024 * 1024 / relleno.Length)) + "<p>b</p>";
-        HtmlATexto.Convertir("<p>calentar</p>");
+        const int grande = 2 * 1024 * 1024, veces = 16;
+        var htmlPequeno = ConRelleno(relleno, grande / veces);
+        var htmlGrande = ConRelleno(relleno, grande);
+        HtmlATexto.Convertir(htmlPequeno);
 
-        var reloj = Stopwatch.StartNew();
-        var texto = HtmlATexto.Convertir(html);
+        // Alternando, para que una racha mala del equipo (el CI, con las clases en paralelo) pille a los dos tamaños.
+        var (pequeno, mayor, texto) = (TimeSpan.MaxValue, TimeSpan.MaxValue, "");
+        for (var ronda = 0; ronda < 5; ronda++)
+        {
+            pequeno = Menor(pequeno, Medir(() => HtmlATexto.Convertir(htmlPequeno)));
+            mayor = Menor(mayor, Medir(() => texto = HtmlATexto.Convertir(htmlGrande)));
+        }
 
-        Assert.True(reloj.Elapsed < TimeSpan.FromSeconds(1), $"Ha tardado {reloj.Elapsed}.");
         Assert.Equal("a\n\nb", texto);
+        // 4 veces de margen sobre lo lineal, y 5 ms de suelo por si el pequeño mide casi cero.
+        var tope = TimeSpan.FromTicks(pequeno.Ticks * veces * 4) + TimeSpan.FromMilliseconds(5);
+        Assert.True(mayor < tope, $"Con {veces} veces más texto ha tardado {mayor} y con el pequeño {pequeno}: crece más que en proporción.");
+        Assert.True(mayor < TimeSpan.FromSeconds(30), $"Ha tardado {mayor}.");
     }
+
+    private static string ConRelleno(string relleno, int largo) =>
+        "<p>a</p>" + string.Concat(Enumerable.Repeat(relleno, largo / relleno.Length)) + "<p>b</p>";
+
+    /// <summary>Lo que tarda, con la basura recogida antes para que una pausa del recolector no caiga dentro.</summary>
+    private static TimeSpan Medir(Action accion)
+    {
+        GC.Collect();
+        var reloj = Stopwatch.StartNew();
+        accion();
+        return reloj.Elapsed;
+    }
+
+    private static TimeSpan Menor(TimeSpan a, TimeSpan b) => a < b ? a : b;
 
     [Fact]
     public void Convertir_MuchosTitulosSinCerrar_NoSeAtasca()

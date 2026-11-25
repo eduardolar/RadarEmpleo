@@ -84,7 +84,7 @@ public sealed class LectorCurriculumTests : IDisposable
         Assert.Null(await new LectorCurriculum(new RutasCurriculum(null)).LeerHashAsync(ArchivoVigilado.Registro));
     }
 
-    [Fact]
+    [FactSoloWindows("abrir un archivo en exclusiva (FileShare.None) solo impide leerlo a otros en Windows")]
     public async Task LeerHashAsync_AbiertoEnExclusiva_LanzaYNoDiceAusente()
     {
         await File.WriteAllTextAsync(_registro, "contenido");

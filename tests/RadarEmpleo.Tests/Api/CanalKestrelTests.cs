@@ -80,6 +80,34 @@ public sealed class CanalKestrelTests : IDisposable
         Assert.False(info.GetProperty("agentesHabilitados").GetBoolean());
     }
 
+    /// <summary>
+    /// Extraer el registro lanza un agente: por el remoto, 403 sin crear nada (tampoco con otro tipo de contenido); por
+    /// el local, 202 con la ejecución. El ejecutor es el falso: no se lanza Claude.
+    /// </summary>
+    [Fact]
+    public async Task ExtraerRegistro_PorElRemotoDa403SinCrearNada_YPorElLocalDa202()
+    {
+        using var local = Cliente(_puertoLocal);
+        using var remoto = Cliente(_puertoRemoto);
+        static StringContent Vacio(string tipo = "application/json") => new("{}", Encoding.UTF8, tipo);
+
+        var desdeMovil = await remoto.PostAsync("/api/agentes/extraer-registro", Vacio());
+        Assert.Equal(HttpStatusCode.Forbidden, desdeMovil.StatusCode);
+        Assert.Equal(DisponibilidadAgentes.MensajeSoloPc,
+            (await desdeMovil.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
+        Assert.Equal(HttpStatusCode.Forbidden, (await remoto.PostAsync("/api/agentes/extraer-registro", Vacio("text/plain"))).StatusCode);
+        Assert.Equal(0, (await local.GetFromJsonAsync<JsonElement>("/api/agentes/ejecuciones")).GetArrayLength());
+
+        var desdePc = await local.PostAsync("/api/agentes/extraer-registro", Vacio());
+        Assert.Equal(HttpStatusCode.Accepted, desdePc.StatusCode);
+        var ejecucion = await desdePc.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ExtraerRegistro", ejecucion.GetProperty("tarea").GetString());
+        Assert.EndsWith($"/api/agentes/ejecuciones/{ejecucion.GetProperty("id").GetInt32()}", desdePc.Headers.Location!.ToString());
+        Assert.Equal(1, (await local.GetFromJsonAsync<JsonElement>("/api/agentes/ejecuciones")).GetArrayLength());
+        // La que se ha creado por el local tampoco se ve ni se toca por el remoto.
+        Assert.Equal(HttpStatusCode.Forbidden, (await remoto.GetAsync($"/api/agentes/ejecuciones/{ejecucion.GetProperty("id").GetInt32()}")).StatusCode);
+    }
+
     [Fact]
     public async Task ElOrigen_SaleDelEndpoint()
     {
