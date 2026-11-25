@@ -98,9 +98,9 @@ describe('usoEstimado', () => {
     expect(usoEstimado(ejecucion, TOPE)).toBe('uso estimado: como mucho el 4 % del tope de hoy');
   });
 
-  it('coste 0 (una oferta cerrada no llama a Claude): no ha gastado nada', () => {
+  it('coste 0 (una oferta cerrada no llama a Claude): no ha usado nada', () => {
     expect(usoEstimado(crearEjecucion({ estado: 'Ok', costeUsd: 0 }), TOPE)).toBe(
-      'no ha gastado nada de tu tope de hoy',
+      'no ha usado nada de tu tope de hoy',
     );
   });
 
@@ -127,7 +127,7 @@ describe('usoEstimado', () => {
     expect(usoEstimado(crearEjecucion({ estado: 'Ok', costeUsd: 0 }), null)).toBeNull();
   });
 
-  it('lo que no llegó a empezar no ha gastado nada: no dice nada', () => {
+  it('lo que no llegó a empezar no ha usado nada: no dice nada', () => {
     expect(usoEstimado(crearEjecucion({ estado: 'EnCola' }), TOPE)).toBeNull();
     expect(usoEstimado(crearEjecucion({ estado: 'Cancelada' }), TOPE)).toBeNull();
   });
@@ -153,7 +153,7 @@ describe('usoDelDia', () => {
 
   it('sin nada gastado pero con algo en marcha no dice que no has usado Claude', () => {
     expect(usoDelDia(crearGasto({ reservadoUsd: 0.5 }))).toBe(
-      'Hoy aún no has gastado nada; Claude tiene trabajo en marcha',
+      'Hoy aún no has usado nada; Claude tiene trabajo en marcha',
     );
   });
 });
@@ -281,7 +281,7 @@ describe('textoEstado', () => {
       costeUsd: 0,
     });
 
-    expect(resultado).toBe('Hecha en 12 s · no ha gastado nada de tu tope de hoy');
+    expect(resultado).toBe('Hecha en 12 s · no ha usado nada de tu tope de hoy');
   });
 
   it('hecha sin coste conocido: no se sabe, como mucho el presupuesto', () => {
@@ -346,15 +346,15 @@ describe('textoEstado', () => {
       `Hecha en 2${NBSP}min 10${NBSP}s · uso estimado: 1${NBSP}% del tope diario`,
     );
     expect(deOtroDia({ estado: 'Ok', ...empezada, costeUsd: 0 })).toBe(
-      `Hecha en 2${NBSP}min 10${NBSP}s · no ha gastado nada de tu tope diario`,
+      `Hecha en 2${NBSP}min 10${NBSP}s · no ha usado nada de tu tope diario`,
     );
     expect(deOtroDia({ estado: 'Cancelada', ...empezada, costeEstimado: true })).toBe(
       `Cancelada antes de terminar · uso estimado: no se sabe, como mucho el 4${NBSP}% del tope diario`,
     );
   });
 
-  it('cancelada sin empezar: no ha gastado nada; empezada, con su uso si se sabe', () => {
-    expect(texto({ estado: 'Cancelada' })).toBe('Cancelada antes de empezar. No ha gastado nada.');
+  it('cancelada sin empezar: no ha usado nada; empezada, con su uso si se sabe', () => {
+    expect(texto({ estado: 'Cancelada' })).toBe('Cancelada antes de empezar. No ha usado nada.');
     expect(texto({ estado: 'Cancelada', inicio: '2026-11-23T10:00:00Z', costeUsd: 0.15 })).toBe(
       'Cancelada antes de terminar · uso estimado: 1 % del tope de hoy',
     );

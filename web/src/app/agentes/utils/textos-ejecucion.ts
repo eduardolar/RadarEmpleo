@@ -40,7 +40,7 @@ export const NOMBRE_TAREA: Record<TareaAgente, string> = {
 };
 
 /** Debajo de cada botón que lanza una tarea de Claude */
-export const AVISO_GASTO = 'Gasta un poco de tu tope diario de Claude.';
+export const AVISO_GASTO = 'Usa un poco de tu tope diario de Claude.';
 
 /** Lo que está haciendo mientras va en curso */
 const TRABAJANDO: Record<TareaAgente, string> = {
@@ -112,7 +112,7 @@ function parteConocida(usd: number, porcentaje: number): string {
 
 /**
  * El uso de una ejecución respecto al tope de hoy:
- * - con su coste, «uso estimado: 1 % del tope de hoy» (con 0, «no ha gastado nada de tu tope de hoy»);
+ * - con su coste, «uso estimado: 1 % del tope de hoy» (con 0, «no ha usado nada de tu tope de hoy»);
  * - en curso, «uso estimado: como mucho el 3 % del tope de hoy», con su presupuesto;
  * - terminada sin coste, «uso estimado: no se sabe, como mucho el 3 % del tope de hoy».
  * De otro día (`deHoy` a false), «del tope diario». null sin tope o si no llegó a empezar (no ha
@@ -132,7 +132,7 @@ export function usoEstimado(
       return null;
     }
     return costeUsd <= 0
-      ? `no ha gastado nada de tu ${tope}`
+      ? `no ha usado nada de tu ${tope}`
       : `uso estimado: ${parteConocida(costeUsd, porcentaje)} del ${tope}`;
   }
   const enCurso = estado === 'EnCurso' && inicio !== null;
@@ -150,7 +150,7 @@ export function usoEstimado(
 
 /**
  * «Uso estimado de tu suscripción hoy: 3 % del tope» o «Hoy aún no has usado Claude» (si hay algo
- * reservado, «Hoy aún no has gastado nada; Claude tiene trabajo en marcha»); null sin tope
+ * reservado, «Hoy aún no has usado nada; Claude tiene trabajo en marcha»); null sin tope
  */
 export function usoDelDia(
   gasto: Pick<GastoHoy, 'gastadoUsd' | 'reservadoUsd' | 'topeUsd'>,
@@ -162,7 +162,7 @@ export function usoDelDia(
   if (gasto.gastadoUsd <= 0) {
     // Con algo en cola o en curso ya se está usando Claude: «aún no has usado» sería falso
     return gasto.reservadoUsd > 0
-      ? 'Hoy aún no has gastado nada; Claude tiene trabajo en marcha'
+      ? 'Hoy aún no has usado nada; Claude tiene trabajo en marcha'
       : 'Hoy aún no has usado Claude';
   }
   return `Uso estimado de tu suscripción hoy: ${parteConocida(gasto.gastadoUsd, porcentaje)} del tope`;
@@ -337,7 +337,7 @@ function textoCancelada(
   deHoy: boolean,
 ): string {
   if (ejecucion.inicio === null) {
-    return 'Cancelada antes de empezar. No ha gastado nada.';
+    return 'Cancelada antes de empezar. No ha usado nada.';
   }
   const uso = usoEstimado(ejecucion, topeUsd, deHoy);
   return uso === null ? 'Cancelada antes de terminar.' : `Cancelada antes de terminar · ${uso}`;

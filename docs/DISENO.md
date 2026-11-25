@@ -614,7 +614,7 @@ borde fino (`borde-fino`), fondo de tarjeta y sin sombra dura. De arriba abajo:
   | Se ha pedido cancelar     | «Cancelando… se parará en unos segundos.»                                           |
   | Hecha                     | «Hecha en 2 min 10 s · uso estimado: 1 % del tope de hoy»                           |
   | No ha salido              | «No ha salido. {el motivo que da la API, que dice qué hacer}»                       |
-  | Cancelada sin empezar     | «Cancelada antes de empezar. No ha gastado nada.»                                   |
+  | Cancelada sin empezar     | «Cancelada antes de empezar. No ha usado nada.»                                     |
   | Cancelada a medias        | «Cancelada antes de terminar · uso estimado: …»                                     |
   | La API ya no la encuentra | «Ya no se encuentra esta tarea de Claude. Si hace falta, vuelve a lanzarla.»        |
 
@@ -650,16 +650,16 @@ su unidad («3 %», «5 min») para que no se partan de línea:
 | ----------------------------------------- | -------------------------------------------------------------------- |
 | Con el coste                              | «uso estimado: 1 % del tope de hoy»                                  |
 | Ha gastado algo, pero no llega al 1 %     | «uso estimado: menos del 1 % del tope de hoy»                        |
-| No ha gastado (una oferta cerrada)        | «no ha gastado nada de tu tope de hoy»                               |
+| No ha gastado (una oferta cerrada)        | «no ha usado nada de tu tope de hoy»                                 |
 | En curso                                  | «uso estimado: como mucho el 3 % del tope de hoy»                    |
 | Terminada sin saber el coste              | «uso estimado: no se sabe, como mucho el 3 % del tope de hoy»        |
 | De otro día                               | lo mismo, con «del tope diario»                                      |
 | El día entero                             | «Uso estimado de tu suscripción hoy: 3 % del tope»                   |
 | El día, sin usar                          | «Hoy aún no has usado Claude»                                        |
-| El día, sin gasto pero con algo en marcha | «Hoy aún no has gastado nada; Claude tiene trabajo en marcha»        |
+| El día, sin gasto pero con algo en marcha | «Hoy aún no has usado nada; Claude tiene trabajo en marcha»          |
 | Lo reservado                              | «Reservado para lo que está en marcha: hasta el 4 % del tope de hoy» |
 
-Debajo de cada botón que lanza una tarea, en letra pequeña y gris: «Gasta un poco de tu tope
+Debajo de cada botón que lanza una tarea, en letra pequeña y gris: «Usa un poco de tu tope
 diario de Claude.».
 
 **Variante compacta** (`compacta`), para la lista de `/agentes`: sin marco y sin barra, la insignia
@@ -741,7 +741,7 @@ momento.» con «Reintentar».
 
 - El aviso «Hay unos N envíos escritos como texto, fuera de la tabla: Claude puede leerlos.» y el
   botón con borde **«Extraer el texto libre con Claude»**. Debajo: «Claude solo lee: verás lo que
-  encuentre antes de añadir nada. Gasta un poco de tu tope diario de Claude.».
+  encuentre antes de añadir nada. Usa un poco de tu tope diario de Claude.».
 - Mientras trabaja, la tarjeta (con la pausa contra el doble toque) y «Puede tardar un rato si el
   texto es largo. Puedes salir: la tarea sigue y la verás aquí al volver.».
 - **Vista combinada.** Al terminar, la misma lista enseña la tabla y lo leído juntos. Lo primero es

@@ -237,8 +237,8 @@ describe('AgentesPageComponent', () => {
       responder([], crearEstadoAgentes({ gasto: crearGasto({ reservadoUsd: 0.5 }) }));
 
       const uso = elemento().querySelector('.agentes__uso')!.textContent!;
-      expect(uso).toContain('Hoy aún no has gastado nada; Claude tiene trabajo en marcha');
-      expect(uso).not.toContain('aún no has usado');
+      expect(uso).toContain('Hoy aún no has usado nada; Claude tiene trabajo en marcha');
+      expect(uso).not.toContain('no has usado Claude');
     });
 
     it('si falla, lo dice y «Reintentar» vuelve a pedir el uso y la lista', () => {

@@ -154,7 +154,7 @@ describe('EstadoEjecucion', () => {
         'cancelada antes de empezar',
         { estado: 'Cancelada' },
         'Cancelada',
-        'Cancelada antes de empezar. No ha gastado nada.',
+        'Cancelada antes de empezar. No ha usado nada.',
       ],
       [
         'cancelada en curso, con su uso',
@@ -577,7 +577,7 @@ describe('EstadoEjecucion', () => {
       pintar();
 
       expect(insignia()).toBe('Hecha');
-      expect(texto()).toBe('Hecha en 1 min · no ha gastado nada de tu tope de hoy');
+      expect(texto()).toBe('Hecha en 1 min · no ha usado nada de tu tope de hoy');
       expect(terminadas).toEqual([hecha]);
       expect(elemento().querySelector('mat-progress-bar')).toBeNull();
 

@@ -147,7 +147,7 @@ describe('AjustesPageComponent', () => {
 
       const contenido = texto(bloque());
       expect(contenido).toContain('La cola la lleva la otra copia de la API.');
-      expect(contenido).toContain('Hoy aún no has gastado nada; Claude tiene trabajo en marcha');
+      expect(contenido).toContain('Hoy aún no has usado nada; Claude tiene trabajo en marcha');
       expect(contenido).toContain('hasta el 4 % del tope de hoy');
       expect(bloque().querySelector('dd:last-of-type .font-mono')!.textContent).toBe('2.1.190');
       expect(contenido).toContain(

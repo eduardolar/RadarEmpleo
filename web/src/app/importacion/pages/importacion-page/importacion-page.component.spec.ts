@@ -995,7 +995,7 @@ describe('ImportacionPageComponent', () => {
         `#${botonExtraer()!.getAttribute('aria-describedby')}`,
       );
       expect(gasto?.textContent?.trim()).toBe(
-        'Claude solo lee: verás lo que encuentre antes de añadir nada. Gasta un poco de tu tope diario de Claude.',
+        'Claude solo lee: verás lo que encuentre antes de añadir nada. Usa un poco de tu tope diario de Claude.',
       );
       expect(elemento().textContent).toContain('fuera de la tabla: Claude puede leerlos.');
       const rellenos = elemento().querySelectorAll('[mat-flat-button]');
@@ -1211,7 +1211,7 @@ describe('ImportacionPageComponent', () => {
       expect(otraVez.hasAttribute('mat-button')).toBe(true);
       expect(
         elemento().querySelector(`#${otraVez.getAttribute('aria-describedby')}`)?.textContent,
-      ).toContain('Gasta un poco de tu tope diario de Claude.');
+      ).toContain('Usa un poco de tu tope diario de Claude.');
 
       otraVez.click();
       http.expectOne(URL_EXTRAER).flush(extraccion({ id: 9 }));

@@ -48,7 +48,7 @@ public class EjecucionAgente
     public const string MensajeInterrumpida = "Se cortó porque la app se cerró mientras trabajaba.";
 
     /// <summary>Resumen de lo que estaba en cola cuando se cerró la API (no se relanza solo).</summary>
-    public const string MensajeReiniciadaAntesDeEmpezar = "La app se cerró antes de empezar. Vuelve a lanzarla.";
+    public const string MensajeReiniciadaAntesDeEmpezar = "La app se cerró antes de empezar. Reinténtala.";
 
     public int Id { get; set; }
     public TareaAgente Tarea { get; set; }
