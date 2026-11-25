@@ -736,10 +736,11 @@ momento.» con «Reintentar».
   tarjetas de `/agentes` y Ajustes: con el trazo grueso parecía una fila más de la lista.
 - **«Leída con Claude».** Cada fila que sale del texto libre lo dice junto a la fecha, en gris de
   lápiz y con las mismas capas. Sin color de aviso: solo dice de dónde viene.
-- **El estado que lee Claude.** Si la línea no lo dice, o es Entrevista, Oferta, Descartada o
-  Cerrada, la fila lleva «Estado leído por Claude: compruébalo en tu archivo.» y, si cambiaría una
-  candidatura que ya tienes, sale «Para revisar»: del texto libre solo Preparada y Enviada cambian
-  solas. Las filas de la tabla, como siempre.
+- **El estado que lee Claude.** «Estado leído por Claude: compruébalo en tu archivo.» lo llevan
+  las filas cuya línea no dice ese estado y todas las nuevas en Entrevista, Oferta, Descartada o
+  Cerrada. Si cambiaría una candidatura que ya tienes sin respaldo, o a uno de esos estados, sale
+  «Para revisar»: del texto libre solo Preparada y Enviada cambian solas. Las filas de la tabla,
+  como siempre.
 - **«Se quedan fuera (N)»** y **«Dudas de Claude (N)»** van plegadas en `seccion-plegable`, con
   una línea que explica qué son y cada elemento como texto.
 - **«Ver lo que ha leído».** Si la tarea terminó mientras estabas fuera: «Claude terminó de leer el
