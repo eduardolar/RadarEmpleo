@@ -10,6 +10,7 @@ import {
   ElementRef,
   inject,
   Injector,
+  linkedSignal,
   signal,
   untracked,
   viewChild,
@@ -60,6 +61,18 @@ import {
 /** La cuenta del título de un grupo: «(3)» con todas marcadas y «(2 de 3)» si no */
 function cuenta(marcadas: number, total: number): string {
   return marcadas === total ? `(${total})` : `(${marcadas} de ${total})`;
+}
+
+/** Lo que necesita la plantilla de cada grupo que se puede elegir (las que se añaden, las que cambian) */
+interface GrupoElegible {
+  filas: FilaVistaPrevia[];
+  /** id de su título, para el botón de marcar */
+  titulo: string;
+  hayAvisos: boolean;
+  /** Ya están marcadas todas las que no llevan aviso: el botón desmarca */
+  desmarcar: boolean;
+  /** El texto del botón; null si no sale (una sola fila, o todas con aviso y ninguna marcada) */
+  textoBoton: string | null;
 }
 
 @Component({
@@ -159,6 +172,14 @@ export default class ImportacionPageComponent {
   protected readonly cuentaAvanzan = computed(() =>
     cuenta(this.avanzanElegidas(), this.avanzan().length),
   );
+  protected readonly grupoNuevas = computed(() =>
+    this.grupoElegible(this.nuevas(), 'titulo-nuevas'),
+  );
+  protected readonly grupoAvanzan = computed(() =>
+    this.grupoElegible(this.avanzan(), 'titulo-avanzan'),
+  );
+  /** Lo que dice el botón tras marcar o desmarcar, para el lector de pantalla; vacío con cada vista nueva */
+  protected readonly anuncioEleccion = linkedSignal({ source: this.vista, computation: () => '' });
   protected readonly tituloAlDia = computed(() => {
     const vista = this.vista();
     return vista ? tituloNadaQueAplicar(vista.resumen, this.resultado() !== null) : '';
@@ -327,25 +348,23 @@ export default class ImportacionPageComponent {
 
   protected elegir({ clave, marcada }: { clave: string; marcada: boolean }): void {
     this.importacion.elegir([clave], marcada);
+    this.anunciarEleccion();
   }
 
-  protected todasElegidas(filas: FilaVistaPrevia[]): boolean {
-    return this.contarElegidas(filas) === filas.length;
-  }
-
-  /** «Marcar todas» o, si ya lo están, «Desmarcar todas» las del grupo */
-  protected alternarTodas(filas: FilaVistaPrevia[]): void {
+  /**
+   * «Desmarcar todas» desmarca el grupo entero; marcar, solo las que no llevan aviso: las de aviso se
+   * marcan una a una, tras mirarlas (que no se cuelen de golpe es lo que pide el H1)
+   */
+  protected alternarTodas(grupo: GrupoElegible): void {
     if (this.aplicando()) {
       return;
     }
+    const filas = grupo.desmarcar ? grupo.filas : grupo.filas.filter((f) => f.avisos.length === 0);
     this.importacion.elegir(
       filas.map((f) => f.clave),
-      !this.todasElegidas(filas),
+      !grupo.desmarcar,
     );
-  }
-
-  protected hayAvisos(filas: FilaVistaPrevia[]): boolean {
-    return filas.some((f) => f.avisos.length > 0);
+    this.anunciarEleccion();
   }
 
   protected reintentar(): void {
@@ -488,6 +507,27 @@ export default class ImportacionPageComponent {
           this.ofrecer(e);
         }
       });
+  }
+
+  private grupoElegible(filas: FilaVistaPrevia[], titulo: string): GrupoElegible {
+    const elegidas = this.elegidas();
+    const hayAvisos = filas.some((f) => f.avisos.length > 0);
+    const sinAviso = filas.filter((f) => f.avisos.length === 0);
+    const desmarcar =
+      filas.some((f) => elegidas.has(f.clave)) && sinAviso.every((f) => elegidas.has(f.clave));
+    let textoBoton: string | null = null;
+    if (filas.length > 1 && (desmarcar || sinAviso.length > 0)) {
+      textoBoton = desmarcar
+        ? 'Desmarcar todas'
+        : hayAvisos
+          ? 'Marcar las que no llevan aviso'
+          : 'Marcar todas';
+    }
+    return { filas, titulo, hayAvisos, desmarcar, textoBoton };
+  }
+
+  private anunciarEleccion(): void {
+    this.anuncioEleccion.set(this.textoBoton());
   }
 
   private contarElegidas(filas: FilaVistaPrevia[]): number {

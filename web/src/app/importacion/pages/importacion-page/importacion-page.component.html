@@ -151,26 +151,29 @@
 
   <!-- Bajo el título de las que se añaden o actualizan: por qué alguna sale sin marcar y marcarlas
        o desmarcarlas todas de una vez -->
-  <ng-template #elegirGrupo let-filas let-titulo="titulo">
+  <ng-template #elegirGrupo let-grupo>
     <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 empty:hidden">
-      @if (hayAvisos(filas)) {
+      @if (grupo.hayAvisos) {
         <p class="min-w-0 text-sm text-on-surface-variant">{{ explicacionSinMarcar }}</p>
       }
-      @if (filas.length > 1) {
+      @if (grupo.textoBoton; as texto) {
         <button
           mat-button
           type="button"
           class="-ml-3 [--mat-button-text-container-height:48px]"
           disabledInteractive
           [disabled]="aplicando()"
-          [attr.aria-describedby]="titulo"
-          (click)="alternarTodas(filas)"
+          [attr.aria-describedby]="grupo.titulo"
+          (click)="alternarTodas(grupo)"
         >
-          {{ todasElegidas(filas) ? 'Desmarcar todas' : 'Marcar todas' }}
+          {{ texto }}
         </button>
       }
     </div>
   </ng-template>
+
+  <!-- Al marcar o desmarcar, el lector de pantalla dice cómo queda el botón de guardar -->
+  <span class="sr-only" aria-live="polite">{{ anuncioEleccion() }}</span>
 
   @if (vista(); as previa) {
     <!-- Lo primero de la vista combinada: qué se está viendo y cómo volver a la de la tabla. Marco fino
@@ -335,7 +338,7 @@
         </h2>
         <ng-container
           [ngTemplateOutlet]="elegirGrupo"
-          [ngTemplateOutletContext]="{ $implicit: nuevas(), titulo: 'titulo-nuevas' }"
+          [ngTemplateOutletContext]="{ $implicit: grupoNuevas() }"
         />
         <app-lista-importacion
           [filas]="nuevas()"
@@ -358,7 +361,7 @@
         </div>
         <ng-container
           [ngTemplateOutlet]="elegirGrupo"
-          [ngTemplateOutletContext]="{ $implicit: avanzan(), titulo: 'titulo-avanzan' }"
+          [ngTemplateOutletContext]="{ $implicit: grupoAvanzan() }"
         />
         <app-lista-importacion
           [filas]="avanzan()"

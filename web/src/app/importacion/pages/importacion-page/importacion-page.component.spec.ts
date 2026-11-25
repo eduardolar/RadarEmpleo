@@ -299,22 +299,72 @@ describe('ImportacionPageComponent', () => {
     });
 
     it('«Marcar todas» y «Desmarcar todas» van por grupo y sin volver a leer nada', async () => {
-      await abrirCon([NUEVA, CON_AVISO, AVANZA, { ...AVANZA, clave: 'avanza2' }]);
+      await abrirCon([NUEVA, AVANZA, { ...AVANZA, clave: 'avanza2' }, { ...NUEVA, clave: 'otra' }]);
       const nuevas = seccion('Se van a añadir')!;
       const avanzan = seccion('Cambian de estado')!;
 
       expect(boton('Desmarcar todas', avanzan)?.getAttribute('aria-describedby')).toBe(
         'titulo-avanzan',
       );
-      await pulsar(boton('Marcar todas', nuevas)!);
-      expect(casillas(nuevas).every((c) => c.checked)).toBe(true);
-      expect(boton('Desmarcar todas', nuevas)).toBeDefined();
-
       await pulsar(boton('Desmarcar todas', avanzan)!);
       expect(casillas(avanzan).some((c) => c.checked)).toBe(false);
       expect(casillas(nuevas).every((c) => c.checked)).toBe(true);
       expect(botonAplicar()?.textContent).toContain('Añadir 2 candidaturas');
+
+      await pulsar(boton('Marcar todas', avanzan)!);
+      expect(casillas(avanzan).every((c) => c.checked)).toBe(true);
+      expect(boton('Desmarcar todas', avanzan)).toBeDefined();
       http.expectNone(URL_PREVISUALIZAR);
+    });
+
+    it('con avisos en el grupo, marcar de golpe deja sin marcar las de aviso: esas, una a una', async () => {
+      await abrirCon([NUEVA, CON_AVISO]);
+      const nuevas = seccion('Se van a añadir')!;
+
+      // Las sin aviso ya están marcadas: el botón desmarca el grupo entero
+      await pulsar(boton('Desmarcar todas', nuevas)!);
+      expect(casillas(nuevas).some((c) => c.checked)).toBe(false);
+      expect(boton('Marcar todas', nuevas)).toBeUndefined();
+
+      await pulsar(boton('Marcar las que no llevan aviso', nuevas)!);
+      expect(casilla('Añadir: Desarrollador Angular en Acme')?.checked).toBe(true);
+      expect(casilla('Añadir: Backend en Gamma')?.checked).toBe(false);
+
+      await pulsar(casilla('Añadir: Backend en Gamma')!);
+      await pulsar(boton('Desmarcar todas', nuevas)!);
+      expect(casillas(nuevas).some((c) => c.checked)).toBe(false);
+    });
+
+    it('si todas llevan aviso y ninguna está marcada, no hay botón de marcar', async () => {
+      await abrirCon([CON_AVISO, { ...CON_AVISO, clave: 'aviso2', puesto: 'Frontend' }]);
+
+      expect(boton('Marcar')).toBeUndefined();
+      await pulsar(casilla('Añadir: Backend en Gamma')!);
+      expect(boton('Desmarcar todas')).toBeDefined();
+    });
+
+    it('la casilla de una fila con aviso lo lee al enfocarla', async () => {
+      await abrirCon([NUEVA, CON_AVISO]);
+
+      const ids = casilla('Añadir: Backend en Gamma')!.getAttribute('aria-describedby')!;
+      expect(elemento().querySelector(`[id="${ids}"]`)?.textContent).toContain(
+        'Revisa la empresa: no aparece en la línea.',
+      );
+      expect(
+        casilla('Añadir: Desarrollador Angular en Acme')?.getAttribute('aria-describedby') ?? '',
+      ).toBe('');
+    });
+
+    it('al marcar o desmarcar, anuncia cómo queda el botón', async () => {
+      await abrirCon([NUEVA, CON_AVISO]);
+      const anuncio = () =>
+        elemento().querySelector('.sr-only[aria-live="polite"]')?.textContent?.trim();
+
+      expect(anuncio()).toBe('');
+      await pulsar(casilla('Añadir: Backend en Gamma')!);
+      expect(anuncio()).toBe('Añadir 2 candidaturas');
+      await pulsar(boton('Desmarcar todas')!);
+      expect(anuncio()).toBe('Marca al menos una candidatura');
     });
 
     it('con una sola fila en el grupo no hace falta «Marcar todas»', async () => {
