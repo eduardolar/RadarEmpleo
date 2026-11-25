@@ -176,7 +176,7 @@ public class DescargadorOfertasHttpTests
 
     /// <summary>
     /// El tope cuenta lo que llega de verdad, no lo que el servidor dice en <c>Content-Length</c>: diciendo menos no se
-    /// cuela un cuerpo enorme, y diciendo más no se da por grande ni se reserva memoria para lo que no viene.
+    /// cuela un cuerpo enorme, y diciendo más no se da por grande.
     /// </summary>
     [Theory]
     [InlineData(500, 10L, true, 100)]
