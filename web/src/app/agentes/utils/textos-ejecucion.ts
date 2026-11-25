@@ -185,6 +185,10 @@ export function reservaDelDia(gasto: Pick<GastoHoy, 'reservadoUsd' | 'topeUsd'>)
 export const TEXTO_RECHAZADOS =
   'Ahora mismo no se puede usar Claude desde aquí. Vuelve a comprobarlo en un momento.';
 
+/** Lo que dice /agentes cuando «Volver a comprobar» vuelve a dar 403 */
+export const TEXTO_SIGUE_RECHAZADO =
+  'Sigue sin poder usarse Claude desde aquí. Prueba otra vez dentro de un momento.';
+
 /** Por qué no se pueden usar los agentes desde aquí, para /agentes (sin /api/agentes/estado, que daría 403) */
 export function motivoSinAgentes(
   info: Pick<SistemaInfo, 'modo' | 'agentesHabilitados' | 'desdeElPc'>,

@@ -7,7 +7,7 @@ import { crearSistemaInfo } from '../../../core/utils/sistema-de-prueba';
 import { EjecucionAgente, EstadoAgentes } from '../../interfaces/ejecucion.interface';
 import { INTERVALO_SEGUIMIENTO_MS } from '../../services/agentes.service';
 import { crearEjecucion, crearEstadoAgentes, crearGasto } from '../../utils/ejecucion-de-prueba';
-import { NBSP, TEXTO_RECHAZADOS } from '../../utils/textos-ejecucion';
+import { NBSP, TEXTO_RECHAZADOS, TEXTO_SIGUE_RECHAZADO } from '../../utils/textos-ejecucion';
 import AgentesPageComponent from './agentes-page.component';
 
 const URL_ESTADO = '/api/agentes/estado';
@@ -247,8 +247,6 @@ describe('AgentesPageComponent', () => {
       http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
       fixture.detectChanges();
 
-      // En el documento, para poder comprobar a dónde va el foco
-      document.body.appendChild(elemento());
       const boton = elemento().querySelector<HTMLButtonElement>(
         '.agentes__uso [role="alert"] button',
       )!;
@@ -269,7 +267,6 @@ describe('AgentesPageComponent', () => {
       );
       expect(elemento().querySelector('.agentes__uso [role="alert"]')).toBeNull();
       expect(document.activeElement).toBe(elemento().querySelector('#titulo-uso'));
-      elemento().remove();
     });
 
     it('si el reintento vuelve a fallar, el aviso no desaparece y el foco se queda en el botón', () => {
@@ -277,7 +274,6 @@ describe('AgentesPageComponent', () => {
       http.expectOne(URL_ESTADO).flush({ title: 'Fallo' }, { status: 500, statusText: 'Error' });
       http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
       fixture.detectChanges();
-      document.body.appendChild(elemento());
 
       const boton = elemento().querySelector<HTMLButtonElement>(
         '.agentes__uso [role="alert"] button',
@@ -292,7 +288,6 @@ describe('AgentesPageComponent', () => {
       expect(boton.isConnected).toBe(true);
       expect(boton.textContent!.trim()).toBe('Reintentar');
       expect(document.activeElement).toBe(boton);
-      elemento().remove();
     });
   });
 
@@ -329,19 +324,19 @@ describe('AgentesPageComponent', () => {
 
       const [primera, segunda] = filas();
       expect(filas()).toHaveLength(2);
-      expect(primera.querySelector('h3')!.textContent).toContain('Análisis del encaje');
+      expect(primera.querySelector('h4')!.textContent).toContain('Análisis del encaje');
       const enlace = primera.querySelector<HTMLAnchorElement>('a[href="/candidaturas/12"]')!;
       expect(enlace.textContent!.trim()).toBe('Desarrollador Angular en Acme');
       expect(primera.querySelector('time')!.getAttribute('datetime')).toBe('2026-11-23T10:00:00Z');
-      expect(primera.querySelector('time')!.textContent).toContain('23 nov 2026, 11:00');
+      expect(primera.querySelector('time')!.textContent).toBe('11:00');
       // Compacta: sin role="status" (no se anuncian todas a la vez) y con la empresa en su nombre
       const estado = primera.querySelector('app-estado-ejecucion [role="group"]')!;
       expect(estado.classList).toContain('estado-ejecucion--compacta');
       expect(estado.getAttribute('aria-label')).toBe('Tarea de Claude: Análisis del encaje · Acme');
       expect(primera.querySelector('[role="status"]')).toBeNull();
 
-      expect(segunda.querySelector('h3')!.textContent).toContain('Lectura del texto libre');
-      expect(segunda.querySelector('a')).toBeNull();
+      expect(segunda.querySelector('h4')!.textContent).toContain('Lectura del texto libre');
+      expect(segunda.querySelector('a[href^="/candidaturas"]')).toBeNull();
     });
 
     it('sin los datos de la candidatura, «Ver la candidatura» lleva la tarea en su nombre', () => {
@@ -452,6 +447,314 @@ describe('AgentesPageComponent', () => {
       const aviso = elemento().querySelector<HTMLElement>('.agentes__lista [role="alert"]')!;
       aviso.querySelector('button')!.click();
       responder([]);
+    });
+
+    it('agrupada por día («Hoy», «Ayer» y la fecha), con solo la hora en cada fila', () => {
+      abrir();
+      responder([
+        crearEjecucion({ id: 4, estado: 'Ok', fechaAlta: '2026-11-23T10:00:00Z' }),
+        crearEjecucion({ id: 3, estado: 'Ok', fechaAlta: '2026-11-23T08:05:00Z' }),
+        crearEjecucion({ id: 2, estado: 'Ok', fechaAlta: '2026-11-22T17:30:00Z' }),
+        crearEjecucion({ id: 1, estado: 'Ok', fechaAlta: '2026-11-20T10:00:00Z' }),
+      ]);
+
+      const dias = [...elemento().querySelectorAll<HTMLElement>('.agentes__dia')];
+      expect(dias.map((d) => d.querySelector('h3')!.textContent!.trim())).toEqual([
+        'Hoy',
+        'Ayer',
+        '20 nov 2026',
+      ]);
+      expect(dias.map((d) => d.querySelectorAll('ul > li').length)).toEqual([2, 1, 1]);
+      // Cada grupo se llama como su encabezado
+      expect(dias[0].getAttribute('aria-labelledby')).toBe(dias[0].querySelector('h3')!.id);
+      expect(filas().map((f) => f.querySelector('time')!.textContent)).toEqual([
+        '11:00',
+        '09:05',
+        '18:30',
+        '11:00',
+      ]);
+    });
+
+    it('un error que salió bien después va atenuado y con «Resuelto: salió bien después.»', () => {
+      abrir();
+      responder([
+        crearEjecucion({ id: 4, estado: 'Error', candidaturaId: 20 }),
+        crearEjecucion({ id: 3, estado: 'Ok' }),
+        crearEjecucion({ id: 2, estado: 'Error' }),
+      ]);
+
+      const [sinResolver, , resuelto] = filas();
+      expect(resuelto.classList).toContain('agentes__ejecucion--resuelta');
+      expect(resuelto.querySelector('.opacity-60')).not.toBeNull();
+      const aviso = resuelto.querySelector('.agentes__resuelto')!;
+      expect(aviso.textContent!.trim()).toBe('Resuelto: salió bien después.');
+      // El aviso no va atenuado
+      expect(aviso.closest('.opacity-60')).toBeNull();
+      expect(sinResolver.querySelector('.agentes__resuelto')).toBeNull();
+      expect(sinResolver.querySelector('.opacity-60')).toBeNull();
+    });
+
+    it('«Ver en Importación» solo en la última lectura del registro, si terminó bien', () => {
+      const lectura = { tarea: 'ExtraerRegistro' as const, candidaturaId: null, candidatura: null };
+      abrir();
+      responder([
+        crearEjecucion({ id: 3, estado: 'Ok', ...lectura }),
+        crearEjecucion({ id: 2, estado: 'Ok', ...lectura }),
+        crearEjecucion({ id: 1, estado: 'Ok' }),
+      ]);
+
+      const enlaces = filas().map((f) => f.querySelector('a[href="/importacion"]'));
+      expect(enlaces[0]!.textContent!.trim()).toBe('Ver en Importación');
+      expect(enlaces.slice(1)).toEqual([null, null]);
+    });
+
+    it('si la última lectura del registro no ha salido, no lleva «Ver en Importación»', () => {
+      abrir();
+      responder([
+        crearEjecucion({
+          estado: 'Error',
+          tarea: 'ExtraerRegistro',
+          candidaturaId: null,
+          candidatura: null,
+        }),
+      ]);
+
+      expect(filas()[0].querySelector('a')).toBeNull();
+    });
+  });
+
+  describe('recuento y filtro', () => {
+    const chips = () => [
+      ...elemento().querySelectorAll<HTMLButtonElement>('[aria-label="Filtrar las tareas"] button'),
+    ];
+    const chip = (nombre: string) => chips().find((c) => c.textContent!.trim() === nombre)!;
+    const recuento = () => elemento().querySelector('.agentes__recuento')!.textContent!.trim();
+    const sinFiltro = () => elemento().querySelector('.agentes__sin-filtro')!.textContent!.trim();
+
+    function conTareas(): void {
+      abrir();
+      responder([
+        crearEjecucion({ id: 5, estado: 'EnCurso', inicio: '2026-11-23T10:00:00Z' }),
+        crearEjecucion({ id: 4, estado: 'Error', candidaturaId: 20 }),
+        crearEjecucion({ id: 3, estado: 'Ok', candidaturaId: 21 }),
+        crearEjecucion({
+          id: 2,
+          estado: 'Error',
+          candidaturaId: 22,
+          fechaAlta: '2026-11-22T10:00:00Z',
+        }),
+      ]);
+    }
+
+    it('arriba, las tareas de hoy y cuántas no han salido; los errores de otro día no cuentan', () => {
+      conTareas();
+
+      expect(recuento()).toBe('Hoy: 3 tareas · 1 no ha salido');
+    });
+
+    it('los chips son botones con aria-pressed y empieza en «Todas»', () => {
+      conTareas();
+
+      expect(chips().map((c) => [c.textContent!.trim(), c.getAttribute('aria-pressed')])).toEqual([
+        ['Todas', 'true'],
+        ['No han salido', 'false'],
+        ['En marcha', 'false'],
+      ]);
+      expect(filas()).toHaveLength(4);
+      expect(sinFiltro()).toBe('');
+    });
+
+    it('«No han salido» deja los errores de cualquier día y «En marcha», lo que está en cola o en curso', () => {
+      conTareas();
+
+      chip('No han salido').click();
+      fixture.detectChanges();
+      expect(chip('No han salido').getAttribute('aria-pressed')).toBe('true');
+      expect(
+        filas().map((f) => f.querySelector('[data-estado]')!.getAttribute('data-estado')),
+      ).toEqual(['Error', 'Error']);
+      expect(elemento().querySelectorAll('.agentes__dia')).toHaveLength(2);
+
+      chip('En marcha').click();
+      fixture.detectChanges();
+      expect(
+        filas().map((f) => f.querySelector('[data-estado]')!.getAttribute('data-estado')),
+      ).toEqual(['EnCurso']);
+      // El recuento es del día, no de lo filtrado
+      expect(recuento()).toBe('Hoy: 3 tareas · 1 no ha salido');
+
+      chip('Todas').click();
+      fixture.detectChanges();
+      expect(filas()).toHaveLength(4);
+    });
+
+    it('si el filtro no deja nada, lo dice en un role="status"', () => {
+      abrir();
+      responder([crearEjecucion({ estado: 'Ok' })]);
+
+      chip('No han salido').click();
+      fixture.detectChanges();
+      expect(filas()).toHaveLength(0);
+      expect(sinFiltro()).toBe('Ninguna tarea ha fallado.');
+      expect(elemento().querySelector('.agentes__sin-filtro')!.getAttribute('role')).toBe('status');
+
+      chip('En marcha').click();
+      fixture.detectChanges();
+      expect(sinFiltro()).toBe('Ahora mismo no hay ninguna tarea en marcha.');
+    });
+  });
+
+  describe('«Volver a comprobar» tras un 403', () => {
+    const PROHIBIDO = { status: 403, statusText: 'Forbidden' };
+    const boton = () => elemento().querySelector<HTMLButtonElement>('.agentes__motivo ~ button')!;
+    const resultado = () => elemento().querySelector('.agentes__comprobacion')!.textContent!.trim();
+
+    function rechazarYPulsar(): HTMLButtonElement {
+      abrir();
+      http.expectOne(URL_ESTADO).flush(crearEstadoAgentes());
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush(null, PROHIBIDO);
+      fixture.detectChanges();
+      expect(resultado()).toBe('');
+      const pulsado = boton();
+      pulsado.focus();
+      pulsado.click();
+      fixture.detectChanges();
+      return pulsado;
+    }
+
+    it('mientras espera dice «Comprobando…» y un segundo clic no pide nada más', () => {
+      const pulsado = rechazarYPulsar();
+
+      expect(pulsado.isConnected).toBe(true);
+      expect(pulsado.textContent!.trim()).toBe('Comprobando…');
+      expect(pulsado.getAttribute('aria-disabled')).toBe('true');
+      pulsado.click();
+
+      // expectOne falla si el segundo clic hubiera pedido otra vez
+      http.expectOne(URL_ESTADO).flush(null, PROHIBIDO);
+    });
+
+    it('si vuelve a dar 403, lo dice debajo y el foco se queda en el botón', () => {
+      const pulsado = rechazarYPulsar();
+      http.expectOne(URL_ESTADO).flush(null, PROHIBIDO);
+      fixture.detectChanges();
+
+      expect(pulsado.isConnected).toBe(true);
+      expect(pulsado.textContent!.trim()).toBe('Volver a comprobar');
+      expect(resultado()).toBe(TEXTO_SIGUE_RECHAZADO);
+      expect(elemento().querySelector('.agentes__comprobacion')!.getAttribute('role')).toBe(
+        'status',
+      );
+      expect(document.activeElement).toBe(pulsado);
+    });
+
+    it('si falla por otra cosa, enseña el mensaje del fallo y al volver a pulsar lo borra', () => {
+      rechazarYPulsar();
+      http.expectOne(URL_ESTADO).flush({ title: 'Fallo' }, { status: 500, statusText: 'Error' });
+      fixture.detectChanges();
+
+      expect(resultado()).not.toBe('');
+      expect(resultado()).not.toBe(TEXTO_SIGUE_RECHAZADO);
+
+      boton().click();
+      fixture.detectChanges();
+      expect(resultado()).toBe('');
+      http.expectOne(URL_ESTADO).flush(null, PROHIBIDO);
+    });
+
+    it('si contesta bien, el panel desaparece y el foco va al título de «Uso de hoy», no a <body>', () => {
+      rechazarYPulsar();
+      http.expectOne(URL_ESTADO).flush(crearEstadoAgentes());
+      fixture.detectChanges();
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+      fixture.detectChanges();
+
+      expect(elemento().querySelector('.agentes__motivo')).toBeNull();
+      expect(document.activeElement).toBe(elemento().querySelector('#titulo-uso'));
+    });
+
+    it('si un reintento del uso da 403, el foco va a la explicación, no a <body>', () => {
+      abrir();
+      http.expectOne(URL_ESTADO).flush({ title: 'Fallo' }, { status: 500, statusText: 'Error' });
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+      fixture.detectChanges();
+
+      const reintentar = elemento().querySelector<HTMLButtonElement>(
+        '.agentes__uso [role="alert"] button',
+      )!;
+      reintentar.focus();
+      reintentar.click();
+      fixture.detectChanges();
+      http.expectOne(URL_ESTADO).flush(null, PROHIBIDO);
+      http.expectOne((r) => r.url === URL_EJECUCIONES).flush([]);
+      fixture.detectChanges();
+
+      expect(reintentar.isConnected).toBe(false);
+      const motivo = elemento().querySelector('.agentes__motivo')!;
+      expect(motivo.textContent).toContain(TEXTO_RECHAZADOS);
+      expect(document.activeElement).toBe(motivo);
+    });
+  });
+
+  describe('una vuelta del seguimiento con un 404 y un 403', () => {
+    const PROHIBIDO = { status: 403, statusText: 'Forbidden' };
+    const NO_ESTA = { status: 404, statusText: 'Not Found' };
+
+    function seguirDos(): void {
+      const enCurso = { estado: 'EnCurso' as const, inicio: '2026-11-23T10:00:00Z' };
+      abrir();
+      responder([
+        crearEjecucion({ id: 6, ...enCurso }),
+        crearEjecucion({ id: 5, candidaturaId: 20, ...enCurso }),
+      ]);
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS);
+    }
+
+    /** Tras la vuelta: la explicación en vez de la lista, y el seguimiento parado */
+    async function compruebaQueQuedaRechazada(): Promise<void> {
+      fixture.detectChanges();
+      await Promise.resolve();
+      // La tarea perdida pide refrescar: como mucho sale una petición del uso, y la lista no se pide
+      const usos = http.match(URL_ESTADO);
+      expect(usos.length).toBeLessThanOrEqual(1);
+      usos.forEach((uso) => uso.flush(null, PROHIBIDO));
+      fixture.detectChanges();
+
+      expect(elemento().querySelector('.agentes__motivo')!.textContent).toContain(TEXTO_RECHAZADOS);
+      expect(elemento().querySelector('ul')).toBeNull();
+      // Ni otra vuelta ni más peticiones (lo comprueba http.verify)
+      vi.advanceTimersByTime(INTERVALO_SEGUIMIENTO_MS * 2);
+    }
+
+    it('primero el 404 y luego el 403: se queda con la explicación y deja de preguntar', async () => {
+      seguirDos();
+      http.expectOne(`${URL_EJECUCIONES}/6`).flush(null, NO_ESTA);
+      http.expectOne(`${URL_EJECUCIONES}/5`).flush(null, PROHIBIDO);
+
+      await compruebaQueQuedaRechazada();
+    });
+
+    it('primero el 403 y luego el 404: lo mismo', async () => {
+      seguirDos();
+      http.expectOne(`${URL_EJECUCIONES}/6`).flush(null, PROHIBIDO);
+      http.expectOne(`${URL_EJECUCIONES}/5`).flush(null, NO_ESTA);
+
+      await compruebaQueQuedaRechazada();
+    });
+
+    it('si después del 404 y el 403 el uso contesta bien, vuelve la lista sin entrar en bucle', async () => {
+      seguirDos();
+      http.expectOne(`${URL_EJECUCIONES}/6`).flush(null, NO_ESTA);
+      http.expectOne(`${URL_EJECUCIONES}/5`).flush(null, PROHIBIDO);
+      fixture.detectChanges();
+      await Promise.resolve();
+
+      http.expectOne(URL_ESTADO).flush(crearEstadoAgentes());
+      fixture.detectChanges();
+      responder([crearEjecucion({ id: 5, candidaturaId: 20, estado: 'Ok' })]);
+
+      expect(elemento().querySelector('.agentes__motivo')).toBeNull();
+      expect(filas()).toHaveLength(1);
     });
   });
 });

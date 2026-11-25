@@ -675,12 +675,22 @@ no.». Sin relleno lima.
 - **«Uso de hoy»**: tarjeta de borde fino con la frase del uso en grande (18 px, seminegrita) y en
   tinta, sin rojo ni ámbar: se lee de un vistazo sin parecer un aviso. Debajo, lo reservado si hay
   algo en marcha.
-- **«Últimas tareas»**: las 50 últimas en una sola tarjeta de borde fino, separadas por una línea
-  fina. Cada fila: el nombre de la tarea («Análisis del encaje», «Lectura del registro») con la
-  fecha en monoespaciada a la derecha, como un registro; el enlace a la candidatura («puesto en
+- **«Últimas tareas»**: las 50 últimas, agrupadas por día («Hoy», «Ayer» o la fecha, en
+  monoespaciada y mayúsculas); cada día, una tarjeta de borde fino con sus filas separadas por una
+  línea fina. Cada fila: el nombre de la tarea («Análisis del encaje», «Lectura del registro») con
+  la hora en monoespaciada a la derecha, como un registro; el enlace a la candidatura («puesto en
   empresa», subrayado y con 48 px de toque); y la tarjeta compacta. «Reintentar» solo sale en la
   última de cada tarea y candidatura. Al terminar, reintentar o perderse una tarea, la lista y el
   uso se refrescan sin vaciarse.
+  - **Recuento y filtro**, encima de la lista: «Hoy: 3 tareas · 1 no ha salido» (solo lo lanzado
+    hoy; sin fallos, «Hoy: 3 tareas») y tres chips con `aria-pressed`, como los del Tablero en el
+    móvil: «Todas», «No han salido» y «En marcha». El filtro vale para todos los días; si no deja
+    nada, lo dice en un `role="status"` («Ninguna tarea ha fallado.», «Ahora mismo no hay ninguna
+    tarea en marcha.»).
+  - **Errores ya resueltos**: si la misma tarea con la misma candidatura salió bien después, la
+    fila va atenuada (60 %) y debajo, sin atenuar, «Resuelto: salió bien después.».
+  - **«Ver en Importación»**: en la última lectura del registro, si terminó bien (Importación
+    enseña esa, no las anteriores).
 - **Estado vacío**: una terminal en un bloque de tinta con el cursor en lima, «Todavía no has
   lanzado ninguna tarea de Claude.», «Se lanzan desde la ficha de una candidatura o desde
   Importación.» en monoespaciada, e «Ir al Tablero» e «Ir a Importación», con borde. Sin marco: va
@@ -689,7 +699,11 @@ no.». Sin relleno lima.
   demo, «En la demo no se usa Claude: los agentes están apagados.»; desde el móvil, «Los agentes de
   Claude solo se pueden usar desde el PC donde está instalada la app.»; apagados, dónde se
   encienden. Si la API los rechaza estando en el PC, «Ahora mismo no se puede usar Claude desde
-  aquí. Vuelve a comprobarlo en un momento.» con «Volver a comprobar» (de texto).
+  aquí. Vuelve a comprobarlo en un momento.» con «Volver a comprobar» (de texto). Mientras espera,
+  el botón dice «Comprobando…»; si no sirve, debajo sale «Sigue sin poder usarse Claude desde
+  aquí. Prueba otra vez dentro de un momento.» (o el fallo que dé la API) en un `role="status"`; si
+  contesta bien, el foco va al título de «Uso de hoy». Si es un reintento del uso el que da 403,
+  el foco va a la explicación, nunca a `<body>`.
 
 **Bloque «Agentes de Claude» de Ajustes.** Un `dl` como el de «Esta app»:
 

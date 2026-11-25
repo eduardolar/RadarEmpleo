@@ -41,16 +41,28 @@
         <path stroke-linecap="square" d="M12 11v6M12 7.5v.01" />
       </svg>
       <div class="min-w-0">
-        <p class="agentes__motivo text-on-surface">{{ motivo() }}</p>
+        <p
+          #textoMotivo
+          tabindex="-1"
+          class="agentes__motivo rounded-sm text-on-surface focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+        >
+          {{ motivo() }}
+        </p>
         @if (rechazados()) {
           <button
             mat-button
             type="button"
             class="mt-2 [--mat-button-text-container-height:48px]"
-            (click)="volverAComprobar()"
+            disabledInteractive
+            [disabled]="esperandoComprobacion()"
+            (click)="comprobarAMano()"
           >
-            Volver a comprobar
+            {{ esperandoComprobacion() ? 'Comprobando…' : 'Volver a comprobar' }}
           </button>
+          <!-- Siempre en el DOM para que el lector de pantalla anuncie lo que llega -->
+          <p role="status" class="agentes__comprobacion text-sm font-medium text-on-surface">
+            {{ resultadoComprobacion() }}
+          </p>
         }
       </div>
     </div>
@@ -156,52 +168,122 @@
             </div>
           </div>
         } @else {
-          <ul
-            class="divide-y divide-borde-fino rounded-2xl border border-borde-fino bg-surface-container-lowest px-4 sm:px-5"
-          >
-            @for (e of lista; track e.id) {
-              <!-- Arriba, la tarea y su fecha en la misma línea (la fecha a la derecha, como un
-                   registro); debajo, la candidatura. El enlace crece solo hacia abajo hasta los
-                   48 px de toque: un ::before que subiera taparía la tarea y la fecha, y uno que
-                   bajara taparía los botones de la fila. Con -mb-2 pisa el relleno vacío de arriba
-                   de la fila de estado (que se pinta debajo del enlace) y no deja tanto hueco -->
-              <li class="agentes__ejecucion pt-3 pb-1">
-                <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                  <h3 class="font-semibold text-on-surface">{{ nombreTarea[e.tarea] }}</h3>
-                  <time
-                    [attr.datetime]="e.fechaAlta"
-                    class="font-mono text-sm text-on-surface-variant"
-                    >{{ e.fechaAlta | fechaMadrid: 'dia-hora' }}</time
-                  >
-                </div>
-                @if (e.candidaturaId !== null) {
-                  <a
-                    [routerLink]="['/candidaturas', e.candidaturaId]"
-                    class="-mx-1 mt-1 -mb-2 inline-flex min-h-12 max-w-full items-start rounded-lg px-1 pt-0.5 text-sm font-medium text-primary underline decoration-2 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
-                    [attr.aria-label]="
-                      e.candidatura ? null : 'Ver la candidatura: ' + nombreTarea[e.tarea]
-                    "
-                  >
-                    @if (e.candidatura; as c) {
-                      {{ c.puesto }} en {{ c.empresa }}
-                    } @else {
-                      Ver la candidatura
-                    }
-                  </a>
-                }
-                <app-estado-ejecucion
-                  [ejecucion]="e"
-                  [compacta]="true"
-                  [topeUsd]="tope()"
-                  [contexto]="e.candidatura?.empresa ?? null"
-                  [permitirReintentar]="ultimas().has(e.id)"
-                  (terminada)="pedirRefresco()"
-                  (reintentada)="pedirRefresco()"
-                  (perdida)="pedirRefresco()"
-                />
-              </li>
+          <!-- El recuento del día y el filtro: lo que no ha salido se encuentra sin recorrer la lista -->
+          <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <p class="agentes__recuento font-mono text-sm font-medium text-on-surface">
+              {{ recuento() }}
+            </p>
+            <div role="group" aria-label="Filtrar las tareas" class="flex flex-wrap gap-2">
+              @for (f of filtros; track f.valor) {
+                <button
+                  type="button"
+                  [attr.aria-pressed]="filtro() === f.valor"
+                  (click)="filtrar(f.valor)"
+                  class="inline-flex min-h-12 cursor-pointer items-center rounded-md px-4 text-sm whitespace-nowrap transition-colors focus-visible:ring-3 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none motion-reduce:transition-none"
+                  [class]="
+                    filtro() === f.valor
+                      ? 'bg-surface-container-highest font-extrabold text-on-surface shadow-[inset_0_-4px_0_0_var(--re-trazo)]'
+                      : 'bg-surface-container font-semibold text-on-surface-variant'
+                  "
+                >
+                  {{ f.texto }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- Lo que deja el filtro se anuncia: al pulsar un chip la lista cambia sin mover el foco -->
+          <p role="status" class="agentes__sin-filtro text-sm text-on-surface-variant">
+            @if (dias().length === 0) {
+              {{
+                filtro() === 'en-marcha'
+                  ? 'Ahora mismo no hay ninguna tarea en marcha.'
+                  : 'Ninguna tarea ha fallado.'
+              }}
             }
-          </ul>
+          </p>
+
+          @for (dia of dias(); track dia.dia) {
+            <section
+              [attr.aria-labelledby]="'dia-' + dia.dia"
+              class="agentes__dia flex flex-col gap-2"
+            >
+              <h3
+                [id]="'dia-' + dia.dia"
+                class="font-mono text-sm font-bold tracking-wide text-on-surface-variant uppercase"
+              >
+                {{ dia.titulo }}
+              </h3>
+              <ul
+                class="divide-y divide-borde-fino rounded-2xl border border-borde-fino bg-surface-container-lowest px-4 sm:px-5"
+              >
+                @for (e of dia.tareas; track e.id) {
+                  <!-- Arriba, la tarea y su hora en la misma línea (la hora a la derecha, como un
+                   registro; el día lo da el encabezado); debajo, la candidatura. El enlace crece
+                   solo hacia abajo hasta los 48 px de toque: un ::before que subiera taparía la
+                   tarea y la hora, y uno que bajara taparía los botones de la fila. Con -mb-2 pisa
+                   el relleno vacío de arriba de la fila de estado (que se pinta debajo del enlace)
+                   y no deja tanto hueco -->
+                  <li
+                    class="agentes__ejecucion pt-3 pb-1"
+                    [class.agentes__ejecucion--resuelta]="resueltos().has(e.id)"
+                  >
+                    <!-- Atenuado solo lo que ya no pide nada: «Resuelto» va fuera, a contraste completo -->
+                    <div [class.opacity-60]="resueltos().has(e.id)">
+                      <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                        <h4 class="font-semibold text-on-surface">{{ nombreTarea[e.tarea] }}</h4>
+                        <time
+                          [attr.datetime]="e.fechaAlta"
+                          class="font-mono text-sm text-on-surface-variant"
+                          >{{ hora(e.fechaAlta) }}</time
+                        >
+                      </div>
+                      @if (e.candidaturaId !== null) {
+                        <a
+                          [routerLink]="['/candidaturas', e.candidaturaId]"
+                          class="-mx-1 mt-1 -mb-2 inline-flex min-h-12 max-w-full items-start rounded-lg px-1 pt-0.5 text-sm font-medium text-primary underline decoration-2 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+                          [attr.aria-label]="
+                            e.candidatura ? null : 'Ver la candidatura: ' + nombreTarea[e.tarea]
+                          "
+                        >
+                          @if (e.candidatura; as c) {
+                            {{ c.puesto }} en {{ c.empresa }}
+                          } @else {
+                            Ver la candidatura
+                          }
+                        </a>
+                      } @else if (
+                        e.tarea === 'ExtraerRegistro' && e.estado === 'Ok' && ultimas().has(e.id)
+                      ) {
+                        <!-- Solo en la última lectura: Importación enseña esa, no las anteriores -->
+                        <a
+                          routerLink="/importacion"
+                          class="agentes__ver-importacion -mx-1 mt-1 -mb-2 inline-flex min-h-12 max-w-full items-start rounded-lg px-1 pt-0.5 text-sm font-medium text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:ring-3 focus-visible:ring-primary focus-visible:outline-none"
+                        >
+                          Ver en Importación
+                        </a>
+                      }
+                      <app-estado-ejecucion
+                        [ejecucion]="e"
+                        [compacta]="true"
+                        [topeUsd]="tope()"
+                        [contexto]="e.candidatura?.empresa ?? null"
+                        [permitirReintentar]="ultimas().has(e.id)"
+                        (terminada)="pedirRefresco()"
+                        (reintentada)="pedirRefresco()"
+                        (perdida)="pedirRefresco()"
+                      />
+                    </div>
+                    @if (resueltos().has(e.id)) {
+                      <p class="agentes__resuelto pb-2 text-sm text-on-surface-variant">
+                        Resuelto: salió bien después.
+                      </p>
+                    }
+                  </li>
+                }
+              </ul>
+            </section>
+          }
         }
       }
     </section>
