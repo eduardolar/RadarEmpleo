@@ -142,11 +142,34 @@
       type="button"
       class="w-full shrink-0 text-balance [--mat-button-filled-container-height:48px] sm:w-auto"
       disabledInteractive
-      [disabled]="aplicando()"
+      [disabled]="aplicando() || totalElegidas() === 0"
       (click)="aplicar()"
     >
       {{ aplicando() ? 'Guardando...' : textoBoton() }}
     </button>
+  </ng-template>
+
+  <!-- Bajo el título de las que se añaden o actualizan: por qué alguna sale sin marcar y marcarlas
+       o desmarcarlas todas de una vez -->
+  <ng-template #elegirGrupo let-filas let-titulo="titulo">
+    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 empty:hidden">
+      @if (hayAvisos(filas)) {
+        <p class="min-w-0 text-sm text-on-surface-variant">{{ explicacionSinMarcar }}</p>
+      }
+      @if (filas.length > 1) {
+        <button
+          mat-button
+          type="button"
+          class="-ml-3 [--mat-button-text-container-height:48px]"
+          disabledInteractive
+          [disabled]="aplicando()"
+          [attr.aria-describedby]="titulo"
+          (click)="alternarTodas(filas)"
+        >
+          {{ todasElegidas(filas) ? 'Desmarcar todas' : 'Marcar todas' }}
+        </button>
+      }
+    </div>
   </ng-template>
 
   @if (vista(); as previa) {
@@ -310,7 +333,16 @@
         <h2 id="titulo-nuevas" class="text-xl font-extrabold text-on-surface">
           Se van a añadir ({{ nuevas().length }})
         </h2>
-        <app-lista-importacion [filas]="nuevas()" />
+        <ng-container
+          [ngTemplateOutlet]="elegirGrupo"
+          [ngTemplateOutletContext]="{ $implicit: nuevas(), titulo: 'titulo-nuevas' }"
+        />
+        <app-lista-importacion
+          [filas]="nuevas()"
+          [elegidas]="elegidas()"
+          [bloqueada]="aplicando()"
+          (elegir)="elegir($event)"
+        />
       </section>
     }
 
@@ -324,7 +356,16 @@
             Ya están en la app: solo se les pone el estado de tu archivo. No se borra nada.
           </p>
         </div>
-        <app-lista-importacion [filas]="avanzan()" />
+        <ng-container
+          [ngTemplateOutlet]="elegirGrupo"
+          [ngTemplateOutletContext]="{ $implicit: avanzan(), titulo: 'titulo-avanzan' }"
+        />
+        <app-lista-importacion
+          [filas]="avanzan()"
+          [elegidas]="elegidas()"
+          [bloqueada]="aplicando()"
+          (elegir)="elegir($event)"
+        />
       </section>
     }
 

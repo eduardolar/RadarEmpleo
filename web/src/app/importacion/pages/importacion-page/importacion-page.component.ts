@@ -31,7 +31,7 @@ import { EnlaceVolver } from '../../../shared/components/enlace-volver/enlace-vo
 import { SeccionPlegable } from '../../../shared/components/seccion-plegable/seccion-plegable';
 import { AvisosService } from '../../../shared/services/avisos.service';
 import { ListaImportacion } from '../../components/lista-importacion/lista-importacion';
-import { ResultadoAplicacion } from '../../interfaces/importacion.interface';
+import { FilaVistaPrevia, ResultadoAplicacion } from '../../interfaces/importacion.interface';
 import { AlNoValerExtraccion, ImportacionService } from '../../services/importacion.service';
 import {
   AVISO_PUEDE_TARDAR,
@@ -41,6 +41,7 @@ import {
   EXPLICACION_FUERA,
   EXPLICACION_PARA_REVISAR,
   EXPLICACION_SIN_LEER,
+  EXPLICACION_SIN_MARCAR,
   EXPLICACION_YA_EXISTEN,
   filasAplicables,
   filasConResultado,
@@ -94,6 +95,7 @@ export default class ImportacionPageComponent {
   protected readonly textoResultado = textoResultado;
   protected readonly avisoRadar = AVISO_RADAR;
   protected readonly explicacionSinLeer = EXPLICACION_SIN_LEER;
+  protected readonly explicacionSinMarcar = EXPLICACION_SIN_MARCAR;
   protected readonly explicacionFuera = EXPLICACION_FUERA;
   protected readonly explicacionDudas = EXPLICACION_DUDAS;
   protected readonly textoFilaFuera = textoFilaFuera;
@@ -138,10 +140,16 @@ export default class ImportacionPageComponent {
     const vista = this.vista();
     return vista ? lineasResumen(vista.resumen) : [];
   });
-  protected readonly textoBoton = computed(() => {
-    const vista = this.vista();
-    return vista ? textoBotonAplicar(vista.resumen) : '';
-  });
+  protected readonly elegidas = this.importacion.elegidas;
+  private readonly nuevasElegidas = computed(() => this.contarElegidas(this.nuevas()));
+  private readonly avanzanElegidas = computed(() => this.contarElegidas(this.avanzan()));
+  protected readonly totalElegidas = computed(() => this.nuevasElegidas() + this.avanzanElegidas());
+  protected readonly textoBoton = computed(() =>
+    textoBotonAplicar(
+      { nuevas: this.nuevasElegidas(), avanzan: this.avanzanElegidas() },
+      this.nuevas().length > 0,
+    ),
+  );
   protected readonly tituloAlDia = computed(() => {
     const vista = this.vista();
     return vista ? tituloNadaQueAplicar(vista.resumen, this.resultado() !== null) : '';
@@ -296,8 +304,8 @@ export default class ImportacionPageComponent {
   }
 
   protected aplicar(): void {
-    // El botón sigue recibiendo clics mientras guarda (disabledInteractive, para no perder el foco)
-    if (this.aplicando()) {
+    // El botón sigue recibiendo clics mientras guarda o sin nada marcado (disabledInteractive, para no perder el foco)
+    if (this.aplicando() || this.totalElegidas() === 0) {
       return;
     }
     this.resultado.set(null);
@@ -306,6 +314,29 @@ export default class ImportacionPageComponent {
       next: (resultado) => this.terminarAplicar(resultado),
       error: (error: ErrorApi) => this.avisos.error(error.mensaje),
     });
+  }
+
+  protected elegir({ clave, marcada }: { clave: string; marcada: boolean }): void {
+    this.importacion.elegir([clave], marcada);
+  }
+
+  protected todasElegidas(filas: FilaVistaPrevia[]): boolean {
+    return this.contarElegidas(filas) === filas.length;
+  }
+
+  /** «Marcar todas» o, si ya lo están, «Desmarcar todas» las del grupo */
+  protected alternarTodas(filas: FilaVistaPrevia[]): void {
+    if (this.aplicando()) {
+      return;
+    }
+    this.importacion.elegir(
+      filas.map((f) => f.clave),
+      !this.todasElegidas(filas),
+    );
+  }
+
+  protected hayAvisos(filas: FilaVistaPrevia[]): boolean {
+    return filas.some((f) => f.avisos.length > 0);
   }
 
   protected reintentar(): void {
@@ -448,6 +479,11 @@ export default class ImportacionPageComponent {
           this.ofrecer(e);
         }
       });
+  }
+
+  private contarElegidas(filas: FilaVistaPrevia[]): number {
+    const elegidas = this.elegidas();
+    return filas.filter((f) => elegidas.has(f.clave)).length;
   }
 
   private focoSinSitio(): boolean {
