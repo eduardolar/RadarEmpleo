@@ -198,7 +198,7 @@ public sealed class LectorCurriculum : ILectorCurriculum
     private static async Task<byte[]> LeerBytesAsync(string ruta, string nombre, CancellationToken cancelacion)
     {
         if (!File.Exists(ruta))
-            throw new ReglaNegocioException($"No se encuentra {nombre} en la carpeta Curriculum.");
+            throw new ReglaNegocioException(RutasCurriculum.MensajeSinArchivo(nombre));
 
         try
         {

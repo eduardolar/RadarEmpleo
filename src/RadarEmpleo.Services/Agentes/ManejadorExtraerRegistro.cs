@@ -21,7 +21,7 @@ namespace RadarEmpleo.Services.Agentes;
 /// </summary>
 public sealed class ManejadorExtraerRegistro(ILectorCurriculum lector, RutasCurriculum rutas, OpcionesEjecutor opciones) : IManejadorTarea
 {
-    public const string MensajeSinRegistro = $"No se encuentra {RutasCurriculum.ArchivoRegistro} en la carpeta Curriculum.";
+    public const string MensajeSinRegistro = RutasCurriculum.MensajeSinRegistro;
     public const string MensajeSinTextoLibre = "El registro no tiene texto libre fuera de la tabla y los rastreos: no hay nada que extraer.";
     public const string MensajeDemasiadoLargo =
         "El texto libre del registro es demasiado largo para leerlo con Claude: haría falta leerlo en más de 6 partes.";

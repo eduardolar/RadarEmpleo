@@ -53,7 +53,9 @@ public sealed class PerfilApiTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Conflict, respuesta.StatusCode);
         var detalle = (await respuesta.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString();
-        Assert.Equal("No se encuentra perfil-busqueda.md en la carpeta Curriculum.", detalle);
+        Assert.Equal(
+            "Falta tu perfil de búsqueda (perfil-busqueda.md) en la carpeta Curriculum. Ponlo ahí y vuelve a intentarlo.",
+            detalle);
         Assert.DoesNotContain(_fabrica.CarpetaCurriculum, detalle);
     }
 
