@@ -233,7 +233,8 @@ public sealed class AgentesApiTests
         var id = await SembrarCandidaturaAsync(fabrica);
         var otra = await SembrarCandidaturaAsync(fabrica);
 
-        // Lo que llega en el cuerpo no cuenta: la candidatura es la de la ruta y el origen lo pone el servidor.
+        // Lo que llega en el cuerpo no cuenta: la candidatura es la de la ruta (aquí no hay origen que comprobar: la
+        // ejecución no lo guarda y esta no llega a aplicarse).
         var respuesta = await PostJson(http, $"/api/agentes/analizar/{id}", $$"""{"candidaturaId":{{otra}},"origen":"Manual","prompt":"x"}""");
         var nueva = await LeerAsync(respuesta, HttpStatusCode.Accepted);
         var ejecucionId = nueva.GetProperty("id").GetInt32();
@@ -294,6 +295,36 @@ public sealed class AgentesApiTests
         Assert.Equal(ManejadorAnalizarEncaje.MensajeCandidaturaFinal, problema.GetProperty("detail").GetString());
         await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
         Assert.Empty(db.EjecucionesAgente);
+    }
+
+    /// <summary>Los otros dos 409 de analizar, por la API: con el tope de uso de hoy y sin la carpeta Curriculum.</summary>
+    [Fact]
+    public async Task Analizar_SinSitioEnElTopeOSinCarpeta_Da409YNoCreaNada()
+    {
+        var reloj = new RelojFijo(Ahora);
+        using var fabrica = Fabrica(reloj: reloj);
+        using var http = fabrica.CreateClient();
+        var id = await SembrarCandidaturaAsync(fabrica);
+
+        await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
+        // Con 14,51 gastados hoy, los 0,50 de un análisis ya no caben en el tope de 15 por un céntimo.
+        var gastada = EjecucionAgente.Nueva(TareaAgente.ExtraerRegistro, "{}", 1.00m, 300, null, Ahora.AddHours(-1));
+        gastada.Empezar(Ahora.AddHours(-1), null, null);
+        gastada.Terminar(Ahora.AddHours(-1), 14.51m, 3, null, "x", null, null, null);
+        db.EjecucionesAgente.Add(gastada);
+        await db.SaveChangesAsync();
+        var conTope = await PostJson(http, $"/api/agentes/analizar/{id}");
+        Assert.Equal(MensajesEjecucion.TopeDiario, (await LeerAsync(conTope, HttpStatusCode.Conflict)).GetProperty("detail").GetString());
+        Assert.Equal("application/problem+json", conTope.Content.Headers.ContentType?.MediaType);
+
+        // Al día siguiente vuelve a haber sitio, pero ya no está la carpeta.
+        reloj.Avanzar(TimeSpan.FromDays(1));
+        Directory.Delete(fabrica.CarpetaCurriculum, recursive: true);
+        var sinCarpeta = (await LeerAsync(await PostJson(http, $"/api/agentes/analizar/{id}"), HttpStatusCode.Conflict)).GetProperty("detail").GetString();
+        Assert.Equal(RutasCurriculum.MensajeSinCarpeta, sinCarpeta);
+        Assert.DoesNotContain(fabrica.CarpetaCurriculum, sinCarpeta);
+
+        Assert.Equal(1, await db.EjecucionesAgente.CountAsync());
     }
 
     [Fact]
