@@ -31,6 +31,9 @@
     <ProjectReference Include="..\..\src\RadarEmpleo.Api\RadarEmpleo.Api.csproj" />
     <!-- Hace de claude.exe en los tests del EjecutorClaudeCli: se copia junto a los tests. -->
     <ProjectReference Include="..\ClaudeSimulado\ClaudeSimulado.csproj" />
+    <!-- Las reglas puras del evaluador del encaje (ConsolaEvaluacion): los tests nunca lo ejecutan. Con alias, porque
+         su Program chocaría con el de la API. -->
+    <ProjectReference Include="..\EvaluacionEncaje\EvaluacionEncaje.csproj" Aliases="evaluador" />
   </ItemGroup>
 
 </Project>
