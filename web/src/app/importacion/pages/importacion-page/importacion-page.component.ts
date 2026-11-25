@@ -71,8 +71,13 @@ interface GrupoElegible {
   hayAvisos: boolean;
   /** Ya están marcadas todas las que no llevan aviso: el botón desmarca */
   desmarcar: boolean;
-  /** El texto del botón; null si no sale (una sola fila, o todas con aviso y ninguna marcada) */
+  /** El texto del botón; null con una sola fila, que ya tiene su casilla */
   textoBoton: string | null;
+  /**
+   * Todas llevan aviso y ninguna está marcada: no hay nada que marcar de golpe. El botón sigue (desactivado)
+   * para que el foco no caiga en <body> al desmarcar la última
+   */
+  sinNadaQueMarcar: boolean;
 }
 
 @Component({
@@ -356,7 +361,7 @@ export default class ImportacionPageComponent {
    * marcan una a una, tras mirarlas (que no se cuelen de golpe es lo que pide el H1)
    */
   protected alternarTodas(grupo: GrupoElegible): void {
-    if (this.aplicando()) {
+    if (this.aplicando() || grupo.sinNadaQueMarcar) {
       return;
     }
     const filas = grupo.desmarcar ? grupo.filas : grupo.filas.filter((f) => f.avisos.length === 0);
@@ -515,15 +520,17 @@ export default class ImportacionPageComponent {
     const sinAviso = filas.filter((f) => f.avisos.length === 0);
     const desmarcar =
       filas.some((f) => elegidas.has(f.clave)) && sinAviso.every((f) => elegidas.has(f.clave));
+    const quedanConAviso = filas.some((f) => f.avisos.length > 0 && !elegidas.has(f.clave));
     let textoBoton: string | null = null;
-    if (filas.length > 1 && (desmarcar || sinAviso.length > 0)) {
-      textoBoton = desmarcar
-        ? 'Desmarcar todas'
-        : hayAvisos
-          ? 'Marcar las que no llevan aviso'
-          : 'Marcar todas';
+    if (filas.length > 1) {
+      if (desmarcar) {
+        textoBoton = quedanConAviso ? 'Desmarcar las marcadas' : 'Desmarcar todas';
+      } else {
+        textoBoton = hayAvisos ? 'Marcar las que no llevan aviso' : 'Marcar todas';
+      }
     }
-    return { filas, titulo, hayAvisos, desmarcar, textoBoton };
+    const sinNadaQueMarcar = !desmarcar && sinAviso.length === 0;
+    return { filas, titulo, hayAvisos, desmarcar, textoBoton, sinNadaQueMarcar };
   }
 
   private anunciarEleccion(): void {

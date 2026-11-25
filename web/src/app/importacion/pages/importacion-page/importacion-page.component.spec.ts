@@ -321,8 +321,8 @@ describe('ImportacionPageComponent', () => {
       await abrirCon([NUEVA, CON_AVISO]);
       const nuevas = seccion('Se van a añadir')!;
 
-      // Las sin aviso ya están marcadas: el botón desmarca el grupo entero
-      await pulsar(boton('Desmarcar todas', nuevas)!);
+      // Las sin aviso ya están marcadas: el botón desmarca las marcadas (la de aviso no lo está)
+      await pulsar(boton('Desmarcar las marcadas', nuevas)!);
       expect(casillas(nuevas).some((c) => c.checked)).toBe(false);
       expect(boton('Marcar todas', nuevas)).toBeUndefined();
 
@@ -335,12 +335,22 @@ describe('ImportacionPageComponent', () => {
       expect(casillas(nuevas).some((c) => c.checked)).toBe(false);
     });
 
-    it('si todas llevan aviso y ninguna está marcada, no hay botón de marcar', async () => {
+    it('si todas llevan aviso y ninguna está marcada, el botón sigue pero desactivado y no se pierde el foco', async () => {
       await abrirCon([CON_AVISO, { ...CON_AVISO, clave: 'aviso2', puesto: 'Frontend' }]);
+      const desactivado = boton('Marcar las que no llevan aviso')!;
+      expect(desactivado.getAttribute('aria-disabled')).toBe('true');
+      await pulsar(desactivado);
+      expect(casillas().some((c) => c.checked)).toBe(false);
 
-      expect(boton('Marcar')).toBeUndefined();
       await pulsar(casilla('Añadir: Backend en Gamma')!);
-      expect(boton('Desmarcar todas')).toBeDefined();
+      const desmarcar = boton('Desmarcar las marcadas')!;
+      desmarcar.focus();
+      await pulsar(desmarcar);
+
+      expect(casillas().some((c) => c.checked)).toBe(false);
+      expect(document.activeElement).toBe(desmarcar);
+      expect(desmarcar.textContent).toContain('Marcar las que no llevan aviso');
+      expect(desmarcar.getAttribute('aria-disabled')).toBe('true');
     });
 
     it('la casilla de una fila con aviso lo lee al enfocarla', async () => {
@@ -351,8 +361,8 @@ describe('ImportacionPageComponent', () => {
         'Revisa la empresa: no aparece en la línea.',
       );
       expect(
-        casilla('Añadir: Desarrollador Angular en Acme')?.getAttribute('aria-describedby') ?? '',
-      ).toBe('');
+        casilla('Añadir: Desarrollador Angular en Acme')?.hasAttribute('aria-describedby'),
+      ).toBe(false);
     });
 
     it('al marcar o desmarcar, anuncia cómo queda el botón', async () => {

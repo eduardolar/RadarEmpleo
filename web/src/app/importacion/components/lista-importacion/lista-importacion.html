@@ -20,7 +20,8 @@
           </p>
         </div>
         <!-- A la derecha: así el resto de la fila queda alineado con la empresa. Los márgenes negativos
-             compensan el hueco táctil de 40 px de la casilla -->
+             compensan el hueco táctil de 40 px de la casilla. $any: mat-checkbox tipa aria-describedby como
+             string, pero lo pinta con [attr.]: con null no sale el atributo vacío -->
         @if (elegidas(); as elegidas) {
           <mat-checkbox
             class="-my-2 -mr-2 shrink-0"
@@ -28,7 +29,7 @@
             [disabled]="bloqueada()"
             [disabledInteractive]="true"
             [aria-label]="etiquetaCasilla(fila)"
-            [aria-describedby]="idsAvisos(i, fila)"
+            [aria-describedby]="$any(idsAvisos(i, fila))"
             (change)="elegir.emit({ clave: fila.clave, marcada: $event.checked })"
           />
         }

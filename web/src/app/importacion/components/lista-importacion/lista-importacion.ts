@@ -39,8 +39,10 @@ export class ListaImportacion {
     return `${this.prefijo}-aviso-${fila}-${aviso}`;
   }
 
-  /** La casilla de una fila con aviso lo lee al enfocarla: por eso sale sin marcar */
-  protected idsAvisos(indice: number, fila: FilaVistaPrevia): string {
-    return fila.avisos.map((_, j) => this.idAviso(indice, j)).join(' ');
+  /** La casilla de una fila con aviso lo lee al enfocarla: por eso sale sin marcar. Sin avisos, null: sin atributo */
+  protected idsAvisos(indice: number, fila: FilaVistaPrevia): string | null {
+    return fila.avisos.length > 0
+      ? fila.avisos.map((_, j) => this.idAviso(indice, j)).join(' ')
+      : null;
   }
 }

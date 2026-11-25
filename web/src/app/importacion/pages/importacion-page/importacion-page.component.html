@@ -162,7 +162,7 @@
           type="button"
           class="-ml-3 [--mat-button-text-container-height:48px]"
           disabledInteractive
-          [disabled]="aplicando()"
+          [disabled]="aplicando() || grupo.sinNadaQueMarcar"
           [attr.aria-describedby]="grupo.titulo"
           (click)="alternarTodas(grupo)"
         >
