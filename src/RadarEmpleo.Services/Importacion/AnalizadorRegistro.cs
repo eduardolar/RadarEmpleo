@@ -374,14 +374,19 @@ public static partial class AnalizadorRegistro
     /// «descartado»…) y ninguna de otro que mande más (uno final, o uno más adelantado en el camino si el de Claude no es
     /// final). «Enviada; entrevista el 11/11» respalda Entrevista y no Enviada; una línea con «oferta» y «descartada» no
     /// respalda Oferta. Una palabra de estado dudada, negada o en espera no cuenta («No descartada aún», «Pendiente de
-    /// entrevista», «¿enviada?»): son las <see cref="PalabrasDeDuda"/> de la tabla, pero aquí solo valen pegadas al estado
-    /// (hasta <see cref="PalabrasDeDudaAntes"/> palabras antes), porque una línea entera sí puede decir «enviada, sin
-    /// respuesta». Es lo que impide que un texto pegado en el registro, o un error de Claude, ponga un estado que
+    /// entrevista», «¿enviada?», «¿Enviada al final?»): son las <see cref="PalabrasDeDuda"/> de la tabla, pero aquí solo
+    /// valen pegadas al estado (hasta <see cref="PalabrasDeDudaAntes"/> palabras antes) o con el estado dentro de la
+    /// pregunta, porque una línea entera sí puede decir «enviada, sin respuesta». Es lo que impide que un texto pegado en el registro, o un error de Claude, ponga un estado que
     /// el archivo no dice.
     /// </summary>
     public static bool RespaldaEstado(string linea, EstadoCandidatura estado)
     {
-        var palabras = PalabraConInterrogacion().Matches(TextoComparable.Normalizar(linea)).Select(m => m.Value).ToArray();
+        var normalizada = TextoComparable.Normalizar(linea);
+        var preguntas = PreguntaAbierta().Matches(normalizada);
+        // Una palabra dentro de una pregunta abierta con «¿» se trata como si llevara su «?», aunque no vaya pegada a ella.
+        var palabras = PalabraConInterrogacion().Matches(normalizada)
+            .Select(m => preguntas.Any(p => m.Index > p.Index && m.Index < p.Index + p.Length) ? m.Value.TrimEnd('?') + "?" : m.Value)
+            .ToArray();
         var enLaLinea = PrefijosEstado.Where(p => AparecePalabraDeEstado(palabras, p.Prefijo, sinDuda: true)).Select(p => p.Estado).ToHashSet();
         return enLaLinea.Contains(estado)
             && !enLaLinea.Any(otro => otro != estado && (ReglasEstado.EsFinal(otro) || !ReglasEstado.EsFinal(estado) && otro > estado));
@@ -393,6 +398,11 @@ public static partial class AnalizadorRegistro
     // Como SeparadorPalabras, pero dejando la interrogación pegada a su palabra («enviada?»).
     [GeneratedRegex(@"[\p{L}\p{N}]+\??")]
     private static partial Regex PalabraConInterrogacion();
+
+    // Una pregunta con su signo de apertura: del «¿» al «?» de cierre o, si no lo hay, al final de la línea. Un «?» sin «¿»
+    // (el de un enlace con «?id=1») no abre ninguna.
+    [GeneratedRegex(@"¿[^?]*\??")]
+    private static partial Regex PreguntaAbierta();
 
     /// <param name="sinDuda">No vale una aparición con interrogación ni con una de <see cref="PalabrasDeDuda"/> justo antes.</param>
     private static bool AparecePalabraDeEstado(string[] palabras, string raiz, bool sinDuda = false)
