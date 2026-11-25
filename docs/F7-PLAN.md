@@ -1241,7 +1241,7 @@ Tras el cierre (PR #41 y `f7b-20-h1-menores`). Una línea pegada en el registro,
 - **Se aplican solos** solo Preparada y Enviada, y solo si la línea los respalda: un paso a esos estados va con el botón general.
 - **Pasan siempre a «Para revisar»** los pasos a Entrevista, Oferta, Descartada y Cerrada, aunque la línea los diga («Entrevista: no me llamaron» o «Vi la oferta de Acme» los nombran y no prueban nada), y cualquier cambio que la línea no respalde. Se cambian a mano en la ficha.
 - **El aviso** «Estado leído por Claude: compruébalo en tu archivo.» lo llevan las filas sin respaldo y todas las nuevas en Entrevista, Oferta, Descartada o Cerrada. Las nuevas siguen entrando con el botón general.
-- Elegir fila a fila qué se añade va en otro PR (PR 12b, abajo).
+- Elegir fila a fila qué se añade o actualiza va en su propio PR (`f7b-21-elegir-filas`): las filas con aviso salen sin marcar.
 
 ### Pendientes que siguen abiertos
 
