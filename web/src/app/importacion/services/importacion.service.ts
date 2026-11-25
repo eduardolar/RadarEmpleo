@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, inject, Injectable, linkedSignal, signal } from '@angular/core';
 import { catchError, defer, EMPTY, finalize, map, Observable, of, Subscription, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ErrorApi } from '../../core/interfaces/error-api.interface';
@@ -9,7 +9,7 @@ import {
   ResultadoAplicacion,
   VistaPreviaImportacion,
 } from '../interfaces/importacion.interface';
-import { filasAplicables } from '../utils/resumen-importacion';
+import { clavesPorDefecto, filasAplicables } from '../utils/resumen-importacion';
 
 const URL_IMPORTACION = `${environment.apiUrl}/api/importacion`;
 
@@ -34,7 +34,7 @@ function urlCombinada(ejecucionId: number): string {
 /**
  * Importación del registro: la vista previa (de la tabla o, tras extraer con Claude, de la tabla más el texto
  * libre) en signals y aplicarla. Al aplicar solo van el origen, la ejecución, el hash del registro leído y las
- * claves: el servidor vuelve a leer el registro y rehace el lote. Al aplicar bien o con un 409 (por ejemplo,
+ * claves elegidas: el servidor vuelve a leer el registro y rehace el lote. Al aplicar bien o con un 409 (por ejemplo,
  * el registro ha cambiado), se vuelve a pedir la misma vista previa; si era la combinada y la extracción ya no
  * vale, la de la tabla.
  */
@@ -53,6 +53,12 @@ export class ImportacionService {
 
   private readonly _aplicando = signal(false);
   readonly aplicando = this._aplicando.asReadonly();
+
+  /** Las claves que se aplicarán. Cada vista previa nueva (otro hash, otra extracción) vuelve a las de por defecto */
+  private readonly _elegidas = linkedSignal<ReadonlySet<string>>(() =>
+    clavesPorDefecto(this._vistaPrevia()?.filas ?? []),
+  );
+  readonly elegidas = this._elegidas.asReadonly();
 
   /** La extracción de la vista pedida (o de la que se pedirá al volver a leer); null con la tabla */
   private readonly _extraccion = signal<ExtraccionPedida | null>(null);
@@ -98,11 +104,29 @@ export class ImportacionService {
     );
   }
 
-  /** Añade las nuevas y las que cambian de estado. No hace nada si no hay qué o ya está guardando */
+  /** Marca o desmarca esas claves para aplicar */
+  elegir(claves: readonly string[], marcadas: boolean): void {
+    this._elegidas.update((actuales) => {
+      const elegidas = new Set(actuales);
+      for (const clave of claves) {
+        if (marcadas) {
+          elegidas.add(clave);
+        } else {
+          elegidas.delete(clave);
+        }
+      }
+      return elegidas;
+    });
+  }
+
+  /** Añade las nuevas y las que cambian de estado elegidas. No hace nada si no hay ninguna o ya está guardando */
   aplicar(): Observable<ResultadoAplicacion> {
     return defer(() => {
       const vista = this._vistaPrevia();
-      const claves = filasAplicables(vista?.filas ?? []).map((f) => f.clave);
+      const elegidas = this._elegidas();
+      const claves = filasAplicables(vista?.filas ?? [])
+        .filter((f) => elegidas.has(f.clave))
+        .map((f) => f.clave);
       if (!vista || claves.length === 0 || this._aplicando()) {
         return EMPTY;
       }

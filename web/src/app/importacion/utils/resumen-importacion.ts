@@ -25,6 +25,15 @@ export function filasAplicables(filas: FilaVistaPrevia[]): FilaVistaPrevia[] {
   return filas.filter((f) => RESULTADOS_APLICABLES.includes(f.resultado));
 }
 
+/** Las que salen marcadas al leer: las aplicables sin aviso. Las que lo llevan, mejor mirarlas antes */
+export function clavesPorDefecto(filas: FilaVistaPrevia[]): ReadonlySet<string> {
+  return new Set(
+    filasAplicables(filas)
+      .filter((f) => f.avisos.length === 0)
+      .map((f) => f.clave),
+  );
+}
+
 export function filasConResultado(
   filas: FilaVistaPrevia[],
   resultado: ResultadoFila,
@@ -51,16 +60,27 @@ export function lineasResumen(resumen: ResumenImportacion): string[] {
 export const EXPLICACION_YA_EXISTEN = 'Ya están en la app. No se tocan.';
 export const EXPLICACION_PARA_REVISAR =
   'Estas no se guardan. Cada una dice por qué; si hace falta, corrígela a mano en la app o en tu archivo.';
+/** Junto a las filas por aplicar, si alguna lleva aviso: por eso sale sin marcar */
+export const EXPLICACION_SIN_MARCAR =
+  'Las que llevan aviso salen sin marcar: míralas y márcalas si están bien.';
 export const EXPLICACION_SIN_LEER =
   'Corrige estas líneas en tu archivo, guárdalo y pulsa «Leer el archivo otra vez».';
 
-/** «Añadir 3 candidaturas», «Actualizar 1 candidatura» o «Añadir 3 candidaturas y actualizar 2» */
-export function textoBotonAplicar({ nuevas, avanzan }: ResumenImportacion): string {
+/**
+ * «Añadir 3 candidaturas», «Actualizar 1 candidatura» o «Añadir 3 candidaturas y actualizar 2», con las
+ * elegidas. Sin ninguna, «Añadir 0 candidaturas» si había nuevas que elegir (`hayNuevas`) y si no, «Actualizar»
+ */
+export function textoBotonAplicar(
+  { nuevas, avanzan }: Pick<ResumenImportacion, 'nuevas' | 'avanzan'>,
+  hayNuevas = nuevas > 0,
+): string {
   const candidaturas = (total: number) => contar(total, 'candidatura', 'candidaturas');
   if (nuevas > 0 && avanzan > 0) {
     return `Añadir ${candidaturas(nuevas)} y actualizar ${avanzan}`;
   }
-  return nuevas > 0 ? `Añadir ${candidaturas(nuevas)}` : `Actualizar ${candidaturas(avanzan)}`;
+  return nuevas > 0 || (avanzan === 0 && hayNuevas)
+    ? `Añadir ${candidaturas(nuevas)}`
+    : `Actualizar ${candidaturas(avanzan)}`;
 }
 
 /**

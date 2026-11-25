@@ -177,6 +177,60 @@ describe('ImportacionService', () => {
       expect(service.aplicando()).toBe(false);
     });
 
+    it('solo manda las claves elegidas', () => {
+      cargarVista(VISTA);
+
+      service.elegir(['avanza'], false);
+      service.aplicar().subscribe();
+      expect(http.expectOne(URL_APLICAR).request.body.claves).toEqual(['nueva']);
+    });
+
+    it('sin ninguna elegida no manda nada', () => {
+      cargarVista(VISTA);
+
+      service.elegir(['nueva', 'avanza'], false);
+      service.aplicar().subscribe();
+
+      http.expectNone(URL_APLICAR);
+      expect(service.aplicando()).toBe(false);
+    });
+
+    it('por defecto, las que llevan aviso no van: hay que marcarlas', () => {
+      cargarVista(
+        crearVista([
+          crearFila({ clave: 'nueva' }),
+          crearFila({ clave: 'aviso', avisos: ['Revisa la empresa.'] }),
+        ]),
+      );
+      expect([...service.elegidas()]).toEqual(['nueva']);
+
+      service.elegir(['aviso'], true);
+      service.aplicar().subscribe();
+
+      expect(http.expectOne(URL_APLICAR).request.body.claves).toEqual(['nueva', 'aviso']);
+    });
+
+    it('marcar una clave que no se aplica (un conflicto, una que ya existe) no la manda', () => {
+      cargarVista(VISTA);
+
+      service.elegir(['existe', 'revisar'], true);
+      service.aplicar().subscribe();
+
+      expect(http.expectOne(URL_APLICAR).request.body.claves).toEqual(['nueva', 'avanza']);
+    });
+
+    it('cada vista previa nueva vuelve a la elección por defecto', () => {
+      cargarVista(VISTA);
+      service.elegir(['nueva', 'avanza'], false);
+      expect(service.elegidas().size).toBe(0);
+
+      service.previsualizar();
+      expect(service.elegidas().size).toBe(0);
+      previsualizacion().flush({ ...VISTA, hashRegistro: 'c'.repeat(64) });
+
+      expect([...service.elegidas()]).toEqual(['nueva', 'avanza']);
+    });
+
     it('un 400 da el detail y deja la vista previa para reintentar', () => {
       const detail = 'El puesto no puede tener más de 300 caracteres.';
       cargarVista(VISTA);
