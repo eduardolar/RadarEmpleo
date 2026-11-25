@@ -157,6 +157,51 @@ public class DescargadorOfertasHttpTests
     }
 
     [Theory]
+    [InlineData(99, false, 99)]
+    [InlineData(100, false, 100)]
+    [InlineData(101, true, 100)]
+    public async Task Descargar_EnElBordeDelTope_SoloSeRecortaSiLoPasa(int largo, bool recortada, int esperado)
+    {
+        var opciones = OpcionesDescarga.PorDefecto with { TopeBytes = 100 };
+        _web.Responder(p => Respuesta(new string('a', largo), p.RequestUri!.Host == "boards-api.greenhouse.io" ? "application/json" : "text/plain"));
+
+        var pagina = await Descargador(opciones).DescargarAsync(Oferta, TipoDescarga.Pagina, CancellationToken.None);
+        var listado = await Descargador(opciones).DescargarAsync(Listado, TipoDescarga.ListadoJson, CancellationToken.None);
+
+        Assert.Equal((recortada, esperado), (pagina.Recortada, pagina.Texto!.Length));
+        // El listado justo en el tope entra entero; con un byte más, falla.
+        Assert.Equal(recortada ? FalloDescarga.DemasiadoGrande : null, listado.Fallo);
+        if (!recortada) Assert.Equal(largo, listado.Texto!.Length);
+    }
+
+    /// <summary>
+    /// El tope cuenta lo que llega de verdad, no lo que el servidor dice en <c>Content-Length</c>: diciendo menos no se
+    /// cuela un cuerpo enorme, y diciendo más no se da por grande ni se reserva memoria para lo que no viene.
+    /// </summary>
+    [Theory]
+    [InlineData(500, 10L, true, 100)]
+    [InlineData(500, 100L, true, 100)]
+    [InlineData(50, 1_000_000_000L, false, 50)]
+    [InlineData(50, 10L, false, 50)]
+    public async Task Descargar_ConUnContentLengthFalso_ElTopeCuentaElCuerpoReal(int largo, long declarado, bool recortada, int esperado)
+    {
+        var opciones = OpcionesDescarga.PorDefecto with { TopeBytes = 100 };
+        _web.Responder(p =>
+        {
+            var respuesta = Respuesta(new string('a', largo), p.RequestUri!.Host == "boards-api.greenhouse.io" ? "application/json" : "text/plain");
+            respuesta.Content.Headers.ContentLength = declarado;
+            return respuesta;
+        });
+
+        var pagina = await Descargador(opciones).DescargarAsync(Oferta, TipoDescarga.Pagina, CancellationToken.None);
+        var listado = await Descargador(opciones).DescargarAsync(Listado, TipoDescarga.ListadoJson, CancellationToken.None);
+
+        Assert.Equal((recortada, esperado), (pagina.Recortada, pagina.Texto!.Length));
+        Assert.Equal(recortada ? FalloDescarga.DemasiadoGrande : null, listado.Fallo);
+        if (!recortada) Assert.Equal(largo, listado.Texto!.Length);
+    }
+
+    [Theory]
     [InlineData("gzip")]
     [InlineData("deflate")]
     [InlineData("br")]
