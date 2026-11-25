@@ -35,6 +35,14 @@ public sealed class TrabajoWindowsTests
     /// <summary>ClaudeSimulado oculto. Con la entrada cerrada sigue adelante: en «espera», se queda esperando.</summary>
     private static Process Lanzar(params string[] argumentos)
     {
+        var proceso = LanzarSinCerrarLaEntrada(argumentos);
+        proceso.StandardInput.Close();
+        return proceso;
+    }
+
+    /// <summary>ClaudeSimulado oculto y parado: no hace nada (tampoco lanzar a su hijo) hasta que se le cierra la entrada.</summary>
+    private static Process LanzarSinCerrarLaEntrada(params string[] argumentos)
+    {
         var inicio = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "ClaudeSimulado.exe"))
         {
             UseShellExecute = false,
@@ -44,9 +52,7 @@ public sealed class TrabajoWindowsTests
             RedirectStandardError = true
         };
         foreach (var argumento in argumentos) inicio.ArgumentList.Add(argumento);
-        var proceso = Process.Start(inicio)!;
-        proceso.StandardInput.Close();
-        return proceso;
+        return Process.Start(inicio)!;
     }
 
     private static void Matar(Process proceso)
@@ -76,24 +82,74 @@ public sealed class TrabajoWindowsTests
         Assert.NotEqual(0, error.NativeErrorCode);
     }
 
-    /// <summary>Si falla una vez, no deja nada a medias: con otro proceso se puede volver a montar.</summary>
+    /// <summary>
+    /// Lo que hace de red de seguridad: al cerrar el trabajo muere también el hijo que el proceso lanzó después de
+    /// entrar, sin que nadie llame a <c>Kill</c>. Sin carrera: ClaudeSimulado no lanza al hijo hasta que se le cierra la
+    /// entrada, y eso se hace con el padre ya dentro del trabajo.
+    /// </summary>
     [FactSoloWindows(Motivo)]
-    public async Task Para_TrasUnFallo_SigueSirviendoConOtroProceso()
+    public async Task Dispose_MataTambienAlHijoQueElProcesoLanzaDespuesDeEntrar()
     {
-        using var terminado = Lanzar("--version");
-        await terminado.WaitForExitAsync(CancellationToken.None);
-        Assert.Throws<Win32Exception>(() => Para(terminado));
-
-        using var vivo = Lanzar("--sim:modo=espera", "--sim:segundos=120");
+        var archivoPid = Path.Combine(Path.GetTempPath(), $"radar-trabajo-{Guid.NewGuid():N}.txt");
+        using var padre = LanzarSinCerrarLaEntrada("--sim:modo=hijo", "--sim:segundos=120", $"--sim:pidhijo={archivoPid}");
+        int? pidHijo = null;
         try
         {
-            using var trabajo = Para(vivo);
+            var trabajo = Para(padre);
+            padre.StandardInput.Close();
+            pidHijo = await Esperar.HastaAsync(() => Task.FromResult(LeerPid(archivoPid)), p => p is not null,
+                _ => "ClaudeSimulado no ha escrito el pid de su hijo.");
+            Assert.True(Vivo(pidHijo!.Value), "El hijo tenía que seguir vivo antes de cerrar el trabajo.");
+            Assert.False(padre.HasExited);
 
-            Assert.False(vivo.HasExited);
+            trabajo.Dispose();
+
+            await Esperar.HastaAsync(() => padre.HasExited && !Vivo(pidHijo.Value), "Al cerrar el trabajo siguen vivos el proceso o su hijo.");
         }
         finally
         {
-            Matar(vivo);
+            Matar(padre);
+            if (pidHijo is { } pid) MatarPorPid(pid);
+            File.Delete(archivoPid);
+        }
+    }
+
+    /// <summary>El pid del archivo, o null si aún no existe o está a medio escribir.</summary>
+    private static int? LeerPid(string ruta)
+    {
+        try
+        {
+            return int.TryParse(File.ReadAllText(ruta), out var pid) ? pid : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    private static bool Vivo(int pid)
+    {
+        try
+        {
+            using var proceso = Process.GetProcessById(pid);
+            return !proceso.HasExited;
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException or Win32Exception)
+        {
+            return false;
+        }
+    }
+
+    private static void MatarPorPid(int pid)
+    {
+        try
+        {
+            using var proceso = Process.GetProcessById(pid);
+            Matar(proceso);
+        }
+        catch (ArgumentException)
+        {
+            // Ya no existe.
         }
     }
 
