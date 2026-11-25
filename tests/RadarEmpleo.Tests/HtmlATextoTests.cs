@@ -94,7 +94,7 @@ public class HtmlATextoTests
     }
 
     /// <summary>
-    /// El tiempo crece en proporción al tamaño, no al cuadrado. Se comparan dos tamaños (el grande, 16 veces el pequeño)
+    /// El tiempo crece en proporción al tamaño, no al cuadrado. Se compara el mejor tiempo de dos tamaños (el grande, 16 veces el pequeño)
     /// en vez de poner un tope fijo de reloj, que con la cobertura puesta o el equipo cargado fallaba sin motivo: lo que
     /// frena al uno frena al otro. Lineal sale unas 16 veces más; cuadrático, unas 256. El tope absoluto, muy holgado,
     /// solo está para que un atasco de verdad no pase por bueno.
@@ -111,9 +111,13 @@ public class HtmlATextoTests
         var htmlGrande = ConRelleno(relleno, grande);
         HtmlATexto.Convertir(htmlPequeno);
 
-        var pequeno = MejorDe(5, () => HtmlATexto.Convertir(htmlPequeno));
-        var texto = "";
-        var mayor = MejorDe(3, () => texto = HtmlATexto.Convertir(htmlGrande));
+        // Alternando, para que una racha mala del equipo (el CI, con las clases en paralelo) pille a los dos tamaños.
+        var (pequeno, mayor, texto) = (TimeSpan.MaxValue, TimeSpan.MaxValue, "");
+        for (var ronda = 0; ronda < 5; ronda++)
+        {
+            pequeno = Menor(pequeno, Medir(() => HtmlATexto.Convertir(htmlPequeno)));
+            mayor = Menor(mayor, Medir(() => texto = HtmlATexto.Convertir(htmlGrande)));
+        }
 
         Assert.Equal("a\n\nb", texto);
         // 4 veces de margen sobre lo lineal, y 5 ms de suelo por si el pequeño mide casi cero.
@@ -125,18 +129,16 @@ public class HtmlATextoTests
     private static string ConRelleno(string relleno, int largo) =>
         "<p>a</p>" + string.Concat(Enumerable.Repeat(relleno, largo / relleno.Length)) + "<p>b</p>";
 
-    /// <summary>El menor tiempo de varias pasadas: quita el ruido de una pausa del recolector o de otro proceso.</summary>
-    private static TimeSpan MejorDe(int pasadas, Action accion)
+    /// <summary>Lo que tarda, con la basura recogida antes para que una pausa del recolector no caiga dentro.</summary>
+    private static TimeSpan Medir(Action accion)
     {
-        var mejor = TimeSpan.MaxValue;
-        for (var i = 0; i < pasadas; i++)
-        {
-            var reloj = Stopwatch.StartNew();
-            accion();
-            if (reloj.Elapsed < mejor) mejor = reloj.Elapsed;
-        }
-        return mejor;
+        GC.Collect();
+        var reloj = Stopwatch.StartNew();
+        accion();
+        return reloj.Elapsed;
     }
+
+    private static TimeSpan Menor(TimeSpan a, TimeSpan b) => a < b ? a : b;
 
     [Fact]
     public void Convertir_MuchosTitulosSinCerrar_NoSeAtasca()
