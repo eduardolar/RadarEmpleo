@@ -81,7 +81,7 @@ describe('ImportacionPageComponent', () => {
 
   function botonesAplicar(): HTMLButtonElement[] {
     return [...elemento().querySelectorAll('button')].filter((b) =>
-      /Añadir|Actualizar|Guardando/.test(b.textContent ?? ''),
+      /Añadir|Actualizar|Guardando|Marca al menos/.test(b.textContent ?? ''),
     );
   }
 
@@ -260,7 +260,7 @@ describe('ImportacionPageComponent', () => {
 
       expect(casilla('Añadir: Desarrollador Angular en Acme')?.checked).toBe(true);
       expect(casilla('Añadir: Backend en Gamma')?.checked).toBe(false);
-      expect(seccion('Se van a añadir')?.textContent).toContain(EXPLICACION_SIN_MARCAR);
+      expect(seccion('Se van a añadir (1 de 2)')?.textContent).toContain(EXPLICACION_SIN_MARCAR);
       expect(botonAplicar()?.textContent).toContain('Añadir 1 candidatura');
 
       await pulsarAplicar();
@@ -287,12 +287,12 @@ describe('ImportacionPageComponent', () => {
       expect(http.expectOne(URL_APLICAR).request.body.claves).toEqual(['nueva', 'aviso']);
     });
 
-    it('con ninguna marcada el botón dice 0, se desactiva y no manda nada', async () => {
+    it('con ninguna marcada el botón dice qué falta, se desactiva y no manda nada', async () => {
       await abrirCon([NUEVA]);
 
       await pulsar(casilla('Añadir: Desarrollador Angular en Acme')!);
 
-      expect(botonAplicar()?.textContent).toContain('Añadir 0 candidaturas');
+      expect(botonAplicar()?.textContent).toContain('Marca al menos una candidatura');
       expect(botonAplicar()?.getAttribute('aria-disabled')).toBe('true');
       await pulsarAplicar();
       http.expectNone(URL_APLICAR);
@@ -1026,7 +1026,7 @@ describe('ImportacionPageComponent', () => {
       await abrirCombinada();
 
       expect(boton('Ver solo la tabla')).toBeDefined();
-      const filas = seccion('Se van a añadir (2)')!.querySelectorAll('li');
+      const filas = seccion('Se van a añadir (1 de 2)')!.querySelectorAll('li');
       expect(filas[0].textContent).not.toContain('Leída con Claude');
       expect(filas[1].textContent).toContain('Leída con Claude');
       expect(filas[1].textContent).toContain(REVISA);

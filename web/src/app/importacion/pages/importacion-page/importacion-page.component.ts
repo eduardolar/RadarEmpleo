@@ -57,6 +57,11 @@ import {
   tituloNadaQueAplicar,
 } from '../../utils/resumen-importacion';
 
+/** La cuenta del título de un grupo: «(3)» con todas marcadas y «(2 de 3)» si no */
+function cuenta(marcadas: number, total: number): string {
+  return marcadas === total ? `(${total})` : `(${marcadas} de ${total})`;
+}
+
 @Component({
   imports: [
     CabeceraPagina,
@@ -145,10 +150,14 @@ export default class ImportacionPageComponent {
   private readonly avanzanElegidas = computed(() => this.contarElegidas(this.avanzan()));
   protected readonly totalElegidas = computed(() => this.nuevasElegidas() + this.avanzanElegidas());
   protected readonly textoBoton = computed(() =>
-    textoBotonAplicar(
-      { nuevas: this.nuevasElegidas(), avanzan: this.avanzanElegidas() },
-      this.nuevas().length > 0,
-    ),
+    textoBotonAplicar({ nuevas: this.nuevasElegidas(), avanzan: this.avanzanElegidas() }),
+  );
+  /** «(3)» o, si alguna está sin marcar, «(2 de 3)»: el título no promete lo que no se va a guardar */
+  protected readonly cuentaNuevas = computed(() =>
+    cuenta(this.nuevasElegidas(), this.nuevas().length),
+  );
+  protected readonly cuentaAvanzan = computed(() =>
+    cuenta(this.avanzanElegidas(), this.avanzan().length),
   );
   protected readonly tituloAlDia = computed(() => {
     const vista = this.vista();

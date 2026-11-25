@@ -331,7 +331,7 @@
     @if (nuevas().length > 0) {
       <section aria-labelledby="titulo-nuevas" class="flex flex-col gap-3">
         <h2 id="titulo-nuevas" class="text-xl font-extrabold text-on-surface">
-          Se van a añadir ({{ nuevas().length }})
+          Se van a añadir {{ cuentaNuevas() }}
         </h2>
         <ng-container
           [ngTemplateOutlet]="elegirGrupo"
@@ -350,7 +350,7 @@
       <section aria-labelledby="titulo-avanzan" class="flex flex-col gap-3">
         <div class="space-y-1">
           <h2 id="titulo-avanzan" class="text-xl font-extrabold text-on-surface">
-            Cambian de estado ({{ avanzan().length }})
+            Cambian de estado {{ cuentaAvanzan() }}
           </h2>
           <p class="text-sm text-on-surface-variant">
             Ya están en la app: solo se les pone el estado de tu archivo. No se borra nada.

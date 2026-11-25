@@ -127,10 +127,9 @@ describe('textoBotonAplicar', () => {
     );
   });
 
-  it('con nada elegido solo cambia el número: «añadir» si había nuevas que elegir', () => {
-    expect(textoBotonAplicar({ nuevas: 0, avanzan: 0 }, true)).toBe('Añadir 0 candidaturas');
-    expect(textoBotonAplicar({ nuevas: 0, avanzan: 0 }, false)).toBe('Actualizar 0 candidaturas');
-    expect(textoBotonAplicar({ nuevas: 0, avanzan: 1 }, true)).toBe('Actualizar 1 candidatura');
+  it('con nada elegido no dice «0 candidaturas»: dice qué falta', () => {
+    expect(textoBotonAplicar({ nuevas: 0, avanzan: 0 })).toBe('Marca al menos una candidatura');
+    expect(textoBotonAplicar({ nuevas: 0, avanzan: 1 })).toBe('Actualizar 1 candidatura');
   });
 });
 

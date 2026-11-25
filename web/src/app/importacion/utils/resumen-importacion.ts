@@ -62,25 +62,28 @@ export const EXPLICACION_PARA_REVISAR =
   'Estas no se guardan. Cada una dice por qué; si hace falta, corrígela a mano en la app o en tu archivo.';
 /** Junto a las filas por aplicar, si alguna lleva aviso: por eso sale sin marcar */
 export const EXPLICACION_SIN_MARCAR =
-  'Las que llevan aviso salen sin marcar: míralas y márcalas si están bien.';
+  'Las que llevan aviso salen sin marcar: míralas y márcalas si están bien. Las que dejes sin marcar no se guardan y volverán a salir al leer el archivo otra vez.';
+/** El botón de guardar con todo desmarcado */
+export const TEXTO_BOTON_SIN_MARCAR = 'Marca al menos una candidatura';
 export const EXPLICACION_SIN_LEER =
   'Corrige estas líneas en tu archivo, guárdalo y pulsa «Leer el archivo otra vez».';
 
 /**
  * «Añadir 3 candidaturas», «Actualizar 1 candidatura» o «Añadir 3 candidaturas y actualizar 2», con las
- * elegidas. Sin ninguna, «Añadir 0 candidaturas» si había nuevas que elegir (`hayNuevas`) y si no, «Actualizar»
+ * elegidas. Sin ninguna, el botón (desactivado) dice qué falta en vez de «0 candidaturas»
  */
-export function textoBotonAplicar(
-  { nuevas, avanzan }: Pick<ResumenImportacion, 'nuevas' | 'avanzan'>,
-  hayNuevas = nuevas > 0,
-): string {
+export function textoBotonAplicar({
+  nuevas,
+  avanzan,
+}: Pick<ResumenImportacion, 'nuevas' | 'avanzan'>): string {
   const candidaturas = (total: number) => contar(total, 'candidatura', 'candidaturas');
+  if (nuevas === 0 && avanzan === 0) {
+    return TEXTO_BOTON_SIN_MARCAR;
+  }
   if (nuevas > 0 && avanzan > 0) {
     return `Añadir ${candidaturas(nuevas)} y actualizar ${avanzan}`;
   }
-  return nuevas > 0 || (avanzan === 0 && hayNuevas)
-    ? `Añadir ${candidaturas(nuevas)}`
-    : `Actualizar ${candidaturas(avanzan)}`;
+  return nuevas > 0 ? `Añadir ${candidaturas(nuevas)}` : `Actualizar ${candidaturas(avanzan)}`;
 }
 
 /**
