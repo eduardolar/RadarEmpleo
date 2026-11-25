@@ -307,10 +307,12 @@ public sealed class AgentesApiTests
         var id = await SembrarCandidaturaAsync(fabrica);
 
         await using var db = await fabrica.Services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
-        // Con 14,51 gastados hoy, los 0,50 de un análisis ya no caben en el tope de 15 por un céntimo.
+        // Con lo gastado hoy, el presupuesto de un análisis ya no cabe en el tope por un céntimo.
+        var tope = fabrica.Services.GetRequiredService<OpcionesEjecutor>().TopeGastoDiarioUsd;
+        var gastado = tope - DefinicionesTareas.AnalizarEncaje.PresupuestoUsd + 0.01m;
         var gastada = EjecucionAgente.Nueva(TareaAgente.ExtraerRegistro, "{}", 1.00m, 300, null, Ahora.AddHours(-1));
         gastada.Empezar(Ahora.AddHours(-1), null, null);
-        gastada.Terminar(Ahora.AddHours(-1), 14.51m, 3, null, "x", null, null, null);
+        gastada.Terminar(Ahora.AddHours(-1), gastado, 3, null, "x", null, null, null);
         db.EjecucionesAgente.Add(gastada);
         await db.SaveChangesAsync();
         var conTope = await PostJson(http, $"/api/agentes/analizar/{id}");
