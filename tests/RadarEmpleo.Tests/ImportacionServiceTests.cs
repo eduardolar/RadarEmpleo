@@ -1007,6 +1007,41 @@ public class ImportacionServiceTests : ArnesSqliteTests
         Assert.Equal(EstadoCandidatura.Enviada, (await FichaAsync("Sin indicar")).Estado);
     }
 
+    [Fact]
+    public async Task Aplicar_ClaudeDiceEntrevistaPorUnaLineaQueLaNombra_LaNuevaAvisaYLaExistenteNoAvanzaSola()
+    {
+        // «Entrevista: no me llamaron» nombra la entrevista y la respalda, pero no prueba que la haya habido.
+        _lector.Texto = "## Notas sueltas\n- Gamma: Entrevista: no me llamaron.\n";
+        var primera = await SembrarExtraccionAsync(Extraida(linea: 2));
+        await _importacion.AplicarAsync(PeticionConClaude((await _importacion.PrevisualizarExtraccionAsync(primera))!));
+        var id = await SembrarExtraccionAsync(Extraida(linea: 2, estado: EstadoCandidatura.Entrevista),
+            Extraida(linea: 2, fecha: "2026-10-20", estado: EstadoCandidatura.Entrevista) with { Puesto = "Otro puesto" });
+
+        var vista = (await _importacion.PrevisualizarExtraccionAsync(id))!;
+        var existente = Assert.Single(vista.Filas, f => f.Puesto == "Sin indicar");
+        var nueva = Assert.Single(vista.Filas, f => f.Puesto == "Otro puesto");
+        var peticion = PeticionConClaude(vista);
+        await _importacion.AplicarAsync(peticion with { Claves = [.. peticion.Claves, existente.Clave] });
+
+        Assert.Equal((ResultadoFila.Conflicto, ReglasImportacion.MotivoEstadoFinalDelTextoLibre(EstadoCandidatura.Entrevista)),
+            (existente.Resultado, existente.Motivo));
+        Assert.Equal(ResultadoFila.Nueva, nueva.Resultado);
+        Assert.Equal([ReglasImportacion.AvisoEstadoDeClaude], nueva.Avisos);
+        Assert.Equal(EstadoCandidatura.Enviada, (await FichaAsync("Sin indicar")).Estado);
+    }
+
+    [Fact]
+    public async Task PrevisualizarExtraccion_EstadoDentroDeUnaPreguntaAbierta_LlevaElAviso()
+    {
+        _lector.Texto = "## Notas sueltas\n- Gamma: ¿Enviada al final?\n";
+        var id = await SembrarExtraccionAsync(Extraida(linea: 2));
+
+        var fila = Assert.Single((await _importacion.PrevisualizarExtraccionAsync(id))!.Filas);
+
+        Assert.Equal(ResultadoFila.Nueva, fila.Resultado);
+        Assert.Equal([ReglasImportacion.AvisoEstadoDeClaude], fila.Avisos);
+    }
+
     private sealed class LectorFalso : ILectorCurriculum
     {
         public string Texto { get; set; } = "";

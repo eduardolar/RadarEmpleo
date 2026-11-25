@@ -26,7 +26,7 @@ public static class ReglasImportacion
     public static string MotivoEstadoSinRespaldo(EstadoCandidatura estado) =>
         $"Claude dice que pasó a «{ReglasEstado.Texto(estado)}», pero tu archivo no lo dice: revísalo en la ficha.";
 
-    /// <summary>Conflicto de una fila del texto libre que llevaría la candidatura a Oferta, Descartada o Cerrada
+    /// <summary>Conflicto de una fila del texto libre que llevaría la candidatura a Entrevista, Oferta, Descartada o Cerrada
     /// (<see cref="NoSeAplicaSolo"/>), aunque su línea lo diga.</summary>
     public static string MotivoEstadoFinalDelTextoLibre(EstadoCandidatura estado) =>
         $"Claude ha leído en el texto libre que pasó a «{ReglasEstado.Texto(estado)}»: eso no se aplica solo, cámbialo tú en la ficha.";
@@ -85,11 +85,13 @@ public static class ReglasImportacion
         Enlaces.Normalizar(enlace) is { Length: > 0 and <= LimitesLote.Enlace } normalizado ? normalizado : null;
 
     /// <summary>
-    /// Los estados que, leídos por Claude en el texto libre, nunca se dan por buenos solos: los que cierran la candidatura
-    /// y Oferta, porque «oferta» sale en cualquier línea («Vi la oferta de Acme en LinkedIn») y no prueba nada.
+    /// Los estados que, leídos por Claude en el texto libre, nunca se dan por buenos solos: los que cierran la candidatura,
+    /// Oferta, porque «oferta» sale en cualquier línea («Vi la oferta de Acme en LinkedIn») y no prueba nada, y Entrevista,
+    /// porque la palabra tampoco dice que la haya («Entrevista: no me llamaron», «solicité entrevista»). Del texto libre
+    /// solo Preparada y Enviada pueden aplicarse solas, y solo si su línea las respalda.
     /// </summary>
     private static bool NoSeAplicaSolo(EstadoCandidatura estado) =>
-        ReglasEstado.EsFinal(estado) || estado == EstadoCandidatura.Oferta;
+        ReglasEstado.EsFinal(estado) || estado is EstadoCandidatura.Entrevista or EstadoCandidatura.Oferta;
 
     private static string Parecido(string empresaNormalizada, string puesto) =>
         $"{empresaNormalizada}|{TextoComparable.Normalizar(puesto)}";
@@ -108,7 +110,7 @@ public static class ReglasImportacion
         if (!ReglasEstado.PuedePasar(misma.Estado, fila.Estado))
             return Fila(fila, clave, ResultadoFila.YaExiste, misma, null);
 
-        // Lo del texto libre lo ha leído Claude: un cambio que su línea no respalda, o a Oferta, Descartada o Cerrada, no
+        // Lo del texto libre lo ha leído Claude: un cambio que su línea no respalda, o a Entrevista, Oferta, Descartada o Cerrada, no
         // se aplica con el botón general. Las filas de la tabla (sin sección) no pasan por aquí.
         if (fila.Seccion is not null && fila.EstadoSinRespaldo)
             return Fila(fila, clave, ResultadoFila.Conflicto, misma, MotivoEstadoSinRespaldo(fila.Estado));
@@ -128,7 +130,7 @@ public static class ReglasImportacion
         if (fila.FechaAproximada) avisos.Add(AvisoFechaAproximada);
         if (fila.EstadoDeducido) avisos.Add(AvisoEstadoDeducido);
         if (fila.EmpresaFueraDeLaCita) avisos.Add(AvisoEmpresaNoEnLaLinea);
-        // Una nueva del texto libre en Oferta, Descartada o Cerrada avisa siempre, aunque su línea lo diga.
+        // Una nueva del texto libre en Entrevista, Oferta, Descartada o Cerrada avisa siempre, aunque su línea lo diga.
         if (fila.Seccion is not null && (fila.EstadoSinRespaldo || resultado == ResultadoFila.Nueva && NoSeAplicaSolo(fila.Estado)))
             avisos.Add(AvisoEstadoDeClaude);
         if (!string.IsNullOrWhiteSpace(fila.Enlace) && EnlaceParaGuardar(fila.Enlace) is null) avisos.Add(AvisoEnlaceNoValido);

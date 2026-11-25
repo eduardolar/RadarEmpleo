@@ -151,6 +151,8 @@ public class CombinadorLotesTests
     [InlineData("- Gamma: detectada en LinkedIn.", EstadoCandidatura.Detectada)]
     [InlineData("- Gamma: ENVIADA por correo, sin respuesta.", EstadoCandidatura.Enviada)]  // la duda no va con el estado
     [InlineData("- Gamma: enviada https://ejemplo.test/oferta?id=1", EstadoCandidatura.Enviada)]
+    [InlineData("- Gamma: enviada https://ejemplo.test/oferta?id=1&x=2 ¿y la entrevista?", EstadoCandidatura.Enviada)]
+    [InlineData("- Gamma: ¿me llamarán? Enviada por correo.", EstadoCandidatura.Enviada)]  // la pregunta acaba antes
     public void Combinar_EstadoQueSuLineaRespalda_EntraSinMarca(string linea, EstadoCandidatura estado)
     {
         var fila = Assert.Single(Combinar($"# Notas\n{linea}\n", Extraida(2, estado: estado)).Filas);
@@ -171,6 +173,9 @@ public class CombinadorLotesTests
     [InlineData("- Gamma: pendiente de entrevista.", EstadoCandidatura.Entrevista)]       // espera
     [InlineData("- Gamma: no descartada aún.", EstadoCandidatura.Descartada)]             // niega
     [InlineData("- Gamma: ¿enviada?", EstadoCandidatura.Enviada)]                         // duda
+    [InlineData("- Gamma: ¿Enviada al final?", EstadoCandidatura.Enviada)]               // dentro de la pregunta
+    [InlineData("- Gamma: ¿enviada por correo o en mano", EstadoCandidatura.Enviada)]     // pregunta sin cerrar
+    [InlineData("- Gamma: ¿Al final enviada, o no?", EstadoCandidatura.Enviada)]
     [InlineData("- Gamma: sin entrevista todavía.", EstadoCandidatura.Entrevista)]
     [InlineData("- Gamma: quizá me hagan oferta.", EstadoCandidatura.Oferta)]
     public void Combinar_EstadoQueSuLineaNoRespalda_EntraMarcada(string linea, EstadoCandidatura estado)

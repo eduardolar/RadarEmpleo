@@ -1233,6 +1233,16 @@ Para no reescribir el plan original, se apunta aquí:
 - **ExtraerRegistro** ya no va con `sonnet` ni en una sola consulta (decisión 7 del apartado 10): vale la tabla 4.4.
 - **AnalizarEncaje** va sin el CV (decisión 1 de la F7b); el CV llega en la F8.
 
+### Auditoría de seguridad: el estado que lee Claude (H1)
+
+Tras el cierre (PR #41 y `f7b-20-h1-menores`). Una línea pegada en el registro, o un error de Claude, no puede cambiar sola el estado de una candidatura. Solo vale para las filas del texto libre; **la tabla no cambia**.
+
+- **Se contrasta con la línea.** Respalda el estado si la línea lo nombra y no nombra otro que mande más. No cuenta si va dudado, negado o en espera («no descartada aún», «pendiente de entrevista»), ni dentro de una pregunta («¿enviada?», «¿Enviada al final?», hasta el «?» o el final de la línea; el «?» de un enlace no abre pregunta).
+- **Se aplican solos** solo Preparada y Enviada, y solo si la línea los respalda: un paso a esos estados va con el botón general.
+- **Pasan siempre a «Para revisar»** los pasos a Entrevista, Oferta, Descartada y Cerrada, aunque la línea los diga («Entrevista: no me llamaron» o «Vi la oferta de Acme» los nombran y no prueban nada), y cualquier cambio que la línea no respalde. Se cambian a mano en la ficha.
+- **El aviso** «Estado leído por Claude: compruébalo en tu archivo.» lo llevan las filas sin respaldo y todas las nuevas en Entrevista, Oferta, Descartada o Cerrada. Las nuevas siguen entrando con el botón general.
+- Elegir fila a fila qué se añade o actualiza va en su propio PR (`f7b-21-elegir-filas`): las filas con aviso salen sin marcar.
+
 ### Pendientes que siguen abiertos
 
 Lista única, sacada de los «Pendientes menores» de los PR 4 a 8, de lo que las revisiones de los PR 12 a 16b dejaron para después y de las notas de este plan. Ninguno bloquea. Lo resuelto por el camino está marcado en cada sección de «Pendientes menores».

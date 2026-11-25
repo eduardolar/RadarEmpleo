@@ -217,10 +217,11 @@ public class ReglasImportacionTests
     }
 
     [Theory]
+    [InlineData(EstadoCandidatura.Entrevista)]
     [InlineData(EstadoCandidatura.Oferta)]
     [InlineData(EstadoCandidatura.Descartada)]
     [InlineData(EstadoCandidatura.Cerrada)]
-    public void Comparar_NuevaDelTextoLibreEnOfertaOFinalConRespaldo_LlevaSiempreElAviso(EstadoCandidatura estado)
+    public void Comparar_NuevaDelTextoLibreEnEntrevistaOfertaOFinalConRespaldo_LlevaSiempreElAviso(EstadoCandidatura estado)
     {
         var fila = Comparar(Fila(estado: estado) with { Seccion = SeccionLibre });
 
@@ -229,8 +230,8 @@ public class ReglasImportacionTests
     }
 
     [Theory]
+    [InlineData(EstadoCandidatura.Preparada)]
     [InlineData(EstadoCandidatura.Enviada)]
-    [InlineData(EstadoCandidatura.Entrevista)]
     public void Comparar_NuevaDelTextoLibreEnOtroEstadoConRespaldo_NoLlevaAviso(EstadoCandidatura estado)
     {
         Assert.Empty(Comparar(Fila(estado: estado) with { Seccion = SeccionLibre }).Avisos);
@@ -243,10 +244,11 @@ public class ReglasImportacionTests
     }
 
     [Theory]
+    [InlineData(EstadoCandidatura.Entrevista)]
     [InlineData(EstadoCandidatura.Oferta)]
     [InlineData(EstadoCandidatura.Descartada)]
     [InlineData(EstadoCandidatura.Cerrada)]
-    public void Comparar_DelTextoLibreQueCerrariaConRespaldo_TambienEsConflicto(EstadoCandidatura estado)
+    public void Comparar_DelTextoLibreQueNoSeAplicaSoloConRespaldo_TambienEsConflicto(EstadoCandidatura estado)
     {
         var fila = Comparar(Fila(estado: estado) with { Seccion = SeccionLibre }, Existente(EstadoCandidatura.Enviada));
 
@@ -256,9 +258,9 @@ public class ReglasImportacionTests
     }
 
     [Fact]
-    public void Comparar_DelTextoLibreQueAvanzaConRespaldoAUnEstadoQueNoEsFinal_AvanzaSinAviso()
+    public void Comparar_DelTextoLibreQueAvanzaConRespaldoAEnviada_AvanzaSinAviso()
     {
-        var fila = Comparar(Fila(estado: EstadoCandidatura.Entrevista) with { Seccion = SeccionLibre }, Existente(EstadoCandidatura.Enviada));
+        var fila = Comparar(Fila() with { Seccion = SeccionLibre }, Existente(EstadoCandidatura.Preparada));
 
         Assert.Equal(ResultadoFila.AvanzaEstado, fila.Resultado);
         Assert.Null(fila.Motivo);
