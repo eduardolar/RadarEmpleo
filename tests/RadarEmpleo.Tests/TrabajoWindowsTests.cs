@@ -1,0 +1,121 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
+using RadarEmpleo.Services.Agentes;
+
+namespace RadarEmpleo.Tests;
+
+/// <summary>
+/// <c>TrabajoWindows</c> (el Job Object que mata a Claude y a sus hijos si la API muere) con
+/// <c>ClaudeSimulado</c>, sin ventana: cuando Windows no deja meter el proceso y cuando sí. La clase es interna y
+/// el proyecto no abre sus internos a los tests, así que se llama por reflexión: si cambia de nombre, fallan.
+/// </summary>
+public sealed class TrabajoWindowsTests
+{
+    private const string Motivo = "los Job Objects solo existen en Windows, donde la app lanza los agentes";
+
+    /// <summary><c>TrabajoWindows.Para(proceso)</c>, con su excepción tal cual (sin el envoltorio de la reflexión).</summary>
+    private static IDisposable Para(Process proceso)
+    {
+        var tipo = typeof(EjecutorClaudeCli).Assembly.GetType("RadarEmpleo.Services.Agentes.TrabajoWindows", throwOnError: true)!;
+        var para = tipo.GetMethod("Para", BindingFlags.Public | BindingFlags.Static, [typeof(Process)])
+            ?? throw new MissingMethodException(tipo.FullName, "Para");
+        try
+        {
+            return (IDisposable)para.Invoke(null, [proceso])!;
+        }
+        catch (TargetInvocationException error) when (error.InnerException is not null)
+        {
+            ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+            throw;
+        }
+    }
+
+    /// <summary>ClaudeSimulado oculto. Con la entrada cerrada sigue adelante: en «espera», se queda esperando.</summary>
+    private static Process Lanzar(params string[] argumentos)
+    {
+        var inicio = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "ClaudeSimulado.exe"))
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argumento in argumentos) inicio.ArgumentList.Add(argumento);
+        var proceso = Process.Start(inicio)!;
+        proceso.StandardInput.Close();
+        return proceso;
+    }
+
+    private static void Matar(Process proceso)
+    {
+        try
+        {
+            if (!proceso.HasExited) proceso.Kill(entireProcessTree: true);
+        }
+        catch (Exception error) when (error is InvalidOperationException or Win32Exception)
+        {
+            // Ya había terminado.
+        }
+    }
+
+    /// <summary>
+    /// Lo que el ejecutor espera cuando el trabajo no se puede montar: una <see cref="Win32Exception"/>, que apunta
+    /// como aviso para seguir sin la red de seguridad. Un proceso que ya ha terminado no entra en ningún trabajo.
+    /// </summary>
+    [FactSoloWindows(Motivo)]
+    public async Task Para_ConUnProcesoQueYaHaTerminado_LanzaWin32Exception()
+    {
+        using var proceso = Lanzar("--version");
+        await proceso.WaitForExitAsync(CancellationToken.None);
+
+        var error = Assert.Throws<Win32Exception>(() => Para(proceso));
+
+        Assert.NotEqual(0, error.NativeErrorCode);
+    }
+
+    /// <summary>Si falla una vez, no deja nada a medias: con otro proceso se puede volver a montar.</summary>
+    [FactSoloWindows(Motivo)]
+    public async Task Para_TrasUnFallo_SigueSirviendoConOtroProceso()
+    {
+        using var terminado = Lanzar("--version");
+        await terminado.WaitForExitAsync(CancellationToken.None);
+        Assert.Throws<Win32Exception>(() => Para(terminado));
+
+        using var vivo = Lanzar("--sim:modo=espera", "--sim:segundos=120");
+        try
+        {
+            using var trabajo = Para(vivo);
+
+            Assert.False(vivo.HasExited);
+        }
+        finally
+        {
+            Matar(vivo);
+        }
+    }
+
+    [FactSoloWindows(Motivo)]
+    public async Task Dispose_MataAlProcesoQueEstaDentro_YRepetirloNoFalla()
+    {
+        using var proceso = Lanzar("--sim:modo=espera", "--sim:segundos=120");
+        try
+        {
+            var trabajo = Para(proceso);
+            Assert.False(proceso.HasExited);
+
+            trabajo.Dispose();
+            trabajo.Dispose();
+
+            using var limite = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await proceso.WaitForExitAsync(limite.Token);
+            Assert.True(proceso.HasExited);
+        }
+        finally
+        {
+            Matar(proceso);
+        }
+    }
+}
