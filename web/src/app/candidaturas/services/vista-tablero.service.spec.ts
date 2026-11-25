@@ -26,7 +26,7 @@ describe('VistaTableroService', () => {
     expect(vista.filtroMovil()).toBe('Todas');
   });
 
-  it('es el mismo para toda la app: al volver de una ficha el tablero sigue como se dejó', () => {
+  it('guarda el estado mientras la app sigue abierta', () => {
     const alSalir = TestBed.inject(VistaTableroService);
     alSalir.buscar('datos');
     alSalir.filtrar('Oferta');
