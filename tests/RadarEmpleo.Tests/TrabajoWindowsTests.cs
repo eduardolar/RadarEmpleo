@@ -92,24 +92,33 @@ public sealed class TrabajoWindowsTests
     {
         var archivoPid = Path.Combine(Path.GetTempPath(), $"radar-trabajo-{Guid.NewGuid():N}.txt");
         using var padre = LanzarSinCerrarLaEntrada("--sim:modo=hijo", "--sim:segundos=120", $"--sim:pidhijo={archivoPid}");
-        int? pidHijo = null;
+        Process? hijo = null;
         try
         {
-            var trabajo = Para(padre);
+            using var trabajo = Para(padre);
             padre.StandardInput.Close();
-            pidHijo = await Esperar.HastaAsync(() => Task.FromResult(LeerPid(archivoPid)), p => p is not null,
+            var pid = await Esperar.HastaAsync(() => Task.FromResult(LeerPid(archivoPid)), p => p is not null,
                 _ => "ClaudeSimulado no ha escrito el pid de su hijo.");
-            Assert.True(Vivo(pidHijo!.Value), "El hijo tenía que seguir vivo antes de cerrar el trabajo.");
+            // El hijo se abre una sola vez, recién lanzado, y desde aquí se usa siempre este objeto con su manejador:
+            // volver a buscarlo por el número podría dar con otro programa si Windows lo ha reutilizado.
+            hijo = Process.GetProcessById(pid!.Value);
+            _ = hijo.SafeHandle;
+            Assert.Equal("ClaudeSimulado", hijo.ProcessName);
+            Assert.False(hijo.HasExited, "El hijo tenía que seguir vivo antes de cerrar el trabajo.");
             Assert.False(padre.HasExited);
 
             trabajo.Dispose();
 
-            await Esperar.HastaAsync(() => padre.HasExited && !Vivo(pidHijo.Value), "Al cerrar el trabajo siguen vivos el proceso o su hijo.");
+            await Esperar.HastaAsync(() => padre.HasExited && hijo.HasExited, "Al cerrar el trabajo siguen vivos el proceso o su hijo.");
         }
         finally
         {
             Matar(padre);
-            if (pidHijo is { } pid) MatarPorPid(pid);
+            if (hijo is not null)
+            {
+                Matar(hijo);
+                hijo.Dispose();
+            }
             File.Delete(archivoPid);
         }
     }
@@ -124,32 +133,6 @@ public sealed class TrabajoWindowsTests
         catch (IOException)
         {
             return null;
-        }
-    }
-
-    private static bool Vivo(int pid)
-    {
-        try
-        {
-            using var proceso = Process.GetProcessById(pid);
-            return !proceso.HasExited;
-        }
-        catch (Exception error) when (error is ArgumentException or InvalidOperationException or Win32Exception)
-        {
-            return false;
-        }
-    }
-
-    private static void MatarPorPid(int pid)
-    {
-        try
-        {
-            using var proceso = Process.GetProcessById(pid);
-            Matar(proceso);
-        }
-        catch (ArgumentException)
-        {
-            // Ya no existe.
         }
     }
 
