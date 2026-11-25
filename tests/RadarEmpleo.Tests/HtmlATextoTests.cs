@@ -93,21 +93,49 @@ public class HtmlATextoTests
         Assert.True(reloj.Elapsed < TimeSpan.FromSeconds(10), $"Ha tardado {reloj.Elapsed}.");
     }
 
+    /// <summary>
+    /// El tiempo crece en proporción al tamaño, no al cuadrado. Se comparan dos tamaños (el grande, 16 veces el pequeño)
+    /// en vez de poner un tope fijo de reloj, que con la cobertura puesta o el equipo cargado fallaba sin motivo: lo que
+    /// frena al uno frena al otro. Lineal sale unas 16 veces más; cuadrático, unas 256. El tope absoluto, muy holgado,
+    /// solo está para que un atasco de verdad no pase por bueno.
+    /// </summary>
     [Theory]
     [InlineData(" ")]
     [InlineData("\n")]
     [InlineData("\r\n")]
     [InlineData(" \t\n")]
-    public void Convertir_DosMegasDeEspaciosOSaltos_EnMenosDeUnSegundo(string relleno)
+    public void Convertir_DosMegasDeEspaciosOSaltos_TardaEnProporcionAlTamano(string relleno)
     {
-        var html = "<p>a</p>" + string.Concat(Enumerable.Repeat(relleno, 2 * 1024 * 1024 / relleno.Length)) + "<p>b</p>";
-        HtmlATexto.Convertir("<p>calentar</p>");
+        const int grande = 2 * 1024 * 1024, veces = 16;
+        var htmlPequeno = ConRelleno(relleno, grande / veces);
+        var htmlGrande = ConRelleno(relleno, grande);
+        HtmlATexto.Convertir(htmlPequeno);
 
-        var reloj = Stopwatch.StartNew();
-        var texto = HtmlATexto.Convertir(html);
+        var pequeno = MejorDe(5, () => HtmlATexto.Convertir(htmlPequeno));
+        var texto = "";
+        var mayor = MejorDe(3, () => texto = HtmlATexto.Convertir(htmlGrande));
 
-        Assert.True(reloj.Elapsed < TimeSpan.FromSeconds(1), $"Ha tardado {reloj.Elapsed}.");
         Assert.Equal("a\n\nb", texto);
+        // 4 veces de margen sobre lo lineal, y 5 ms de suelo por si el pequeño mide casi cero.
+        var tope = TimeSpan.FromTicks(pequeno.Ticks * veces * 4) + TimeSpan.FromMilliseconds(5);
+        Assert.True(mayor < tope, $"Con {veces} veces más texto ha tardado {mayor} y con el pequeño {pequeno}: crece más que en proporción.");
+        Assert.True(mayor < TimeSpan.FromSeconds(30), $"Ha tardado {mayor}.");
+    }
+
+    private static string ConRelleno(string relleno, int largo) =>
+        "<p>a</p>" + string.Concat(Enumerable.Repeat(relleno, largo / relleno.Length)) + "<p>b</p>";
+
+    /// <summary>El menor tiempo de varias pasadas: quita el ruido de una pausa del recolector o de otro proceso.</summary>
+    private static TimeSpan MejorDe(int pasadas, Action accion)
+    {
+        var mejor = TimeSpan.MaxValue;
+        for (var i = 0; i < pasadas; i++)
+        {
+            var reloj = Stopwatch.StartNew();
+            accion();
+            if (reloj.Elapsed < mejor) mejor = reloj.Elapsed;
+        }
+        return mejor;
     }
 
     [Fact]
